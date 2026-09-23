@@ -8,10 +8,20 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7.0"]
+dev = ["pytest>=7.0,<9"]
 
 [project.scripts]
 gcsgrep = "gcsgrep.cli:main"
+
+[tool.pytest.ini_options]
+# Los tests de integración necesitan credenciales, red y plata: se excluyen por
+# defecto. `python -m pytest` es offline y gratis; para los otros hay que pedirlos
+# explícitamente con `-m integration` (el -m de la línea de comandos gana).
+# Ver docs/integracion-gcs.md.
+addopts = "-m 'not integration'"
+markers = [
+    "integration: requiere un bucket de GCS real y ADC configurado (ver docs/integracion-gcs.md)",
+]
 
 [build-system]
 requires = ["setuptools>=61.0"]
