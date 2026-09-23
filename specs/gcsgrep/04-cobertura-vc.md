@@ -1,20 +1,29 @@
 # gcsgrep — tabla de cobertura de VCs
 
 > Salida del paso **Verificar**, para lo que ya está implementado (Iteración 1
-> de [`gcsgrep-plan.md`](./gcsgrep-plan.md)). Se completa con una fila nueva por
-> cada VC a medida que se implementa la Iteración 2.
+> de [`03-plan.md`](./03-plan.md)).
+>
+> **Este documento es la única fuente de verdad sobre el estado de cada VC.** El
+> plan declara qué VCs entran en cada iteración; el estado se lee acá y en
+> ningún otro lado.
+>
+> Es **append-only por iteración**: la Iteración 2 agrega filas, no reescribe
+> las de la Iteración 1. Si un VC ya registrado cambia de estado o de forma de
+> medirse, va una fila nueva con la fecha, no una edición encima de la vieja.
 >
 > La tabla no dice "lo probé". Dice, para cada criterio de verificación, con qué
 > se lo ejercita y qué se observó.
 
-## Resumen (Iteración 1)
+## Resumen (Iteración 1, spec v1.1)
 
 | | |
 |---|---|
-| VCs en el alcance de la Iteración 1 | 9 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-16 parcial) |
-| VCs con cobertura ejecutable | 9 |
-| VCs pasando | 9 |
+| VCs en el alcance de la Iteración 1 | 10 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, VC-16 parcial) |
+| VCs con cobertura ejecutable | 10 |
+| VCs pasando contra dobles de prueba | 10 |
+| VCs verificados contra GCS real | **0 — ver la sección de integración** |
 | VCs de la Iteración 2 (pendientes) | VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, VC-16 (completo) |
+| Tests que ejercitan todo esto | 23, en 4 archivos |
 
 ## Cobertura, uno por uno
 
@@ -27,65 +36,99 @@
 | VC-5 | FR-5 sin resultados | `test_core.py::test_vc5_sin_resultados`, `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio` | exit `1`, stdout vacío | ✅ |
 | VC-7 | FR-7 bucket completo | `test_core.py::test_vc7_bucket_completo_busca_en_todas_las_carpetas`, `test_cli.py::test_vc7_bucket_completo_prefijo_vacio` | matches encontrados en `a/x.txt` y `c/y.txt` con prefijo vacío | ✅ |
 | VC-8 | FR-8 ubicación inválida | `test_core.py::test_vc8_*` (3 casos), `test_cli.py::test_vc8_*` (2 casos) | `ValueError`/exit `2` para `logs/` (sin esquema) y `s3://b/` (esquema no soportado); mensaje menciona `gs://` | ✅ |
-| VC-14 | NFR-1 memoria acotada | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb` | pico de memoria adicional medido con `tracemalloc` sobre un objeto simulado de 200 MB: **< 20 MB** (umbral definido en la spec) | ✅ |
-| VC-16 (parcial) | NFR-3 salida apta para scripting | `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio`, `test_cli.py::test_vc8_ubicacion_sin_esquema_exit_2` | stdout vacío y stderr sin `Traceback` para los dos casos de error/borde ya implementados (VC-5, VC-8) | ✅ (parcial — el resto de los casos de VC-16 depende de código de la Iteración 2) |
+| VC-14 (a) | NFR-1 memoria, patrón ausente | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_sin_matches` | pico adicional con `tracemalloc` sobre un objeto simulado de 200 MB: **< 20 MB** | ✅ |
+| VC-14 (b) | NFR-1 memoria, **todas** las líneas matchean | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_donde_todo_matchea` | 1.043.359 matches emitidos y descartados; pico adicional **< 20 MB** (medido: ~0 MB). Contraste: acumulando los matches en una lista el pico es de **371 MB** | ✅ |
+| VC-17 | FR-11 salida incremental | `test_core.py::test_vc17_primer_match_se_emite_sin_recorrer_todo_el_prefijo`, `test_cli.py::test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida` | con 3 objetos que matchean, obtener el 1er match listó y abrió **solo** el 1ero (`listed == opened == ["logs/a.txt"]`); de punta a punta, 2 matches ya están en stdout cuando la lectura del objeto falla | ✅ |
+| VC-16 (parcial) | NFR-3 salida apta para scripting | `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio`, `test_cli.py::test_vc8_ubicacion_sin_esquema_exit_2` | stdout vacío y stderr sin `Traceback` para los dos casos de error/borde ya implementados (VC-5, VC-8) | ✅ (parcial — el resto depende de código de la Iteración 2) |
+
+### Por qué VC-14 tiene dos filas
+
+En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**
+el caso sin matches. Como `core.search` devolvía una lista, con cero matches esa
+lista quedaba vacía y el VC pasaba por construcción: no podía fallar. Un objeto
+real de 200 MB con el patrón en casi todas las líneas habría usado ~371 MB, 18
+veces el umbral, sin que ningún VC se enterara.
+
+La fila (b) es el caso adverso, y el número de contraste (371 MB) está medido: es
+lo que demuestra que ahora el VC **puede** fallar por la razón correcta. Ver
+[`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgo H-3, y
+[ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md).
+
+### Qué no cubre VC-17
+
+El test de `cli` observa el **orden**: los matches están en stdout antes de que
+la corrida termine. No observa el `flush=True`, porque `capsys` captura
+reemplazando `sys.stdout` y el buffering de un pipe real no interviene. Que la
+salida aparezca de verdad a medida que avanza, con stdout redirigido a un pipe,
+es parte de la verificación de integración (paso 5 del runbook).
 
 ## Cómo se ejercita todo
 
 ```bash
-python -m pytest -v
+python -m pytest            # 23 tests, sin credenciales ni red
 ```
 
-Los 20 tests corren sin credenciales de GCP ni red, en dos niveles:
+Los tests corren en dos niveles:
 
 - `core` recibe `list_objects` y `open_text_stream` como colaboradores, y los
-  tests le pasan un doble de prueba en memoria (`tests/fakes.py::FakeGCS`,
-  `HugeLineStream`) — cero conocimiento del SDK de Google.
-- `gcs.py` (`tests/test_gcs.py`) se testea mockeando el **cliente del SDK** en
-  el punto donde `gcs._get_client()` lo entrega, con un `_FakeClient` /
+  tests le pasan dobles en memoria (`tests/fakes.py`: `FakeGCS`,
+  `RecordingFakeGCS`, `HugeLineStream`, `ExplodingStream`) — cero conocimiento
+  del SDK de Google.
+- `gcs.py` (`tests/test_gcs.py`) se testea mockeando el **cliente del SDK** en el
+  punto donde `gcs._get_client()` lo entrega, con un `_FakeClient` /
   `_FakeBucket` / `_FakeBlob` de mano. Esto confirma que `list_objects` llama a
   `list_blobs(bucket, prefix=...)` con los argumentos correctos y que
   `open_text_stream` abre el blob correcto en modo `"r"`.
 
+En CI, [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) corre
+esta misma suite en Python 3.9 y 3.12 en cada push y cada PR. Eso es lo que
+convierte los ✅ de esta tabla en una afirmación chequeada por una máquina y no
+en una línea de markdown que alguien se acordó de actualizar.
+
 **Qué NO prueba el mock de `gcs.py`:** que `google-cloud-storage` en sí se
 comporte como creemos — autenticación real contra ADC, la semántica exacta de
 `list_blobs` con prefijos raros, streaming real sobre la red, o errores de
-permisos reales de GCS. Eso solo lo confirma correr contra un bucket real (ver
-abajo). El mock sube la confianza en el *wiring* del código a costo cero; no
-reemplaza la integración.
+permisos reales de GCS. Eso solo lo confirma correr contra un bucket real. El
+mock sube la confianza en el *wiring* del código a costo cero; no reemplaza la
+integración.
 
 ## Verificación de integración (contra un bucket real)
 
-Requiere un bucket de prueba y ADC configurado (`gcloud auth
-application-default login`, o ejecutar desde un entorno de GCP con una cuenta
-de servicio adjunta):
+> ### ⚠️ Estado: PENDIENTE — bloqueante de entrega
+>
+> **Ningún VC de esta tabla se verificó todavía contra GCS real.** Los 10 pasan
+> contra dobles de prueba.
+>
+> El enunciado pide que el código de la Iteración 1 "corra una búsqueda real y
+> sus chequeos de verificación pasen". Hasta que esta sección se complete con
+> resultados observados, **ese criterio de entrega no está cumplido**. Es el
+> hallazgo H-9 de la revisión.
 
-```bash
-gsutil cp local1.txt gs://mi-bucket-de-prueba/logs/a.txt   # contiene "timeout"
-gsutil cp local2.txt gs://mi-bucket-de-prueba/logs/b.txt   # no contiene "timeout"
+El procedimiento reproducible —creación del bucket de prueba, siembra de
+fixtures, los cinco chequeos, y destrucción— está en
+[`docs/integracion-gcs.md`](../../docs/integracion-gcs.md), automatizado en
+`scripts/testing-ground.sh`. Corre también como job manual de CI
+(`.github/workflows/integration.yml`) para quien tenga el proyecto de GCP
+configurado.
 
-python -m gcsgrep.cli "timeout" gs://mi-bucket-de-prueba/logs/
-echo "exit: $?"                          # esperado: 0
+Cuando se ejecute, los resultados se registran acá, con fecha y bucket usado:
 
-python -m gcsgrep.cli -i -n "TIMEOUT" gs://mi-bucket-de-prueba/logs/
-echo "exit: $?"                          # esperado: 0, con número de línea
-
-python -m gcsgrep.cli "no-existe-esto" gs://mi-bucket-de-prueba/logs/
-echo "exit: $?"                          # esperado: 1, stdout vacío
-
-python -m gcsgrep.cli "x" no-es-gs
-echo "exit: $?"                          # esperado: 2
-```
-
-**Esta corrida no se ejecutó todavía** en este entorno (no hay un bucket de
-prueba ni ADC configurados acá). Es el paso pendiente antes de dar por
-verificada de verdad la Iteración 1 contra GCS real, no solo contra el doble de
-prueba — correlo con tu propio bucket de prueba antes de entregar.
+| Chequeo | VCs que toca | Comando | Esperado | Observado | Fecha |
+|---|---|---|---|---|---|
+| I-1 búsqueda con match | VC-1, VC-4 | `gcsgrep "timeout" gs://$BUCKET/logs/` | exit `0`, línea con `gs://…/a.txt` | _pendiente_ | — |
+| I-2 `-i` y `-n` | VC-2, VC-3 | `gcsgrep -i -n "TIMEOUT" gs://$BUCKET/logs/` | exit `0`, con número de línea | _pendiente_ | — |
+| I-3 sin resultados | VC-5 | `gcsgrep "no-existe-esto" gs://$BUCKET/logs/` | exit `1`, stdout vacío | _pendiente_ | — |
+| I-4 ubicación inválida | VC-8 | `gcsgrep "x" no-es-gs` | exit `2`, sin llamada a GCS | _pendiente_ | — |
+| I-5 salida incremental en un pipe | VC-17 | `gcsgrep "linea" gs://$BUCKET/grande/ \| head -3` | 3 líneas y corta, sin leer el objeto completo | _pendiente_ | — |
+| I-6 ADC real | ADR-0002 | `gcsgrep` sin credenciales configuradas | exit `2`, mensaje legible sin traceback | _pendiente_ | — |
 
 ## Qué mirar en esta tabla
 
 1. **Cada fila tiene un ejercitador nombrado**, no "verificado manualmente".
 2. **La columna "Se observa" es observable**: exit codes, contenido de stdout,
    megabytes medidos. No dice "funciona bien".
-3. **VC-16 está marcado como parcial a propósito** — no se infla la cobertura
-   de un NFR que depende de código que todavía no existe (Iteración 2).
+3. **VC-16 está marcado como parcial a propósito** — no se infla la cobertura de
+   un NFR que depende de código que todavía no existe (Iteración 2).
+4. **La verificación de integración está marcada como pendiente, no como
+   implícita.** Pasar contra un doble de prueba y pasar contra GCS son dos
+   afirmaciones distintas, y esta tabla no las mezcla.

@@ -1,5 +1,12 @@
 # Tarea Lección 1 — `gcsgrep`
 
+> **Nota de este repositorio** (lo único agregado a la consigna original): este
+> enunciado se escribió dentro del monorepo del curso, así que sus enlaces
+> relativos (`../../entrega.md`, `../ejemplo-guiado/README.md`) apuntan afuera y
+> están rotos acá. Los nombres de archivo que menciona también cambiaron al
+> reorganizar el repo: la equivalencia está en la tabla de artefactos del
+> [`README.md`](./README.md). El texto de la consigna no se modificó.
+
 **En equipo de trabajo.** Se entrega antes de la Lección 2 · [cómo se entrega](../../entrega.md)
 
 ## Qué hay que hacer
@@ -16,7 +23,7 @@ objeto matcheó y dónde.
 
 ## Lo que te damos
 
-[`gcsgrep-requirements.md`](./gcsgrep-requirements.md) — un borrador **deliberadamente
+[`gcsgrep-requirements.md`](./specs/gcsgrep/00-requirements-draft.md) — un borrador **deliberadamente
 subespecificado**: FRs flojos, BRs candidatos, NFRs en blanco y una lista de preguntas
 abiertas al final.
 
