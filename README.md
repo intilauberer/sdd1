@@ -69,12 +69,30 @@ que la segunda feature no cueste nada.
 Requiere Python ≥ 3.9 y credenciales de GCP resueltas por
 [ADC](./docs/adr/ADR-0002-autenticacion-adc.md).
 
+El proyecto se desarrolla con [`uv`](https://docs.astral.sh/uv/), que gestiona el
+entorno virtual y las dependencias a partir de `pyproject.toml`:
+
 ```bash
 git clone <este-repo> && cd sdd1
-pip install -e '.[dev]'
+uv sync --extra dev
 
 # Autenticación: gcsgrep usa lo que tu entorno ya tenga configurado.
 gcloud auth application-default login
+```
+
+`uv run` ejecuta cualquier comando dentro del entorno del proyecto, sin activarlo
+manualmente:
+
+```bash
+uv run gcsgrep "timeout" gs://mi-bucket/logs/
+```
+
+`pyproject.toml` es la única fuente de verdad de las dependencias, de modo que
+`pip` es un camino equivalente y es el que utiliza la
+[integración continua](./.github/workflows/tests.yml):
+
+```bash
+python -m pip install -e '.[dev]'
 ```
 
 ## Uso
@@ -144,10 +162,20 @@ aparezca mientras la búsqueda avanza.
 
 ## Desarrollo
 
+Con `uv`, cada comando se ejecuta mediante `uv run`:
+
 ```bash
-python -m pytest              # 23 tests, offline, sin credenciales, gratis
-python -m pytest -v           # con el nombre de cada VC
-python scripts/check-doc-links.py   # enlaces entre artefactos
+uv run pytest                              # 23 tests, offline, sin credenciales
+uv run pytest -v                           # con el nombre de cada VC
+uv run python scripts/check-doc-links.py   # enlaces entre artefactos
+```
+
+Sobre un entorno instalado con `pip`, los mismos comandos se corren sin prefijo:
+
+```bash
+python -m pytest
+python -m pytest -v
+python scripts/check-doc-links.py
 ```
 
 Los tests están nombrados por el VC que ejercitan
