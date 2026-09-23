@@ -59,11 +59,25 @@ entra en el free tier de GCS; si no, es del orden de centavos.
 Lo que **sí** puede costar plata es olvidarse de correr `down`. El bucket
 persiste y se sigue cobrando el almacenamiento.
 
-## Requisitos
+### Decisión pendiente: cómo correr esto sin una cuenta con billing
 
-Estos son los del backend por defecto (`gcs`, contra Google Cloud real). El
-backend `emulador` no necesita ninguno salvo Docker — ver
-[Backend alternativo](#backend-alternativo-emulador-local).
+Crear un bucket en GCS exige una **billing account activa**, con medio de pago,
+incluso para quedarse dentro del free tier. Mientras el equipo no tenga una, H-9
+no se puede cerrar por este camino y **no está decidido cuál se toma**. Las
+opciones sobre la mesa, sin elegir:
+
+| Opción | Costo | Qué verificaría de verdad |
+|---|---|---|
+| Free tier de GCS (tarjeta, sin cargo) | $0 si no se excede | todo: GCS, ADC, IAM, red |
+| Crédito educativo de la facultad | $0, sin tarjeta | ídem, si existe el cupón |
+| Billing de un integrante del equipo | $0 | ídem; alcanza con una corrida |
+| Emulador local de la API de GCS | $0, sin cuenta | el cliente y el wiring; **no** ADC, IAM ni red real |
+
+La última cambiaría este runbook y el script, así que **no se documenta como
+procedimiento soportado hasta que se decida**. Lo que no cambia en ningún caso es
+la regla: lo que no se corrió contra GCS no se anota como verificado contra GCS.
+
+## Requisitos
 
 - `gcloud` instalado y autenticado para ADC:
   `gcloud auth application-default login`
@@ -131,56 +145,6 @@ Si algún chequeo falla, **no lo arregles en el script**. Un chequeo que falla
 contra GCS real y pasa contra el doble de prueba significa que el doble miente:
 lo que hay que corregir es el doble, y después el código. Ese es el único valor
 que tiene esta verificación.
-
-## Backend alternativo: emulador local
-
-Crear un bucket en GCS exige una **billing account activa**, con tarjeta, incluso
-para quedarse dentro del free tier. Cuando eso no está disponible —o cuando se
-quiere correr esto en CI en cada push, que contra GCS real cuesta plata y
-credenciales— el campo de pruebas corre contra
-[`fake-gcs-server`](https://github.com/fsouza/fake-gcs-server), un emulador de la
-API de GCS en Docker:
-
-```bash
-docker run -d --name fake-gcs -p 4443:4443 \
-  fsouza/fake-gcs-server -scheme http
-
-export GCSGREP_TEST_BACKEND=emulador
-export STORAGE_EMULATOR_HOST=http://localhost:4443
-export GCSGREP_TEST_BUCKET=gcsgrep-test-emulador
-
-./scripts/testing-ground.sh up
-./scripts/testing-ground.sh verify
-./scripts/testing-ground.sh down
-```
-
-**`gcsgrep` no necesita ni una línea de código para esto.** El cliente de
-`google-cloud-storage` respeta `STORAGE_EMULATOR_HOST` por sí solo: no hacen falta
-`AnonymousCredentials` ni `client_options`, y por lo tanto
-[ADR-0002](./adr/ADR-0002-autenticacion-adc.md) no se toca. Lo único que cambia es
-cómo el script crea y siembra el bucket (API HTTP en vez de `gcloud storage`).
-
-### Qué verifica de verdad, y qué no
-
-| | Emulador | GCS real |
-|---|---|---|
-| El wiring del código | ✅ | ✅ |
-| `google-cloud-storage` de verdad, sobre HTTP | ✅ | ✅ |
-| Semántica de `list_blobs` con prefijos | ✅ mayormente | ✅ |
-| Streaming real sobre la red | ❌ (localhost) | ✅ |
-| ADC, IAM, permisos reales | ❌ | ✅ |
-| Latencia y comportamiento bajo carga | ❌ | ✅ |
-
-> **La regla, y no es negociable:** los resultados obtenidos contra el emulador se
-> anotan en la tabla de integración diciendo **"emulador"** en la columna
-> *Observado*, y el estado *"VCs verificados contra GCS real"* del resumen sigue en
-> **0**. Pasar contra un emulador y pasar contra GCS son dos afirmaciones
-> distintas, igual que pasar contra un doble de prueba y pasar contra GCS. Este
-> repo no las mezcla — es literalmente el hallazgo H-9.
-
-Dicho eso, el emulador **no es solo el plan B gratis**: es mejor banco de pruebas
-que GCS real para los VCs de error de la Iteración 2, porque un 403 o un 500 se
-provocan a voluntad. VC-6, VC-13 y VC-15 lo van a querer.
 
 ## En CI
 

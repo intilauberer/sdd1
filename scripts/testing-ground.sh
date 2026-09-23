@@ -10,14 +10,8 @@
 #   ./scripts/testing-ground.sh down     # borra objetos y bucket (pide confirmación)
 #   ./scripts/testing-ground.sh all      # up && verify && down
 #
-# Dos backends (GCSGREP_TEST_BACKEND):
-#   gcs       (default) Google Cloud Storage real. Requiere gcloud autenticado
-#             (`gcloud auth application-default login`) y un proyecto por defecto
-#             (`gcloud config set project <id>`), con billing habilitado.
-#   emulador  fake-gcs-server local, gratis y sin cuenta. Requiere el contenedor
-#             corriendo y STORAGE_EMULATOR_HOST apuntándole. Verifica el wiring y
-#             el cliente de google-cloud-storage, NO ADC/IAM ni la red real: los
-#             resultados se anotan como "emulador", no como GCS.
+# Requiere: gcloud autenticado (`gcloud auth application-default login`) y un
+# proyecto por defecto (`gcloud config set project <id>`).
 #
 # Documentación del procedimiento y de qué VC cubre cada chequeo:
 #   docs/integracion-gcs.md
@@ -33,10 +27,6 @@ readonly PREFIJO_OBLIGATORIO="gcsgrep-test-"
 
 BUCKET="${GCSGREP_TEST_BUCKET:-}"
 REGION="${GCSGREP_TEST_REGION:-us-central1}"
-
-# Backend del campo de pruebas: 'gcs' (real) o 'emulador' (fake-gcs-server).
-BACKEND="${GCSGREP_TEST_BACKEND:-gcs}"
-EMULADOR="${STORAGE_EMULATOR_HOST:-http://localhost:4443}"
 
 # Qué iteración se verifica. Cada chequeo declara a qué iteración pertenece, así
 # que 'verify' no reporta como falla algo que todavía no se prometió (H-11).
@@ -63,85 +53,6 @@ fallas=0
 
 requiere_gcloud() {
   command -v gcloud >/dev/null 2>&1 || die "no encontré 'gcloud' en el PATH"
-}
-
-requiere_curl() {
-  command -v curl >/dev/null 2>&1 || die "no encontré 'curl' en el PATH"
-}
-
-resolver_backend() {
-  case "$BACKEND" in
-    gcs)
-      requiere_gcloud
-      ;;
-    emulador)
-      requiere_curl
-      if [[ -z "${STORAGE_EMULATOR_HOST:-}" ]]; then
-        die "backend 'emulador' sin STORAGE_EMULATOR_HOST.
-  gcsgrep lo necesita para hablarle al emulador en vez de a GCS:
-      export STORAGE_EMULATOR_HOST=${EMULADOR}"
-      fi
-      curl -fsS -o /dev/null "${EMULADOR}/storage/v1/b?project=test" 2>/dev/null \
-        || die "no pude hablar con el emulador en ${EMULADOR}.
-  Levantalo con:
-      docker run -d --name fake-gcs -p 4443:4443 fsouza/fake-gcs-server -scheme http"
-      ;;
-    *)
-      die "GCSGREP_TEST_BACKEND inválido: '${BACKEND}'. Valores: gcs | emulador"
-      ;;
-  esac
-}
-
-# --- Capa de almacenamiento --------------------------------------------------
-# Las tres operaciones que el campo de pruebas necesita, una implementación por
-# backend. Es el único lugar del script que sabe con qué está hablando.
-
-crear_bucket() {
-  if [[ "$BACKEND" == "emulador" ]]; then
-    curl -fsS -o /dev/null -X POST \
-      -H 'Content-Type: application/json' \
-      -d "{\"name\":\"${BUCKET}\"}" \
-      "${EMULADOR}/storage/v1/b?project=gcsgrep-test"
-  else
-    gcloud storage buckets create "gs://${BUCKET}" \
-      --location="${REGION}" \
-      --uniform-bucket-level-access \
-      --public-access-prevention
-  fi
-}
-
-# uso: subir_objeto <archivo local> <nombre del objeto>   p. ej. 'logs/a.txt'
-subir_objeto() {
-  local local_path="$1" nombre="$2"
-  if [[ "$BACKEND" == "emulador" ]]; then
-    # El '/' del nombre va escapado en el query param, o el emulador lo toma
-    # como parte de la ruta del endpoint.
-    local escapado
-    escapado="$(printf '%s' "$nombre" | sed 's|/|%2F|g')"
-    curl -fsS -o /dev/null -X POST \
-      -H 'Content-Type: application/octet-stream' \
-      --data-binary "@${local_path}" \
-      "${EMULADOR}/upload/storage/v1/b/${BUCKET}/o?uploadType=media&name=${escapado}"
-  else
-    gcloud storage cp "$local_path" "gs://${BUCKET}/${nombre}"
-  fi
-}
-
-borrar_bucket() {
-  if [[ "$BACKEND" == "emulador" ]]; then
-    # El emulador no borra recursivo: se listan los objetos y se borran de a uno.
-    local nombres
-    nombres="$(curl -fsS "${EMULADOR}/storage/v1/b/${BUCKET}/o" 2>/dev/null \
-      | grep -o '"name": *"[^"]*"' | sed 's/.*: *"//;s/"$//' || true)"
-    local n
-    for n in $nombres; do
-      curl -fsS -o /dev/null -X DELETE \
-        "${EMULADOR}/storage/v1/b/${BUCKET}/o/$(printf '%s' "$n" | sed 's|/|%2F|g')" || true
-    done
-    curl -fsS -o /dev/null -X DELETE "${EMULADOR}/storage/v1/b/${BUCKET}" || true
-  else
-    gcloud storage rm --recursive "gs://${BUCKET}" || true
-  fi
 }
 
 resolver_bucket() {
@@ -188,14 +99,13 @@ chequeo() {
 
 cmd_up() {
   resolver_bucket
-  resolver_backend
+  requiere_gcloud
 
-  if [[ "$BACKEND" == "emulador" ]]; then
-    info "creando gs://${BUCKET} en el emulador (${EMULADOR})"
-  else
-    info "creando gs://${BUCKET} en ${REGION}"
-  fi
-  crear_bucket
+  info "creando gs://${BUCKET} en ${REGION}"
+  gcloud storage buckets create "gs://${BUCKET}" \
+    --location="${REGION}" \
+    --uniform-bucket-level-access \
+    --public-access-prevention
 
   local tmp
   tmp="$(mktemp -d)"
@@ -219,31 +129,21 @@ cmd_up() {
   printf 'contenido comprimido irrelevante\n' | gzip > "${tmp}/access.log.gz"
 
   info "subiendo fixtures"
-  subir_objeto "${tmp}/a.txt" "logs/a.txt"
-  subir_objeto "${tmp}/b.txt" "logs/b.txt"
-  subir_objeto "${tmp}/c.txt" "logs/c.txt"
-  subir_objeto "${tmp}/big.txt" "grande/big.txt"
-  subir_objeto "${tmp}/blob.bin" "raros/blob.bin"
-  subir_objeto "${tmp}/access.log.gz" "raros/access.log.gz"
+  gcloud storage cp "${tmp}/a.txt" "gs://${BUCKET}/logs/a.txt"
+  gcloud storage cp "${tmp}/b.txt" "gs://${BUCKET}/logs/b.txt"
+  gcloud storage cp "${tmp}/c.txt" "gs://${BUCKET}/logs/c.txt"
+  gcloud storage cp "${tmp}/big.txt" "gs://${BUCKET}/grande/big.txt"
+  gcloud storage cp "${tmp}/blob.bin" "gs://${BUCKET}/raros/blob.bin"
+  gcloud storage cp "${tmp}/access.log.gz" "gs://${BUCKET}/raros/access.log.gz"
 
   ok "campo de pruebas listo en gs://${BUCKET}"
-  if [[ "$BACKEND" == "emulador" ]]; then
-    info "backend emulador: no cuesta plata, pero 'down' igual deja limpio para la próxima"
-  else
-    info "acordate de correr 'down' cuando termines: el bucket sigue costando plata"
-  fi
+  info "acordate de correr 'down' cuando termines: el bucket sigue costando plata"
 }
 
 cmd_verify() {
   resolver_bucket
-  [[ "$BACKEND" == "emulador" ]] && resolver_backend
   info "chequeos de integración contra gs://${BUCKET} — comando: ${GCSGREP[*]}"
-  info "backend: ${BACKEND} · iteración verificada: ${ITERACION}"
-  if [[ "$BACKEND" == "emulador" ]]; then
-    info "recordatorio: 'emulador' NO verifica ADC, IAM ni la red real."
-    info "  anotá los resultados como 'emulador' en la tabla de integración;"
-    info "  'VCs verificados contra GCS real' sigue en 0. Ver docs/integracion-gcs.md"
-  fi
+  info "iteración verificada: ${ITERACION}"
 
   chequeo I-1 0 "búsqueda con match (VC-1, VC-4)" -- \
     "timeout" "gs://${BUCKET}/logs/"
@@ -303,8 +203,7 @@ cmd_verify() {
     local rc err
     set +e
     err="$(CLOUDSDK_CONFIG=/nonexistent GOOGLE_APPLICATION_CREDENTIALS=/nonexistent \
-          GOOGLE_CLOUD_PROJECT="" STORAGE_EMULATOR_HOST="" \
-          "${GCSGREP[@]}" "timeout" "gs://${BUCKET}/logs/" 2>&1 >/dev/null)"
+          GOOGLE_CLOUD_PROJECT="" "${GCSGREP[@]}" "timeout" "gs://${BUCKET}/logs/" 2>&1 >/dev/null)"
     rc=$?
     set -e
     if [[ "$rc" -eq 2 ]]; then
@@ -335,7 +234,7 @@ cmd_verify() {
 
 cmd_down() {
   resolver_bucket
-  resolver_backend
+  requiere_gcloud
 
   info "esto borra TODOS los objetos y el bucket gs://${BUCKET}"
   if [[ "${GCSGREP_TEST_YES:-}" != "1" ]]; then
@@ -343,7 +242,7 @@ cmd_down() {
     [[ "$confirmacion" == "$BUCKET" ]] || die "no coincide; no se borró nada"
   fi
 
-  borrar_bucket
+  gcloud storage rm --recursive "gs://${BUCKET}" || true
   ok "gs://${BUCKET} borrado"
 }
 
@@ -351,7 +250,7 @@ cmd_down() {
 
 usage() {
   cat <<'USO'
-Campo de pruebas de gcsgrep, contra GCS real o contra un emulador local.
+Campo de pruebas de gcsgrep contra GCS real.
 
   ./scripts/testing-ground.sh up       # crea el bucket y sube las fixtures
   ./scripts/testing-ground.sh verify   # corre los chequeos de la iteración
@@ -360,22 +259,15 @@ Campo de pruebas de gcsgrep, contra GCS real o contra un emulador local.
 
 Variables:
   GCSGREP_TEST_BUCKET     nombre del bucket; tiene que empezar con 'gcsgrep-test-'
-  GCSGREP_TEST_BACKEND    gcs (default) | emulador
   GCSGREP_TEST_ITERACION  qué iteración se verifica (default: 1)
-  GCSGREP_TEST_REGION     región del bucket (default: us-central1; solo backend gcs)
+  GCSGREP_TEST_REGION     región del bucket (default: us-central1)
   GCSGREP_TEST_YES=1      saltea la confirmación interactiva de 'down'
-  STORAGE_EMULATOR_HOST   endpoint del emulador (obligatorio con backend=emulador)
 
 Chequeos por iteración:
   1 → I-1 … I-5, I-7      2 → todos, incluido I-6 (NFR-2)
 
-Backend 'gcs' requiere gcloud autenticado (`gcloud auth application-default
-login`), un proyecto por defecto (`gcloud config set project <id>`) y billing.
-
-Backend 'emulador' no requiere cuenta ni tarjeta:
-  docker run -d --name fake-gcs -p 4443:4443 fsouza/fake-gcs-server -scheme http
-  export STORAGE_EMULATOR_HOST=http://localhost:4443
-No verifica ADC, IAM ni la red real: los resultados se anotan como 'emulador'.
+Requiere gcloud autenticado (`gcloud auth application-default login`) y un
+proyecto por defecto (`gcloud config set project <id>`).
 
 Procedimiento completo y qué VC cubre cada chequeo: docs/integracion-gcs.md
 USO

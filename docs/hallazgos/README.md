@@ -49,15 +49,24 @@ es un hallazgo, es alcance pendiente.
 | H-9 | La verificación de integración nunca se ejecutó | **bloqueante de entrega** | [revisión v1.1](../revision-spec.md) | **abierto** — runbook listo, corrida pendiente |
 | H-10 | El doble de prueba expone un método de escritura | menor | [revisión v1.1](../revision-spec.md) | abierto — precondición de VC-11, Iteración 2 |
 | H-11 | El runbook reclama I-6 para la Iteración 1; el plan lo asigna a la 2 | mayor | [H-11](./H-11-runbook-vs-plan.md) | resuelto (I-6 movido a Iteración 2) |
-| H-12 | La tabla de Actores declara un modo de falla que ningún requerimiento cubre | crítico | [H-12](./H-12-actores-sin-trazar.md) | resuelto (FR-12 + VC-18 + 3ra tabla de trazabilidad) |
+| H-12 | El CLI no tiene frontera de excepciones, y NFR-3 no es falsable | crítico | [H-12](./H-12-sin-frontera-de-excepciones.md) | spec resuelta (VC-16 reforzado, FR-12/VC-18); **código pendiente** |
+| H-13 | La tabla de Actores declara modos de falla que ninguna tabla vigila | crítico | [H-13](./H-13-actores-sin-trazar.md) | resuelto (3ra tabla de trazabilidad + C-13) |
 
-## De dónde salieron H-11 y H-12
+## De dónde salieron H-11, H-12 y H-13
 
-Los dos aparecieron por el mismo evento: al montar un emulador local de GCS para
-verificar la Iteración 1 sin una cuenta paga, `gcsgrep` terminó con un traceback
-de Python y exit `1` ante un bucket que no existía. El traceback no era el
-hallazgo — era el síntoma que llevó a mirar dos artefactos y encontrar que uno
-prometía algo que el otro no cubría.
+Los tres aparecieron en el mismo rato: el primer intento de correr `gcsgrep`
+contra almacenamiento real terminó en un traceback de Python con exit `1`.
 
-Esa es la forma típica: **el síntoma se ve en el código, el hallazgo está en los
-documentos.**
+**El traceback no era el hallazgo.** Era un síntoma, y mirarlo con atención
+destapó tres cosas de naturaleza distinta:
+
+| | Qué se preguntó | Qué se encontró |
+|---|---|---|
+| **H-12** | ¿Por qué crashea en vez de dar un error? | No hay frontera de excepciones en el CLI, y NFR-3 prometía que no habría tracebacks sin un VC que pudiera detectarlo |
+| **H-13** | ¿Qué *debería* haber hecho? | La spec no lo decía; la obligación estaba en la tabla de Actores y ninguna tabla de trazabilidad la vigilaba |
+| **H-11** | ¿Por qué no lo agarró la verificación de integración? | El chequeo que lo habría visto (I-6) estaba reclamado por una iteración que no lo había prometido |
+
+Esa es la forma típica, y vale como método: **el síntoma se ve en el código; el
+hallazgo casi siempre está en los documentos.** Un solo traceback rindió un hueco
+de contrato, un hueco de verificación y un hueco de alcance — ninguno de los tres
+se arregla escribiendo el `try/except`.

@@ -23,10 +23,10 @@
 
 | | |
 |---|---|
-| VCs en el alcance de la Iteración 1 | 11 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, **VC-18**, VC-16 parcial) |
+| VCs en el alcance de la Iteración 1 | 11 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, **VC-18**, VC-16 (a) parcial + **(b)**) |
 | VCs con cobertura ejecutable | 10 |
 | VCs pasando contra dobles de prueba | 10 |
-| VCs **sin implementar** | **1 — VC-18** (FR-12, incorporado por la enmienda de la spec v1.2) |
+| VCs **sin implementar** | **2 — VC-18 y VC-16 (b)** (FR-12 y la frontera de excepciones, incorporados por la enmienda de la spec v1.2) |
 | VCs verificados contra GCS real | **0 — ver la sección de integración** |
 | VCs de la Iteración 2 (pendientes) | VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, VC-16 (completo) |
 | Tests que ejercitan todo esto | 23, en 4 archivos |
@@ -45,7 +45,8 @@
 | VC-14 (a) | NFR-1 memoria, patrón ausente | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_sin_matches` | pico adicional con `tracemalloc` sobre un objeto simulado de 200 MB: **< 20 MB** | ✅ |
 | VC-14 (b) | NFR-1 memoria, **todas** las líneas matchean | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_donde_todo_matchea` | 1.043.359 matches emitidos y descartados; pico adicional **< 20 MB** (medido: ~0 MB). Contraste: acumulando los matches en una lista el pico es de **371 MB** | ✅ |
 | VC-17 | FR-11 salida incremental | `test_core.py::test_vc17_primer_match_se_emite_sin_recorrer_todo_el_prefijo`, `test_cli.py::test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida` | con 3 objetos que matchean, obtener el 1er match listó y abrió **solo** el 1ero (`listed == opened == ["logs/a.txt"]`); de punta a punta, 2 matches ya están en stdout cuando la lectura del objeto falla | ✅ |
-| VC-16 (parcial) | NFR-3 salida apta para scripting | `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio`, `test_cli.py::test_vc8_ubicacion_sin_esquema_exit_2` | stdout vacío y stderr sin `Traceback` para los dos casos de error/borde ya implementados (VC-5, VC-8) | ✅ (parcial — el resto depende de código de la Iteración 2) |
+| VC-16 (a) parcial | NFR-3, lista enumerada | `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio`, `test_cli.py::test_vc8_ubicacion_sin_esquema_exit_2` | stdout vacío y stderr sin `Traceback` para los dos casos de error/borde ya implementados (VC-5, VC-8) | ✅ (parcial — el resto depende de código de la Iteración 2) |
+| **VC-16 (b)** | **NFR-3, excepción inesperada** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, mensaje legible sin `Traceback`. **Observado hoy: cualquier excepción del SDK escapa de `cli.main()` como traceback con exit `1`** | ⬜ **no implementado** |
 | **VC-18** | **FR-12 bucket inexistente o inaccesible** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, stderr nombra el bucket, distingue "no existe" de "sin permiso", sin `Traceback`. **Observado hoy: traceback de `google.api_core.exceptions.NotFound` y exit `1`** | ⬜ **no implementado** |
 
 ### Por qué VC-14 tiene dos filas
@@ -61,15 +62,21 @@ lo que demuestra que ahora el VC **puede** fallar por la razón correcta. Ver
 [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgo H-3, y
 [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md).
 
-### Por qué VC-18 está en esta tabla sin ejercitador
+### Por qué VC-18 y VC-16 (b) están sin ejercitador
 
-Es la única fila ⬜ del documento, y está a propósito. FR-12 se incorporó a la
-Iteración 1 por la enmienda de la spec v1.2
-([H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md)) **después** de que la
-iteración se declarara completa, así que hay una ventana en la que el contrato
-promete algo que el código todavía no hace.
+Son las dos filas ⬜ del documento, y están a propósito. Las dos salieron de
+[H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md) e ingresaron a la
+Iteración 1 por la enmienda de la spec v1.2, **después** de que la iteración se
+declarara completa: hay una ventana en la que el contrato promete algo que el
+código todavía no hace.
 
-La alternativa —no registrar el VC hasta que exista el test— dejaría la tabla
+VC-16 (b) es la más incómoda de las dos, porque **NFR-3 prometía esto desde la
+v1.0** ("ningún caso de error imprime un stack trace de Python") y VC-16 pasaba
+igual: verificaba una lista cerrada de casos, y todos los caminos de error del SDK
+quedaban fuera de la lista. El ✅ de VC-16 era verdadero sobre lo que medía y falso
+sobre lo que NFR-3 prometía.
+
+La alternativa —no registrar los VCs hasta que existan los tests— dejaría la tabla
 diciendo "10 de 10 pasando" mientras la spec tiene 18 requerimientos. Esa es
 exactamente la clase de afirmación cómoda que este documento existe para evitar.
 La columna "Se observa" registra el comportamiento actual, que es el traceback.

@@ -1,31 +1,19 @@
-# H-12 · La tabla de Actores declara un modo de falla que ningún requerimiento cubre
+# H-13 · La tabla de Actores declara modos de falla que ninguna tabla de trazabilidad vigila
 
 | | |
 |---|---|
 | **Severidad** | crítico |
 | **Fecha** | 2026-09-23 |
-| **Detectado en** | Primera corrida de `gcsgrep` contra un emulador local de GCS, con un bucket que no existía |
+| **Detectado en** | Análisis de [H-12](./H-12-sin-frontera-de-excepciones.md): al buscar qué requerimiento cubría el caso que crasheó, no había ninguno |
 | **Artefacto afectado** | [`../../specs/gcsgrep/02-spec.md`](../../specs/gcsgrep/02-spec.md) |
-| **Estado** | resuelto → spec v1.2 (FR-12 / VC-18 + tercera tabla de trazabilidad) |
-
-## El síntoma
-
-```
-$ STORAGE_EMULATOR_HOST=http://localhost:4443 gcsgrep "timeout" gs://test-bucket/
-Traceback (most recent call last):
-  File ".../gcsgrep/cli.py", line 50, in main
-    for match in core.search(bucket, prefix, config, gcs.list_objects, ...)
-  ...
-google.api_core.exceptions.NotFound: 404 GET .../storage/v1/b/test-bucket/o: Not Found
-```
-
-Exit `1`, traceback de 20 líneas, y ningún mensaje que le diga a quien lo corrió
-lo único que necesita saber: **el bucket no existe.**
+| **Estado** | resuelto → spec v1.2 (tercera tabla de trazabilidad + C-13) |
 
 ## El hallazgo
 
-El síntoma no es el hallazgo. Se recorrieron los 17 requerimientos de la spec
-v1.1 y **ninguno cubre este caso**:
+[H-12](./H-12-sin-frontera-de-excepciones.md) encontró que el CLI no atrapa
+excepciones. Al preguntarse **qué debería hacer** en el caso concreto que lo
+destapó —un bucket que no existe— resultó que la spec v1.1 no lo decía en ninguna
+parte. Se recorrieron los 17 requerimientos y **ninguno lo cubre**:
 
 | Requerimiento | Por qué no aplica |
 |---|---|
@@ -39,8 +27,8 @@ Nada cubre *"el bucket no existe"* ni *"no tengo permiso para listarlo"*. Y es,
 de lejos, el error más frecuente que va a tener esta herramienta en toda su vida:
 un typo en el nombre del bucket.
 
-Lo agravante es que **estaba declarado**. La tabla de Actores de la spec dice,
-desde la v1.0:
+Lo agravante, y lo que convierte esto en un hallazgo propio, es que **estaba
+declarado**. La tabla de Actores de la spec dice, desde la v1.0:
 
 > | **GCS** | Fuente de los objetos; puede fallar por permisos, red, **o no existir** |
 
@@ -67,28 +55,19 @@ la de al lado (los actores).
 
 ## Resolución
 
-**Spec v1.2**, tres cambios:
+**Tercera tabla de trazabilidad en la spec v1.2: `Actores → requerimiento`.** Una
+fila por cada modo de falla nombrado en la tabla de Actores, con el requerimiento
+que lo cubre y su VC. Es la tabla que habría atrapado esto sin necesidad de que
+alguien corriera el programa.
 
-1. **FR-12 nuevo** — bucket o prefijo inexistente o inaccesible: exit `2`, mensaje
-   legible por stderr que nombra el bucket y **distingue "no existe" de "sin
-   permiso"**, sin traceback y sin leer ningún objeto.
-2. **VC-18**, su criterio de verificación.
-3. **Tercera tabla de trazabilidad: `Actores → requerimiento`.** Una fila por
-   cada modo de falla nombrado en la tabla de Actores, con el requerimiento que
-   lo cubre. Es la que habría atrapado esto.
+Al escribirla apareció un matiz que la tabla de Actores escondía: los modos de
+falla hay que abrirlos **por dónde ocurren**. "Permisos" al listar aborta la
+corrida (FR-12); "permisos" sobre un objeto no (FR-6). Escritos como una sola
+línea, es precisamente lo que permitió que el caso del listado se perdiera:
+"permisos" *parecía* cubierto.
 
-Se distinguen 404 y 403 en el mensaje porque mandan a quien lo lee a lugares
-distintos: "no existe" manda a revisar el typo, "sin permiso" manda a revisar
-IAM. Cuesta un `except` más y ahorra el diagnóstico equivocado.
-
-**No se toca ningún ADR, ni se escribe uno nuevo.** FR-12 no es una decisión de
-arquitectura con alternativas descartadas que valga la pena preservar: es una
-promesa que faltaba. El fundamento entra en el propio FR.
-
-**Iteración: 1.** Decidido como enmienda explícita del plan, por tres razones: es
-el error más común de todos, la Iteración 1 ya lo puede producir hoy, y el
-enunciado pide que la Iteración 1 "corra una búsqueda real" — un traceback ante
-un typo es lo primero que va a ver quien la corra.
+El requerimiento que llena el hueco concreto (FR-12 / VC-18) se registra en
+[H-12](./H-12-sin-frontera-de-excepciones.md), que es el hallazgo que lo pedía.
 
 ## Regla nueva del checklist de revisión
 

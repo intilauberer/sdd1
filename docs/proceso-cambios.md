@@ -27,10 +27,12 @@ después, y el código va al final.**
 
 ## Cómo se usa
 
-1. **Clasificá antes de tocar nada.** Un mismo síntoma puede ser dos filas a la
-   vez, y conviene separarlas: el traceback de H-12 era *spec incompleta* (fila 3)
-   **y** *dos artefactos en conflicto* (fila 4, que resultó ser H-11). Tratarlos
-   como un solo problema habría arreglado uno y escondido el otro.
+1. **Clasificá antes de tocar nada, y no asumas que es una sola cosa.** Un mismo
+   síntoma suele ser varias filas a la vez. Un traceback rindió tres hallazgos
+   distintos —[H-12](./hallazgos/H-12-sin-frontera-de-excepciones.md),
+   [H-13](./hallazgos/H-13-actores-sin-trazar.md) y
+   [H-11](./hallazgos/H-11-runbook-vs-plan.md)— y tratarlo como un solo problema
+   habría arreglado el más chico y escondido los otros dos.
 2. **El documento va antes que el código, en distinto orden de sesión.** Primero
    la spec, el plan o el hallazgo; recién después el ticket. Esto no es
    ceremonia: un arreglo sin promesa escrita no tiene forma de verificarse, y el
@@ -57,15 +59,19 @@ La forma de respetarla sin perder el hallazgo es **anotarlo**, no arreglarlo:
 
 ## Ejemplo trabajado
 
-Un solo evento —un traceback ante un bucket inexistente, ver
-[H-12](./hallazgos/H-12-actores-sin-trazar.md)— se clasificó así:
+El primer intento de correr `gcsgrep` contra almacenamiento real terminó en un
+traceback de Python con exit `1`. **Un solo síntoma, cuatro descubrimientos de
+naturaleza distinta:**
 
-| Descubrimiento | Fila | Resultado |
-|---|---|---|
-| Bucket inexistente sin cubrir por ningún requerimiento | 3 · spec incompleta | spec v1.2: FR-12 + VC-18 |
-| La tabla de Actores declara modos de falla que nada traza | 4 · contradicción | [H-12](./hallazgos/H-12-actores-sin-trazar.md) + C-13 en el checklist |
-| I-6 reclamado por la Iteración 1, asignado por el plan a la 2 | 4 · contradicción | [H-11](./hallazgos/H-11-runbook-vs-plan.md) |
-| El `try/except` que falta en `cli.py` | — | Ticket, sesión aparte, **después** de lo anterior |
+| Qué se preguntó | Qué se encontró | Fila | Resultado |
+|---|---|---|---|
+| ¿Por qué crashea en vez de dar un error? | `cli.main()` no atrapa ninguna excepción, y NFR-3 prometía "ningún traceback" con un VC que enumeraba casos y no podía detectarlo | 3 · spec incompleta | [H-12](./hallazgos/H-12-sin-frontera-de-excepciones.md) → VC-16 (a)/(b) |
+| ¿Qué *debería* hacer en este caso? | Ningún requerimiento lo decía, aunque la tabla de Actores lo declaraba | 3 · spec incompleta | FR-12 + VC-18 |
+| ¿Por qué la spec no lo cubría? | Ninguna tabla de trazabilidad vigila la tabla de Actores | 4 · contradicción | [H-13](./hallazgos/H-13-actores-sin-trazar.md) + C-13 |
+| ¿Por qué no lo agarró la verificación? | I-6 estaba reclamado por una iteración que no lo había prometido | 4 · contradicción | [H-11](./hallazgos/H-11-runbook-vs-plan.md) |
+| El `try/except` que falta | — | — | Ticket, sesión aparte, **después** de todo lo anterior |
 
-Tres artefactos de documentación cambiaron antes de que se escribiera una línea
-de código. Esa es la forma.
+Cinco artefactos de documentación cambiaron antes de que se escribiera una línea
+de código. Esa es la forma — y el punto no es la ceremonia: el `try/except` escrito
+en el momento habría tapado el síntoma dejando intactos el hueco de contrato, el de
+verificación y el de alcance, que son los que van a volver a morder.

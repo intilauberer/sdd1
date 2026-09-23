@@ -16,8 +16,8 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: Iteración 1 completa contra dobles de prueba**, más un requerimiento
-> incorporado después (FR-12) que está especificado y sin implementar. La
+> **Estado: Iteración 1 completa contra dobles de prueba**, más una frontera de
+> manejo de excepciones que está especificada y sin implementar. La
 > verificación contra un bucket de GCS real sigue **pendiente** y es bloqueante de
 > entrega — ver [Estado](#estado) más abajo.
 
@@ -42,7 +42,7 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 7 | [`docs/proceso-cambios.md`](./docs/proceso-cambios.md) | Qué artefacto cambia según lo que aparezca. El carril de entrada del harness | se actualiza |
 | 8 | [`specs/gcsgrep/03-plan.md`](./specs/gcsgrep/03-plan.md) | 3 iteraciones; el alcance diferido vive acá, no en la spec | se actualiza |
 | 9 | [`specs/gcsgrep/04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md) | Qué VC pasa, con qué se ejercita y qué se observó | **append-only** por iteración |
-| 10 | [`docs/integracion-gcs.md`](./docs/integracion-gcs.md) | Runbook de la verificación contra GCS real o un emulador local | se actualiza |
+| 10 | [`docs/integracion-gcs.md`](./docs/integracion-gcs.md) | Runbook de la verificación contra GCS real | se actualiza |
 
 Las cuatro reglas de mutabilidad de la tabla son la parte que hace que esto
 funcione a lo largo del tiempo. Un borrador que se edita borra la evidencia de
@@ -210,22 +210,15 @@ export GCSGREP_TEST_BUCKET="gcsgrep-test-$(whoami)-$(date +%s)"
 
 El script se niega a operar sobre un bucket cuyo nombre no empiece con
 `gcsgrep-test-`: crea y borra buckets, así que el prefijo es el guardrail que
-evita apuntar a uno real por accidente.
-
-Crear un bucket en GCS exige billing habilitado. Sin eso,
-`GCSGREP_TEST_BACKEND=emulador` corre el mismo campo de pruebas contra un
-emulador local, gratis y sin cuenta — con la salvedad de que no verifica ADC, IAM
-ni la red real, así que sus resultados no cuentan como "verificado contra GCS".
-
-Procedimiento completo, costo, los dos backends y wiring de CI en
-[`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
+evita apuntar a uno real por accidente. Procedimiento completo, costo y wiring de
+CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 
 ## Estado
 
 | | |
 |---|---|
 | Iteración 1 (búsqueda de punta a punta) | ✅ implementada, 10/10 VCs pasando contra dobles de prueba |
-| FR-12 / VC-18 (bucket inexistente), incorporado a la Iteración 1 en la spec v1.2 | ⬜ **especificado, sin implementar** — [H-12](./docs/hallazgos/H-12-actores-sin-trazar.md) |
+| Frontera de excepciones en el CLI: FR-12 / VC-18 y VC-16 (b), incorporados a la Iteración 1 en la spec v1.2 | ⬜ **especificado, sin implementar** — [H-12](./docs/hallazgos/H-12-sin-frontera-de-excepciones.md) |
 | Verificación contra GCS real | ⚠️ **pendiente** — bloqueante de entrega |
 | Iteración 2 (resiliencia, guardrail de costo, no-texto) | ⬜ planificada, sin implementar |
 | Iteración 3 (concurrencia y su NFR de rendimiento) | ⬜ no comprometida; obligación registrada |

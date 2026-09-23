@@ -27,7 +27,7 @@
 >    perdido en silencio.
 > 3. **Cada modo de falla nombrado en la tabla de Actores tiene un requerimiento
 >    que lo cubre.** Agregada en v1.2 por
->    [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md): la tabla de Actores
+>    [H-13](../../docs/hallazgos/H-13-actores-sin-trazar.md): la tabla de Actores
 >    declaraba que GCS "puede fallar por permisos, red, o no existir", y el
 >    tercero no había aterrizado en ningún requerimiento. Las reglas 1 y 2 no
 >    podían detectarlo — una mira los requerimientos que existen, la otra el
@@ -244,10 +244,12 @@ o sobre el cual quien invoca no tiene permiso de listado,
 bucket y **distingue "no existe" de "sin permiso"**, sale con código `2`, y no
 lee el contenido de ningún objeto.
 
-*Origen:* [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md). La tabla de
-Actores declaraba desde la v1.0 que GCS "puede fallar por permisos, red, o **no
-existir**", y ningún requerimiento cubría el tercer caso. Se descubrió con un
-`NotFound: 404` que escapó como traceback de Python y exit `1`.
+*Origen:* [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md) (el CLI
+no atrapa excepciones: un `NotFound: 404` escapó como traceback con exit `1`) y
+[H-13](../../docs/hallazgos/H-13-actores-sin-trazar.md) (al buscar qué debería
+hacer en ese caso, ningún requerimiento lo decía, aunque la tabla de Actores
+declaraba desde la v1.0 que GCS "puede fallar por permisos, red, o **no
+existir**").
 
 *Por qué es un requerimiento aparte y no una extensión de otro:* FR-5 exige un
 prefijo "válido y accesible" como premisa; FR-8 cubre la sintaxis, y
@@ -357,9 +359,28 @@ stdout contiene únicamente líneas de match. Todo mensaje informativo, de
 error o de resumen (objetos salteados, objetos fallidos, guardrail excedido)
 va a stderr. Ningún caso de error imprime un stack trace de Python.
 
-> **VC-16** — Para cada caso de error o salteo cubierto (VC-6, VC-8, VC-9,
+> **VC-16 (a)** — Para cada caso de error o salteo cubierto (VC-6, VC-8, VC-9,
 > VC-10, VC-12, VC-13, VC-15, VC-18), stdout no contiene ninguna línea que no sea
 > un match real, y stderr no contiene la palabra `Traceback`.
+>
+> **VC-16 (b)** — Inyectando desde el colaborador de `gcs` una excepción
+> **arbitraria e inesperada** (una clase que el código no conoce, levantada tanto
+> al listar como al abrir un stream), la corrida sale con código `2`, stdout queda
+> vacío, y stderr trae un mensaje legible sin la palabra `Traceback`.
+
+**Por qué VC-16 tiene dos partes.** NFR-3 está cuantificado universalmente
+("ningún caso de error"), y una lista enumerada de casos no puede verificar eso:
+todo camino de error que no esté en la lista queda libre de tirar un traceback sin
+que el VC se entere. La parte (b) es la que hace falsable la promesa universal —
+no se puede enumerar "todos los errores", pero sí se puede exigir que uno
+**desconocido** se maneje. Es el mismo refuerzo que se le hizo a VC-14 en la v1.1,
+y por la misma razón (C-8: ¿puede este VC fallar por la razón correcta?).
+
+Se agregó en v1.2 por [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md),
+que encontró que `cli.main()` no atrapa ninguna excepción que suba de `core` o de
+`gcs`: cualquier fallo del SDK escapa como traceback con exit `1` — el código que
+significa "sin matches", así que un script lee un fallo total como un resultado
+válido. VC-16 (a) no podía detectarlo.
 
 ---
 
@@ -427,7 +448,7 @@ Las dos tablas de arriba cubren los requerimientos que existen y los ítems del
 borrador. Esta cubre la tercera fuente de obligaciones, que no estaba vigilada por
 ninguna de las dos: **los modos de falla declarados en la tabla de Actores.**
 
-Se agregó en v1.2 por [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md), que
+Se agregó en v1.2 por [H-13](../../docs/hallazgos/H-13-actores-sin-trazar.md), que
 encontró uno declarado desde la v1.0 y nunca cubierto.
 
 | Actor | Modo de falla declarado | Requerimiento que lo cubre | VC |
@@ -436,7 +457,7 @@ encontró uno declarado desde la v1.0 y nunca cubierto.
 | GCS | **Permisos** — sobre el listado del bucket | **FR-12** (mensaje distinto del de "no existe") | VC-18 |
 | GCS | **Red** — al leer un objeto | FR-6 + BR-3 | VC-6, VC-13 |
 | GCS | **Red** — al listar | NFR-2 (aborta con `2`, sin traceback) | VC-15 |
-| GCS | **No existir** — el bucket | **FR-12** — *era el huérfano de H-12* | VC-18 |
+| GCS | **No existir** — el bucket | **FR-12** — *era el huérfano de H-13* | VC-18 |
 | GCS | **No existir** — el prefijo (0 objetos) | FR-5 (exit `1`, es un resultado válido, no un error) | VC-5 |
 | Persona usuaria | Ubicación mal escrita | FR-8 (exit `2` sin tocar la red) | VC-8 |
 | Persona usuaria | Prefijo gigante, corrida costosa | BR-2 (guardrail, tope 1000) | VC-12 |
@@ -473,13 +494,14 @@ revisión, como ADR-0011 y ADR-0012.
 |---|---|---|---|
 | 1.0 | 2026-09-23 | Primera spec a partir del base context. 16 FR/BR/NFR, 16 VCs. | paso Especificar |
 | 1.1 | 2026-09-23 | **+FR-11/VC-17** (salida incremental, resuelve FR-g). **NFR-a declinado** con fundamento en vez de quedar pendiente. **VC-14 reforzado** con el caso donde todo matchea. Fundamento movido a ADRs; la spec los referencia. Nueva tabla borrador → spec. Encabezado versionado. | [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgos H-1, H-2, H-3, H-5, H-7, H-8 |
-| 1.2 | 2026-09-23 | **+FR-12/VC-18** (bucket inexistente o inaccesible → exit `2`, mensaje que distingue "no existe" de "sin permiso"). **Tercera regla estructural** y su **tabla de trazabilidad actores → requerimiento**. VC-16 extendido a VC-18. Modos de falla de la tabla de Actores marcados como obligaciones. | [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md) |
+| 1.2 | 2026-09-23 | **VC-16 partido en (a) y (b)**: la parte universal de NFR-3 pasa a ser falsable con una excepción inesperada, porque `cli` no atrapaba ninguna y VC-16 solo miraba una lista cerrada. **+FR-12/VC-18** (bucket inexistente o inaccesible → exit `2`, mensaje que distingue "no existe" de "sin permiso"). **Tercera regla estructural** y su **tabla de trazabilidad actores → requerimiento**. Modos de falla de la tabla de Actores marcados como obligaciones. | [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md), [H-13](../../docs/hallazgos/H-13-actores-sin-trazar.md) |
 
-**Qué cambió del contrato en v1.2.** FR-12 no cambia el resultado de ninguna
-corrida que la Iteración 1 ya produjera *correctamente*: hoy ese caso termina en
-traceback y exit `1`, que no era un comportamiento prometido por nadie. Pasa a ser
-exit `2` con un mensaje legible. No es una regresión ni rompe ningún VC existente;
-es un hueco del contrato que se cierra.
+**Qué cambió del contrato en v1.2.** Nada de lo que la Iteración 1 producía
+*correctamente*. Los casos que FR-12 y VC-16 (b) cubren hoy terminan en traceback
+con exit `1`, que no era un comportamiento prometido por nadie — al contrario, NFR-3
+ya prometía lo opuesto. Pasan a exit `2` con mensaje legible. No es una regresión
+ni rompe ningún VC existente: son huecos del contrato y de su verificación que se
+cierran.
 
 **Cambio de contrato todavía pendiente, anunciado para v1.3:** BR-3 hace que un
 error de lectura parcial fuerce exit `2` aunque haya matches. Eso sí cambia el

@@ -48,16 +48,16 @@ de NFR-2:
 
 - [`../integracion-gcs.md`](../integracion-gcs.md): I-6 pasa a una sección
   aparte, marcada como Iteración 2. La verificación de integración que cierra la
-  Iteración 1 es **I-1 … I-5**.
+  Iteración 1 es **I-1 … I-5, más I-7** (el chequeo nuevo de FR-12).
 - [`../../specs/gcsgrep/04-cobertura-vc.md`](../../specs/gcsgrep/04-cobertura-vc.md):
   la fila I-6 deja de decir *pendiente* (que implica "debería pasar y no se
   probó") y dice **Iteración 2** (que es "todavía no se prometió").
-- `scripts/testing-ground.sh`: I-6 solo corre con `--iteracion 2`, para que
-  `verify` de la Iteración 1 no reporte una falla que no lo es.
+- `scripts/testing-ground.sh`: I-6 solo corre con `GCSGREP_TEST_ITERACION=2`,
+  para que `verify` de la Iteración 1 no reporte una falla que no lo es.
 
 Se eligió esto por sobre la alternativa —adelantar una tajada de NFR-2 a la
 Iteración 1 para que I-6 cierre— porque adelantar arrastra la precedencia de exit
-codes de BR-3, que es un cambio de contrato anunciado para la spec v1.2 y no
+codes de BR-3, que es un cambio de contrato anunciado para la spec v1.3 y no
 conviene hacer a medias.
 
 **Observación para el ticket de FR-12:** el `try/except` que FR-12 necesita en
