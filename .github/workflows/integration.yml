@@ -1,0 +1,105 @@
+name: integración (GCS real)
+
+# Solo a pedido. Cuesta plata y necesita credenciales de GCP.
+# Procedimiento y configuración: docs/integracion-gcs.md
+on:
+  workflow_dispatch:
+    inputs:
+      region:
+        description: "Región del bucket de pruebas"
+        required: false
+        default: "us-central1"
+
+permissions:
+  contents: read
+  id-token: write # necesario para Workload Identity Federation
+
+jobs:
+  integracion:
+    name: Chequeos I-1 … I-6 contra un bucket real
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ¿Están configuradas las credenciales?
+        id: guard
+        env:
+          WIF_PROVIDER: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          SA: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+        run: |
+          if [[ -z "$WIF_PROVIDER" || -z "$SA" ]]; then
+            echo "configurado=false" >> "$GITHUB_OUTPUT"
+            {
+              echo "### Integración salteada"
+              echo
+              echo "Faltan los secrets \`GCP_WORKLOAD_IDENTITY_PROVIDER\` y/o"
+              echo "\`GCP_SERVICE_ACCOUNT\`. Un fork o un clon sin acceso a GCP no"
+              echo "tiene por qué ver el CI en rojo, así que este job se saltea."
+              echo
+              echo "Cómo configurarlos: \`docs/integracion-gcs.md\`, sección *En CI*."
+              echo "Mientras tanto, la verificación de integración se corre a mano:"
+              echo '`./scripts/testing-ground.sh all`'
+            } >> "$GITHUB_STEP_SUMMARY"
+          else
+            echo "configurado=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: actions/setup-python@v5
+        if: steps.guard.outputs.configurado == 'true'
+        with:
+          python-version: "3.12"
+
+      - name: Instalar gcsgrep
+        if: steps.guard.outputs.configurado == 'true'
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      # Sin keys de larga vida: GitHub obtiene un token de corta duración.
+      - uses: google-github-actions/auth@v2
+        if: steps.guard.outputs.configurado == 'true'
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ secrets.GCP_SERVICE_ACCOUNT }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.guard.outputs.configurado == 'true'
+
+      - name: Nombrar el bucket desechable
+        if: steps.guard.outputs.configurado == 'true'
+        run: |
+          echo "GCSGREP_TEST_BUCKET=gcsgrep-test-ci-${{ github.run_id }}" >> "$GITHUB_ENV"
+          echo "GCSGREP_TEST_REGION=${{ inputs.region }}" >> "$GITHUB_ENV"
+          echo "GCSGREP_TEST_YES=1" >> "$GITHUB_ENV"
+
+      - name: Crear el campo de pruebas
+        if: steps.guard.outputs.configurado == 'true'
+        run: ./scripts/testing-ground.sh up
+
+      - name: Chequeos de integración (shell) — I-1 … I-6
+        if: steps.guard.outputs.configurado == 'true'
+        run: ./scripts/testing-ground.sh verify
+
+      - name: Chequeos de integración (pytest) — I-1, I-2, I-3, I-5
+        if: steps.guard.outputs.configurado == 'true'
+        run: python -m pytest -m integration -v
+
+      # `always()` para que el bucket no quede vivo cobrando si algo falló antes.
+      - name: Destruir el campo de pruebas
+        if: always() && steps.guard.outputs.configurado == 'true'
+        run: ./scripts/testing-ground.sh down
+
+      - name: Recordatorio de registro
+        if: steps.guard.outputs.configurado == 'true'
+        run: |
+          {
+            echo "### Integración ejecutada"
+            echo
+            echo "Bucket: \`$GCSGREP_TEST_BUCKET\` (ya destruido)."
+            echo
+            echo "**Anotá lo observado** en la tabla de integración de"
+            echo "\`specs/gcsgrep/04-cobertura-vc.md\`. Si la corrida no queda"
+            echo "registrada ahí, para el repo no pasó — y el hallazgo H-9 de"
+            echo "\`docs/revision-spec.md\` sigue abierto."
+          } >> "$GITHUB_STEP_SUMMARY"

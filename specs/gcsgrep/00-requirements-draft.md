@@ -1,12 +1,21 @@
 # gcsgrep — requerimientos (borrador)
 
-> **Estado: borrador.** Este documento está **deliberadamente subespecificado**.
-> No es una spec. Es el punto de partida de la tarea de la Lección 1: tu trabajo
-> es refinarlo hasta convertirlo en un contrato verificable.
+> **Estado: CONGELADO.** Documento histórico, no se edita nunca.
+>
+> Es el punto de partida de la tarea de la Lección 1: un borrador
+> **deliberadamente subespecificado**. No es una spec y no describe el
+> comportamiento actual de la herramienta. Se conserva tal como se recibió para
+> que se pueda auditar la distancia entre lo que se pidió y lo que se
+> especificó; esa auditoría es la tabla *Trazabilidad borrador → spec* de
+> [`02-spec.md`](./02-spec.md).
 >
 > Los FRs de abajo son vagos a propósito, los BRs son candidatos sin decidir, los
 > NFRs están en blanco, y hay una lista de preguntas abiertas al final. Si algo te
 > parece impreciso, no es un error del documento: es el ejercicio.
+>
+> **Para saber qué se decidió sobre cada punto de acá, no leas este archivo:**
+> mirá la tabla borrador → spec en [`02-spec.md`](./02-spec.md) y los ADRs en
+> [`docs/adr/`](../../docs/adr/).
 
 ## La idea
 
@@ -123,10 +132,22 @@ Esto es tu **base context**, no tu spec. El camino es:
 4. Partirla en un plan de iteraciones.
 5. Implementar y verificar la Iteración 1.
 
-La consigna completa está en [`enunciado.md`](./enunciado.md). Leela antes de empezar,
-no después.
+La consigna completa está en [`enunciado.md`](../../enunciado.md). Leela antes de
+empezar, no después.
+
+> **Dónde terminó cada paso** (agregado al congelar este documento; el borrador
+> original terminaba acá):
+>
+> | Paso | Artefacto |
+> |---|---|
+> | 1 · Refinar | [`01-base-context.md`](./01-base-context.md) + [`docs/adr/`](../../docs/adr/) |
+> | 2 · Especificar | [`02-spec.md`](./02-spec.md) |
+> | 3 · Revisar | [`docs/revision-spec.md`](../../docs/revision-spec.md) |
+> | 4 · Planificar | [`03-plan.md`](./03-plan.md) |
+> | 5 · Implementar y verificar | `gcsgrep/` + [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
 Si querés ver cómo se ven esos artefactos terminados, mirá el ejemplo guiado en
-[`../ejemplo-guiado/`](../ejemplo-guiado/) — es otro proyecto (un CLI de tareas),
-resuelto de punta a punta, justamente para que puedas usarlo de referencia sin que
-te resuelva esta tarea.
+`../ejemplo-guiado/` — es otro proyecto (un CLI de tareas), resuelto de punta a
+punta, justamente para que puedas usarlo de referencia sin que te resuelva esta
+tarea. *(Ese directorio vive en el repo del curso, no en este; el enlace
+original quedó roto al extraer la tarea a su propio repositorio.)*

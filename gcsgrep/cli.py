@@ -2,7 +2,7 @@
 
 import argparse
 import sys
-from typing import List, Optional, Sequence
+from typing import Optional, Sequence
 
 from . import core, gcs
 
@@ -20,6 +20,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def format_match(match: core.Match, show_line_numbers: bool) -> str:
+    """Formato estilo `grep` (ADR-0007)."""
     uri = f"gs://{match.bucket}/{match.object_name}"
     if show_line_numbers:
         return f"{uri}:{match.line_number}:{match.text}"
@@ -42,14 +43,15 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         show_line_numbers=args.line_number,
     )
 
-    matches: List[core.Match] = core.search(
-        bucket, prefix, config, gcs.list_objects, gcs.open_text_stream
-    )
+    # Se imprime cada match en cuanto aparece, con flush, para que la salida
+    # sea incremental (FR-11 / ADR-0011). Consecuencia: no se puede contar los
+    # matches antes de imprimirlos, así que el exit code sale de un flag.
+    found_any = False
+    for match in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_text_stream):
+        found_any = True
+        print(format_match(match, args.line_number), flush=True)
 
-    for match in matches:
-        print(format_match(match, args.line_number))
-
-    return 0 if matches else 1
+    return 0 if found_any else 1
 
 
 if __name__ == "__main__":

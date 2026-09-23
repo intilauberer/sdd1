@@ -1,11 +1,30 @@
 # gcsgrep — spec
 
-> **Estado: revisada.** Sin preguntas abiertas — construida a partir de
-> [`gcsgrep-base-context.md`](./gcsgrep-base-context.md), que resuelve las 10
-> preguntas abiertas del borrador original ([`gcsgrep-requirements.md`](./gcsgrep-requirements.md)).
+| | |
+|---|---|
+| **Versión** | 1.1 |
+| **Estado** | habilitada, con la excepción registrada en la revisión (ver más abajo) |
+| **Fecha** | 2026-09-23 |
+| **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-12, 10 hallazgos |
+| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) |
+| **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
+
+> **Cómo cambia este documento.** No es inmutable, pero tampoco se edita en el
+> lugar: todo cambio sube la versión, deja una fila en el *Historial de
+> revisiones* del final, y pasa por el checklist de
+> [`docs/revision-spec.md`](../../docs/revision-spec.md). El fundamento de cada
+> decisión **no vive acá**: vive en un ADR con identificador estable, y un ADR
+> aceptado no se edita, se supersede.
 >
-> Regla estructural: **cada FR y cada BR tiene un VC.** Si una línea no se puede
-> verificar, no está especificada.
+> Dos reglas estructurales:
+>
+> 1. **Cada FR y cada BR tiene un VC.** Si una línea no se puede verificar, no
+>    está especificada.
+> 2. **Cada ítem del borrador terminó en algo:** un FR/BR/NFR, la lista de
+>    "Fuera", o una iteración del plan. La tabla *Trazabilidad borrador → spec*
+>    lo demuestra fila por fila. Esta segunda regla se agregó en v1.1, después
+>    de que la revisión encontrara dos requerimientos del borrador que se habían
+>    perdido en silencio.
 
 ## Propósito
 
@@ -22,25 +41,38 @@ Cloud Storage sin descargarlos primero, con la misma experiencia mental que
 - Autenticación por Application Default Credentials.
 - Guardrail de costo por cantidad de objetos.
 - Exit codes estilo `grep`, salida apta para scripting.
+- Salida incremental: cada match se imprime en cuanto se encuentra.
 
 ### Fuera
 
-Cada uno de estos es una decisión tomada, no un olvido:
+Cada uno de estos es una decisión tomada, no un olvido. El fundamento está en
+el ADR que se cita:
 
-- **Regex** (básica o completa) — solo substring literal en v1.
+- **Regex** (básica o completa) — solo substring literal en v1
+  ([ADR-0001](../../docs/adr/ADR-0001-busqueda-literal.md)).
 - **Flags de `grep` más allá de `-i` y `-n`** (`-l`, `-c`, `-v`, `-r`,
-  `--include`, etc).
-- **Descompresión de `.gz`** — se saltean, no se leen.
+  `--include`, etc) ([ADR-0004](../../docs/adr/ADR-0004-flags-v1.md)).
+- **Descompresión de `.gz`** — se saltean, no se leen
+  ([ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md)).
 - **Autenticación por archivo de service account explícito** — solo ADC; si
-  `GOOGLE_APPLICATION_CREDENTIALS` apunta a una key, ADC ya la resuelve sola.
-- **Lectura concurrente de objetos** — secuencial en v1.
-- **Salida JSON** — solo formato estilo `grep`.
+  `GOOGLE_APPLICATION_CREDENTIALS` apunta a una key, ADC ya la resuelve sola
+  ([ADR-0002](../../docs/adr/ADR-0002-autenticacion-adc.md)).
+- **Lectura concurrente de objetos** — secuencial en v1
+  ([ADR-0009](../../docs/adr/ADR-0009-lectura-secuencial.md)).
+- **Umbral de rendimiento** — declinado en v1 con fundamento, diferido a la
+  Iteración 3, donde el número es comparativo contra la línea de base
+  secuencial ([ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md)).
+- **Indicador de progreso explícito** (barra, contador por stderr) — el
+  progreso se manifiesta como salida incremental, ver FR-11
+  ([ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md)).
+- **Salida JSON** — solo formato estilo `grep`
+  ([ADR-0007](../../docs/adr/ADR-0007-formato-de-salida.md)).
 - **Providers que no son GCS** (S3, Azure Blob).
 - **Reintentos automáticos ante fallos de red transitorios.**
 - **Consistencia ante un objeto modificado mientras se lee** — riesgo conocido,
-  aceptado (ver base context).
+  aceptado ([ADR-0010](../../docs/adr/ADR-0010-objeto-modificado.md)).
 - **Escritura, borrado o modificación de cualquier objeto o permiso en GCS** —
-  la herramienta es de solo lectura, siempre.
+  la herramienta es de solo lectura, siempre (BR-1).
 
 ## Actores
 
@@ -166,6 +198,28 @@ contenido comprimido como texto, y lo anota en el resumen de salteados.
 > no falla ni imprime contenido corrupto para ese objeto, y stderr lo menciona
 > como salteado.
 
+### FR-11 · Salida incremental
+
+**Dado** un prefijo con varios objetos que contienen el patrón,
+**Cuando** la persona ejecuta `gcsgrep`,
+**Entonces** cada match se emite por stdout en cuanto se encuentra, sin esperar
+a que termine de recorrerse el prefijo.
+
+*Origen:* FR-g del borrador ("el usuario tiene que poder darse cuenta de que
+está progresando cuando hay muchos objetos, porque si no parece colgado"),
+resuelto en [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md). El
+progreso **es** la salida apareciendo: no hay barra ni contador.
+
+*Límite explícito:* una corrida larga **sin** matches no muestra nada hasta
+terminar. Aceptado en el ADR.
+
+> **VC-17** — Con tres objetos que matchean bajo el mismo prefijo, obtener el
+> primer match no requiere haber listado ni abierto los otros dos (se observa
+> sobre el doble de prueba, que registra qué objetos se consumieron y cuándo).
+> De punta a punta: si el primer objeto emite dos matches y después falla al
+> leerse, esos dos matches ya salieron por stdout antes de que la corrida
+> termine.
+
 ---
 
 ## Reglas de negocio
@@ -226,12 +280,18 @@ sin ambigüedad, igual que hace `grep` cuando un archivo no se puede abrir.
 ### NFR-1 · Memoria acotada por streaming
 
 El sistema procesa cada objeto línea por línea usando streaming de lectura, sin
-cargar el contenido completo del objeto en memoria de una vez.
+cargar el contenido completo del objeto en memoria de una vez, **y sin acumular
+los matches encontrados** (ver FR-11 y
+[ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md)).
 
 > **VC-14** — Sobre un objeto simulado de **200 MB** de contenido de texto, el
 > pico de memoria adicional usado por el proceso de lectura de ese objeto es
-> menor a **20 MB** (medido sobre el doble de prueba que expone el stream;
-> nunca se llama a un equivalente de "leer todo el archivo" sobre él).
+> menor a **20 MB** (medido con `tracemalloc` sobre el doble de prueba que
+> expone el stream; nunca se llama a un equivalente de "leer todo el archivo"
+> sobre él). Se mide en **dos** condiciones: con un patrón que no aparece en
+> ninguna línea, y con un patrón que aparece en **todas**. El segundo caso es
+> el que hace falsable al VC: con acumulación de matches, el pico medido es de
+> ~371 MB.
 
 ### NFR-2 · Fallos de red no crashean el proceso
 
@@ -256,7 +316,7 @@ va a stderr. Ningún caso de error imprime un stack trace de Python.
 
 ---
 
-## Tabla de trazabilidad
+## Tabla de trazabilidad · requerimiento → VC
 
 | Requerimiento | VC | Camino |
 |---|---|---|
@@ -270,6 +330,7 @@ va a stderr. Ningún caso de error imprime un stack trace de Python.
 | FR-8 | VC-8 | falla (input inválido) |
 | FR-9 | VC-9 | borde (binario) |
 | FR-10 | VC-10 | borde (.gz) |
+| FR-11 | VC-17 | invariante (observabilidad) |
 | BR-1 | VC-11 | invariante |
 | BR-2 | VC-12 | guardrail |
 | BR-3 | VC-13 | invariante |
@@ -277,13 +338,61 @@ va a stderr. Ningún caso de error imprime un stack trace de Python.
 | NFR-2 | VC-15 | falla |
 | NFR-3 | VC-16 | invariante |
 
-**16 requerimientos, 16 VCs, 0 huérfanos.**
+**17 requerimientos, 17 VCs, 0 huérfanos.**
+
+## Tabla de trazabilidad · borrador → spec
+
+La tabla de arriba prueba que ningún requerimiento de esta spec quedó sin VC.
+Esta prueba lo otro, que es lo que faltaba en v1.0: que ningún ítem del
+[borrador](./00-requirements-draft.md) quedó sin destino. Los dos huérfanos que
+encontró la revisión (FR-g y NFR-a) están marcados con su resolución.
+
+| Ítem del borrador | Destino | Dónde |
+|---|---|---|
+| FR-a · patrón + ubicación, busca dentro de los objetos | FR-1 | Iteración 1 |
+| FR-b · bucket completo o prefijo | FR-7 | Iteración 1 |
+| FR-c · salida deja claro el objeto, y la línea si se puede | FR-4 (objeto) + FR-3 (línea, tras `-n`) | Iteración 1 |
+| FR-d · búsqueda sin distinguir mayúsculas | FR-2 | Iteración 1 |
+| FR-e · avisar "no encontré nada" de forma detectable por un script | FR-5 (exit `1`) | Iteración 1 |
+| FR-f · un objeto ilegible no tira la corrida | FR-6 | Iteración 2 |
+| FR-g · notar el progreso con muchos objetos | **FR-11** — resuelto en v1.1, [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md). Era huérfano en v1.0 (hallazgo H-1) | Iteración 1 |
+| BR-a? · nunca escribe en GCS | BR-1 | Iteración 2 |
+| BR-b? · no amplía el acceso del invocador | BR-1 (fusionado) + [ADR-0002](../../docs/adr/ADR-0002-autenticacion-adc.md) | Iteración 2 |
+| BR-c? · límite para no escanear un bucket enorme | BR-2, con tope decidido en objetos ([ADR-0006](../../docs/adr/ADR-0006-guardrail-de-costo.md)) | Iteración 2 |
+| BR-d? · saltear lo que no es texto | FR-9 (es comportamiento observable, no regla de negocio) + [ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md) | Iteración 2 |
+| NFR-a · rendimiento | **Declinado en v1 con fundamento**, diferido a Iteración 3, [ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md). Estaba en `_pendiente_` en v1.0 (hallazgo H-2) | Iteración 3 |
+| NFR-b · memoria con objetos grandes | NFR-1, umbral 20 MB sobre 200 MB | Iteración 1 |
+| NFR-c · comportamiento ante fallos de red | NFR-2 | Iteración 2 |
+
+**14 ítems del borrador, 14 con destino explícito, 0 perdidos.**
+
+Dos notas sobre la forma de esta tabla:
+
+- **FR-c se abrió en dos.** El borrador metía dos comportamientos en una línea
+  ("el objeto, y la línea si se puede"). Un FR por comportamiento.
+- **BR-a? y BR-b? se fusionaron.** Son la misma invariante vista de dos lados:
+  no escribir y no elevar privilegios. Un solo BR con un solo VC.
 
 ## Preguntas abiertas
 
-Ninguna. Las 10 preguntas del borrador original quedaron resueltas en
-[`gcsgrep-base-context.md`](./gcsgrep-base-context.md).
+Ninguna. Las 10 del borrador quedaron resueltas como
+[ADR-0001 … ADR-0010](../../docs/adr/); los dos huérfanos que encontró la
+revisión, como ADR-0011 y ADR-0012.
 
 ## Qué sigue
 
-El plan de iteraciones está en [`gcsgrep-plan.md`](./gcsgrep-plan.md).
+- Plan de iteraciones: [`03-plan.md`](./03-plan.md).
+- Estado de verificación (única fuente de verdad sobre qué VC pasa):
+  [`04-cobertura-vc.md`](./04-cobertura-vc.md).
+
+## Historial de revisiones
+
+| Versión | Fecha | Cambio | Origen |
+|---|---|---|---|
+| 1.0 | 2026-09-23 | Primera spec a partir del base context. 16 FR/BR/NFR, 16 VCs. | paso Especificar |
+| 1.1 | 2026-09-23 | **+FR-11/VC-17** (salida incremental, resuelve FR-g). **NFR-a declinado** con fundamento en vez de quedar pendiente. **VC-14 reforzado** con el caso donde todo matchea. Fundamento movido a ADRs; la spec los referencia. Nueva tabla borrador → spec. Encabezado versionado. | [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgos H-1, H-2, H-3, H-5, H-7, H-8 |
+
+**Cambio de contrato anunciado para v1.2:** BR-3 hace que un error de lectura
+parcial fuerce exit `2` aunque haya matches. Eso cambia el resultado observable
+de corridas que la Iteración 1 ya puede producir. Cuando se implemente la
+Iteración 2, va en una fila nueva de este historial, no en una edición muda.

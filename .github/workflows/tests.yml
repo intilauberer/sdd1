@@ -1,0 +1,55 @@
+name: tests
+
+# Convierte los ✅ de specs/gcsgrep/04-cobertura-vc.md en una afirmación
+# chequeada por una máquina, y no en una línea de markdown que alguien se
+# acordó de actualizar.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+jobs:
+  unit:
+    name: VCs offline · Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.9 es el piso declarado en pyproject.toml; 3.12 es lo que se usa para
+        # desarrollar. Si el piso se sube, se cambia en los dos lugares.
+        python-version: ["3.9", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Instalar el paquete y las dependencias de desarrollo
+        run: |
+          python -m pip install --upgrade pip
+          pip install -e '.[dev]'
+
+      - name: Correr los VCs
+        # Los tests de integración quedan deseleccionados por el addopts de
+        # pyproject.toml: esta corrida no toca la red ni cuesta plata.
+        run: python -m pytest -v
+
+  docs:
+    name: Trazabilidad de los documentos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Enlaces relativos entre artefactos
+        # Un enlace roto entre spec, ADR, plan y cobertura es deuda silenciosa:
+        # el documento se sigue leyendo bien y la trazabilidad ya no existe.
+        run: python scripts/check-doc-links.py
+
+      - name: El shell del campo de pruebas parsea
+        run: bash -n scripts/testing-ground.sh

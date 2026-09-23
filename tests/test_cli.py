@@ -3,7 +3,7 @@
 import pytest
 
 from gcsgrep import cli, gcs
-from .fakes import FakeGCS
+from .fakes import ExplodingStream, FakeGCS
 
 
 @pytest.fixture
@@ -102,3 +102,38 @@ def test_vc8_esquema_no_soportado_exit_2(capsys):
 
     assert exit_code == 2
     assert "gs://" in captured.err
+
+
+
+def test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida(monkeypatch, capsys):
+    """VC-17 — FR-11: la salida es incremental, también de punta a punta.
+
+    El objeto emite dos líneas que matchean y después falla al leer. Si `cli`
+    imprimiera al final (el comportamiento anterior a ADR-0011), la excepción
+    se llevaría los dos matches y stdout quedaría vacío. Con salida incremental
+    ya salieron.
+
+    Este test NO especifica nada sobre el manejo de errores de lectura: que la
+    excepción se propague es el estado actual de la Iteración 1. FR-6 la va a
+    convertir en un mensaje por stderr en la Iteración 2, y este test seguirá
+    valiendo porque solo mira lo que ya se imprimió.
+    """
+    boom = OSError("fallo de lectura simulado")
+
+    def list_objects(bucket, prefix):
+        return ["logs/a.txt"]
+
+    def open_text_stream(bucket, name):
+        return ExplodingStream(["timeout uno\n", "timeout dos\n"], boom)
+
+    monkeypatch.setattr(gcs, "list_objects", list_objects)
+    monkeypatch.setattr(gcs, "open_text_stream", open_text_stream)
+
+    with pytest.raises(OSError):
+        cli.main(["timeout", "gs://b/logs/"])
+
+    out = capsys.readouterr().out
+    assert out.splitlines() == [
+        "gs://b/logs/a.txt:timeout uno",
+        "gs://b/logs/a.txt:timeout dos",
+    ]
