@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Versión** | 1.1 |
+| **Versión** | 1.2 |
 | **Estado** | habilitada, con la excepción registrada en la revisión (ver más abajo) |
 | **Fecha** | 2026-09-23 |
-| **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-12, 10 hallazgos |
+| **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-13, 12 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) |
 | **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) |
 | **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
@@ -16,7 +16,7 @@
 > decisión **no vive acá**: vive en un ADR con identificador estable, y un ADR
 > aceptado no se edita, se supersede.
 >
-> Dos reglas estructurales:
+> Tres reglas estructurales, cada una con su tabla de trazabilidad al final:
 >
 > 1. **Cada FR y cada BR tiene un VC.** Si una línea no se puede verificar, no
 >    está especificada.
@@ -25,6 +25,16 @@
 >    lo demuestra fila por fila. Esta segunda regla se agregó en v1.1, después
 >    de que la revisión encontrara dos requerimientos del borrador que se habían
 >    perdido en silencio.
+> 3. **Cada modo de falla nombrado en la tabla de Actores tiene un requerimiento
+>    que lo cubre.** Agregada en v1.2 por
+>    [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md): la tabla de Actores
+>    declaraba que GCS "puede fallar por permisos, red, o no existir", y el
+>    tercero no había aterrizado en ningún requerimiento. Las reglas 1 y 2 no
+>    podían detectarlo — una mira los requerimientos que existen, la otra el
+>    borrador, y esta obligación había nacido dentro de la spec.
+>
+> Las tres son la misma idea aplicada en tres direcciones: **toda tabla que
+> declara obligaciones necesita otra tabla que demuestre que se cumplieron.**
 
 ## Propósito
 
@@ -80,7 +90,12 @@ el ADR que se cita:
 |---|---|
 | **Persona usuaria** | Ejecuta `gcsgrep` en una shell y lee la salida en pantalla |
 | **Script** | Ejecuta `gcsgrep` y decide en base al exit code, no al texto de salida |
-| **GCS** | Fuente de los objetos; puede fallar por permisos, red, o no existir |
+| **GCS** | Fuente de los objetos; puede fallar por **permisos**, **red**, o **no existir** |
+
+Los tres modos de falla de GCS están en negrita porque son obligaciones: cada uno
+tiene que aterrizar en un requerimiento, y la tabla *Trazabilidad actores →
+requerimiento* lo demuestra. No es decoración: el tercero estuvo declarado acá y
+sin cubrir desde la v1.0 hasta la v1.2.
 
 ---
 
@@ -220,6 +235,38 @@ terminar. Aceptado en el ADR.
 > leerse, esos dos matches ya salieron por stdout antes de que la corrida
 > termine.
 
+### FR-12 · Bucket inexistente o inaccesible
+
+**Dado** una ubicación sintácticamente válida (pasa FR-8) cuyo bucket no existe,
+o sobre el cual quien invoca no tiene permiso de listado,
+**Cuando** la persona ejecuta `gcsgrep`,
+**Entonces** el sistema informa por stderr con un mensaje legible que nombra el
+bucket y **distingue "no existe" de "sin permiso"**, sale con código `2`, y no
+lee el contenido de ningún objeto.
+
+*Origen:* [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md). La tabla de
+Actores declaraba desde la v1.0 que GCS "puede fallar por permisos, red, o **no
+existir**", y ningún requerimiento cubría el tercer caso. Se descubrió con un
+`NotFound: 404` que escapó como traceback de Python y exit `1`.
+
+*Por qué es un requerimiento aparte y no una extensión de otro:* FR-5 exige un
+prefijo "válido y accesible" como premisa; FR-8 cubre la sintaxis, y
+`gs://no-existe/` es sintácticamente correcta; FR-6 es por objeto y no aborta la
+corrida, mientras que acá falla el **listado** y no hay objetos sobre los que
+seguir; y NFR-2 habla de fallos de **red**, que un 404 no es — la red funcionó y
+la respuesta fue explícita.
+
+*Por qué se distinguen los dos mensajes:* mandan a quien lee a lugares distintos.
+"No existe" manda a revisar el nombre; "sin permiso" manda a revisar IAM. Un
+mensaje único obliga a diagnosticar dos veces.
+
+> **VC-18** — Con un bucket inexistente, `gcsgrep "x" gs://no-existe/` sale con
+> código `2`, stdout vacío, stderr menciona el nombre del bucket e indica que no
+> existe, y stderr no contiene `Traceback`. Con un bucket que existe pero sobre el
+> que no hay permiso de listado, el mismo exit code `2` y un mensaje **distinto**,
+> que menciona los permisos. En ninguno de los dos casos se abre un objeto
+> (0 llamadas a abrir un stream).
+
 ---
 
 ## Reglas de negocio
@@ -311,8 +358,8 @@ error o de resumen (objetos salteados, objetos fallidos, guardrail excedido)
 va a stderr. Ningún caso de error imprime un stack trace de Python.
 
 > **VC-16** — Para cada caso de error o salteo cubierto (VC-6, VC-8, VC-9,
-> VC-10, VC-12, VC-13, VC-15), stdout no contiene ninguna línea que no sea un
-> match real, y stderr no contiene la palabra `Traceback`.
+> VC-10, VC-12, VC-13, VC-15, VC-18), stdout no contiene ninguna línea que no sea
+> un match real, y stderr no contiene la palabra `Traceback`.
 
 ---
 
@@ -331,6 +378,7 @@ va a stderr. Ningún caso de error imprime un stack trace de Python.
 | FR-9 | VC-9 | borde (binario) |
 | FR-10 | VC-10 | borde (.gz) |
 | FR-11 | VC-17 | invariante (observabilidad) |
+| FR-12 | VC-18 | falla (bucket inexistente / sin permiso) |
 | BR-1 | VC-11 | invariante |
 | BR-2 | VC-12 | guardrail |
 | BR-3 | VC-13 | invariante |
@@ -338,7 +386,7 @@ va a stderr. Ningún caso de error imprime un stack trace de Python.
 | NFR-2 | VC-15 | falla |
 | NFR-3 | VC-16 | invariante |
 
-**17 requerimientos, 17 VCs, 0 huérfanos.**
+**18 requerimientos, 18 VCs, 0 huérfanos.**
 
 ## Tabla de trazabilidad · borrador → spec
 
@@ -373,6 +421,40 @@ Dos notas sobre la forma de esta tabla:
 - **BR-a? y BR-b? se fusionaron.** Son la misma invariante vista de dos lados:
   no escribir y no elevar privilegios. Un solo BR con un solo VC.
 
+## Tabla de trazabilidad · actores → requerimiento
+
+Las dos tablas de arriba cubren los requerimientos que existen y los ítems del
+borrador. Esta cubre la tercera fuente de obligaciones, que no estaba vigilada por
+ninguna de las dos: **los modos de falla declarados en la tabla de Actores.**
+
+Se agregó en v1.2 por [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md), que
+encontró uno declarado desde la v1.0 y nunca cubierto.
+
+| Actor | Modo de falla declarado | Requerimiento que lo cubre | VC |
+|---|---|---|---|
+| GCS | **Permisos** — sobre un objeto puntual | FR-6 (informa y sigue) + BR-3 (exit `2`) | VC-6, VC-13 |
+| GCS | **Permisos** — sobre el listado del bucket | **FR-12** (mensaje distinto del de "no existe") | VC-18 |
+| GCS | **Red** — al leer un objeto | FR-6 + BR-3 | VC-6, VC-13 |
+| GCS | **Red** — al listar | NFR-2 (aborta con `2`, sin traceback) | VC-15 |
+| GCS | **No existir** — el bucket | **FR-12** — *era el huérfano de H-12* | VC-18 |
+| GCS | **No existir** — el prefijo (0 objetos) | FR-5 (exit `1`, es un resultado válido, no un error) | VC-5 |
+| Persona usuaria | Ubicación mal escrita | FR-8 (exit `2` sin tocar la red) | VC-8 |
+| Persona usuaria | Prefijo gigante, corrida costosa | BR-2 (guardrail, tope 1000) | VC-12 |
+| Script | Necesita decidir sin parsear texto | FR-5, BR-3, NFR-3 (exit codes + stdout limpio) | VC-5, VC-13, VC-16 |
+
+**9 modos de falla declarados, 9 cubiertos, 0 huérfanos.**
+
+Dos notas sobre la forma de esta tabla:
+
+- **"Permisos", "red" y "no existir" se abrieron por dónde ocurren.** Un fallo al
+  **listar** aborta la corrida; el mismo fallo sobre **un objeto** no. Escritos
+  como una sola línea, fue precisamente lo que permitió que el caso del listado se
+  perdiera: "permisos" parecía cubierto por FR-6.
+- **"Prefijo inexistente" no es un error.** Un prefijo sin objetos dentro de un
+  bucket que sí existe es indistinguible de un prefijo sin matches, y GCS no
+  reporta error: FR-5 (exit `1`) es la respuesta correcta. Solo el **bucket**
+  inexistente es un error, porque ahí GCS sí responde 404.
+
 ## Preguntas abiertas
 
 Ninguna. Las 10 del borrador quedaron resueltas como
@@ -391,8 +473,17 @@ revisión, como ADR-0011 y ADR-0012.
 |---|---|---|---|
 | 1.0 | 2026-09-23 | Primera spec a partir del base context. 16 FR/BR/NFR, 16 VCs. | paso Especificar |
 | 1.1 | 2026-09-23 | **+FR-11/VC-17** (salida incremental, resuelve FR-g). **NFR-a declinado** con fundamento en vez de quedar pendiente. **VC-14 reforzado** con el caso donde todo matchea. Fundamento movido a ADRs; la spec los referencia. Nueva tabla borrador → spec. Encabezado versionado. | [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgos H-1, H-2, H-3, H-5, H-7, H-8 |
+| 1.2 | 2026-09-23 | **+FR-12/VC-18** (bucket inexistente o inaccesible → exit `2`, mensaje que distingue "no existe" de "sin permiso"). **Tercera regla estructural** y su **tabla de trazabilidad actores → requerimiento**. VC-16 extendido a VC-18. Modos de falla de la tabla de Actores marcados como obligaciones. | [H-12](../../docs/hallazgos/H-12-actores-sin-trazar.md) |
 
-**Cambio de contrato anunciado para v1.2:** BR-3 hace que un error de lectura
-parcial fuerce exit `2` aunque haya matches. Eso cambia el resultado observable
-de corridas que la Iteración 1 ya puede producir. Cuando se implemente la
-Iteración 2, va en una fila nueva de este historial, no en una edición muda.
+**Qué cambió del contrato en v1.2.** FR-12 no cambia el resultado de ninguna
+corrida que la Iteración 1 ya produjera *correctamente*: hoy ese caso termina en
+traceback y exit `1`, que no era un comportamiento prometido por nadie. Pasa a ser
+exit `2` con un mensaje legible. No es una regresión ni rompe ningún VC existente;
+es un hueco del contrato que se cierra.
+
+**Cambio de contrato todavía pendiente, anunciado para v1.3:** BR-3 hace que un
+error de lectura parcial fuerce exit `2` aunque haya matches. Eso sí cambia el
+resultado observable de corridas que la Iteración 1 ya puede producir. Cuando se
+implemente la Iteración 2, va en una fila nueva de este historial, no en una
+edición muda. (Este anuncio decía "v1.2" hasta que v1.2 se usó para FR-12; el
+compromiso es el mismo, corre una versión.)

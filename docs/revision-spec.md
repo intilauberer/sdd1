@@ -36,6 +36,13 @@ no contra la intención de quien lo escribió.
 | C-10 | ¿El documento tiene versión, estado, fecha y responsable de la revisión? | ❌ → **H-8** |
 | C-11 | ¿El código implementado no contradice la spec? | ❌ → **H-3**, **H-6** |
 | C-12 | ¿Los criterios de entrega del enunciado están todos cumplidos? | ❌ → **H-9** |
+| C-13 | **¿Cada modo de falla nombrado en la tabla de Actores tiene un requerimiento que lo cubre?** | agregado después de esta revisión → ver **H-12** |
+
+**C-13 no existía cuando se aplicó este checklist**, y es la razón por la que H-12
+se descubrió recién al intentar la primera corrida real. Se agrega acá para que la
+revisión de la Iteración 2 lo incluya. Junto con C-6 (borrador → spec) y C-2
+(requerimiento → VC) cierra las tres direcciones de trazabilidad; cada una tiene
+su tabla en la spec.
 
 C-6 es el criterio que no existía antes de esta revisión. La spec verificaba la
 dirección *spec → VC* ("0 huérfanos") pero nunca la dirección *borrador → spec*.
@@ -167,6 +174,24 @@ legítima del test de una escritura del código bajo prueba.
 
 **Resolución:** anotado como precondición de VC-11 en la Iteración 2. No se
 toca ahora.
+
+## Hallazgos posteriores
+
+H-1 … H-10 son los de esta revisión y viven en este documento: es el acta de la
+revisión de la spec v1.1, y moverlos afuera la destruiría.
+
+Los hallazgos posteriores viven en [`hallazgos/`](./hallazgos/), un archivo por
+hallazgo, con la forma de [`adr/`](./adr/). El motivo es que crecen sin techo: un
+único archivo con todos se vuelve ilegible alrededor del vigésimo y se lee entero
+cada vez que se busca uno solo.
+
+| # | Hallazgo | Origen |
+|---|---|---|
+| [H-11](./hallazgos/H-11-runbook-vs-plan.md) | El runbook reclama I-6 para la Iteración 1; el plan lo asigna a la 2 | primer intento de montar el campo de pruebas |
+| [H-12](./hallazgos/H-12-actores-sin-trazar.md) | La tabla de Actores declara un modo de falla que ningún requerimiento cubre → C-13, spec v1.2 | primera corrida real, `NotFound: 404` |
+
+Qué artefacto cambia según lo que se descubra está en
+[`proceso-cambios.md`](./proceso-cambios.md).
 
 ## Resumen de cambios habilitados por esta revisión
 

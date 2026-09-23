@@ -14,6 +14,8 @@
 
 ## Qué cubre
 
+### Iteración 1
+
 | Chequeo | VC / decisión | Qué observa | Dónde corre |
 |---|---|---|---|
 | I-1 | VC-1, VC-4 | match real, con el URI `gs://…` en la salida | script + pytest |
@@ -21,10 +23,31 @@
 | I-3 | VC-5 | exit `1` y stdout vacío sin matches | script + pytest |
 | I-4 | VC-8 | exit `2` sin tocar la red | script |
 | I-5 | VC-17, NFR-1 | `\| head -3` corta sin leer el objeto de 200.000 líneas | script (pipe real) + pytest (primer match) |
+| I-7 | VC-18, FR-12 | bucket inexistente: exit `2`, mensaje que lo nombra, sin traceback | script + pytest |
+
+I-4 vive solo en el script porque no toca la red; I-7 necesita que **FR-12 esté
+implementado** (spec v1.2, pendiente de ticket), así que hasta entonces falla a
+propósito.
+
+### Iteración 2
+
+| Chequeo | VC / decisión | Qué observa | Dónde corre |
+|---|---|---|---|
 | I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script |
 
-I-4 e I-6 viven solo en el script: manipular las credenciales del proceso que
-corre pytest contamina el resto de la sesión.
+**Por qué I-6 se movió acá.** Hasta la spec v1.2 este runbook lo listaba como
+chequeo de la Iteración 1, pero verifica NFR-2, que el plan asigna a la Iteración 2
+— y `cli.py` no tiene el `try/except` que lo haría pasar. O sea: **no podía pasar
+por diseño**, y quien corriera `verify` iba a ver un ✗ y buscar el problema en el
+lugar equivocado. Ver
+[H-11](./hallazgos/H-11-runbook-vs-plan.md).
+
+I-6 vive solo en el script: manipular las credenciales del proceso que corre pytest
+contamina el resto de la sesión.
+
+Un chequeo de integración declara **a qué iteración pertenece**, igual que un VC.
+Un runbook escrito contra la spec completa verifica promesas que todavía no se
+hicieron.
 
 ## Costo
 
@@ -37,6 +60,10 @@ Lo que **sí** puede costar plata es olvidarse de correr `down`. El bucket
 persiste y se sigue cobrando el almacenamiento.
 
 ## Requisitos
+
+Estos son los del backend por defecto (`gcs`, contra Google Cloud real). El
+backend `emulador` no necesita ninguno salvo Docker — ver
+[Backend alternativo](#backend-alternativo-emulador-local).
 
 - `gcloud` instalado y autenticado para ADC:
   `gcloud auth application-default login`
@@ -55,7 +82,7 @@ export GCSGREP_TEST_BUCKET="gcsgrep-test-$(whoami)-$(date +%s)"
 # 2 · Crear el bucket y sembrar las fixtures
 ./scripts/testing-ground.sh up
 
-# 3 · Chequeos I-1 … I-6 (el script imprime observado vs esperado)
+# 3 · Chequeos de la Iteración 1: I-1 … I-5 e I-7 (imprime observado vs esperado)
 ./scripts/testing-ground.sh verify
 
 # 4 · Los mismos chequeos desde pytest, si preferís esa salida
@@ -88,6 +115,10 @@ Los dos últimos viven **fuera** de `logs/` a propósito: la Iteración 1 no sab
 saltear binarios ni `.gz`, así que si estuvieran bajo `logs/` romperían I-1. Se
 siembran igual para que la Iteración 2 tenga el campo de pruebas listo.
 
+**I-7 no tiene fixture**, y eso es el punto: apunta a un bucket que no existe
+(`gcsgrep-test-no-existe-jamas`). El único cuidado es que el nombre siga sin
+existir, por eso es largo y lleva el prefijo del campo de pruebas.
+
 ## Después de correrlo
 
 Anotá lo observado en la tabla de integración de
@@ -100,6 +131,56 @@ Si algún chequeo falla, **no lo arregles en el script**. Un chequeo que falla
 contra GCS real y pasa contra el doble de prueba significa que el doble miente:
 lo que hay que corregir es el doble, y después el código. Ese es el único valor
 que tiene esta verificación.
+
+## Backend alternativo: emulador local
+
+Crear un bucket en GCS exige una **billing account activa**, con tarjeta, incluso
+para quedarse dentro del free tier. Cuando eso no está disponible —o cuando se
+quiere correr esto en CI en cada push, que contra GCS real cuesta plata y
+credenciales— el campo de pruebas corre contra
+[`fake-gcs-server`](https://github.com/fsouza/fake-gcs-server), un emulador de la
+API de GCS en Docker:
+
+```bash
+docker run -d --name fake-gcs -p 4443:4443 \
+  fsouza/fake-gcs-server -scheme http
+
+export GCSGREP_TEST_BACKEND=emulador
+export STORAGE_EMULATOR_HOST=http://localhost:4443
+export GCSGREP_TEST_BUCKET=gcsgrep-test-emulador
+
+./scripts/testing-ground.sh up
+./scripts/testing-ground.sh verify
+./scripts/testing-ground.sh down
+```
+
+**`gcsgrep` no necesita ni una línea de código para esto.** El cliente de
+`google-cloud-storage` respeta `STORAGE_EMULATOR_HOST` por sí solo: no hacen falta
+`AnonymousCredentials` ni `client_options`, y por lo tanto
+[ADR-0002](./adr/ADR-0002-autenticacion-adc.md) no se toca. Lo único que cambia es
+cómo el script crea y siembra el bucket (API HTTP en vez de `gcloud storage`).
+
+### Qué verifica de verdad, y qué no
+
+| | Emulador | GCS real |
+|---|---|---|
+| El wiring del código | ✅ | ✅ |
+| `google-cloud-storage` de verdad, sobre HTTP | ✅ | ✅ |
+| Semántica de `list_blobs` con prefijos | ✅ mayormente | ✅ |
+| Streaming real sobre la red | ❌ (localhost) | ✅ |
+| ADC, IAM, permisos reales | ❌ | ✅ |
+| Latencia y comportamiento bajo carga | ❌ | ✅ |
+
+> **La regla, y no es negociable:** los resultados obtenidos contra el emulador se
+> anotan en la tabla de integración diciendo **"emulador"** en la columna
+> *Observado*, y el estado *"VCs verificados contra GCS real"* del resumen sigue en
+> **0**. Pasar contra un emulador y pasar contra GCS son dos afirmaciones
+> distintas, igual que pasar contra un doble de prueba y pasar contra GCS. Este
+> repo no las mezcla — es literalmente el hallazgo H-9.
+
+Dicho eso, el emulador **no es solo el plan B gratis**: es mejor banco de pruebas
+que GCS real para los VCs de error de la Iteración 2, porque un 403 o un 500 se
+provocan a voluntad. VC-6, VC-13 y VC-15 lo van a querer.
 
 ## En CI
 
