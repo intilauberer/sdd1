@@ -50,13 +50,11 @@ qué se pidió; una spec que se edita en silencio borra la evidencia de qué se
 prometió; un ADR que se edita borra la evidencia de por qué; una tabla de
 cobertura que se reescribe borra la evidencia de qué se verificó y cuándo.
 
-El pipeline de arriba va de un borrador a código verificado, y eso es de ida.
-Para lo que aparece **después** —una excepción mientras se prueba, un reporte de
-un compañero— el carril de entrada es
-[`docs/proceso-cambios.md`](./docs/proceso-cambios.md): dice qué artefacto cambia
-según lo que se descubrió, y por qué el código va siempre al final. Los
-descubrimientos quedan registrados en [`docs/hallazgos/`](./docs/hallazgos/), un
-archivo por hallazgo, con la misma forma que los ADRs porque crece igual.
+Ese pipeline es de ida: va de un borrador a código verificado. Para lo que
+aparece **después** —una excepción mientras se prueba, un reporte de un
+compañero— el carril de entrada es
+[`proceso-cambios.md`](./docs/proceso-cambios.md), y lo que se descubre queda en
+[`hallazgos/`](./docs/hallazgos/).
 
 ### Equivalencia con los nombres viejos
 
@@ -152,13 +150,6 @@ en el ADR correspondiente:
 Además, el guardrail de costo (`--max`) y el manejo de objetos ilegibles son
 alcance de la **Iteración 2**: todavía no están implementados.
 
-Y hay **un pendiente de la Iteración 1**: ante un bucket que no existe o sobre el
-que no hay permiso de listado, `gcsgrep` todavía termina con un traceback de
-Python y exit `1`, en vez del exit `2` con mensaje legible que promete FR-12. El
-requerimiento se agregó en la spec v1.2 después de encontrarlo
-([H-12](./docs/hallazgos/H-12-actores-sin-trazar.md)); el código va en su propio
-ticket.
-
 ## Arquitectura
 
 ```
@@ -221,22 +212,10 @@ El script se niega a operar sobre un bucket cuyo nombre no empiece con
 `gcsgrep-test-`: crea y borra buckets, así que el prefijo es el guardrail que
 evita apuntar a uno real por accidente.
 
-Crear un bucket en GCS exige billing habilitado, con tarjeta, incluso para el free
-tier. Sin eso, el mismo campo de pruebas corre contra un emulador local, gratis y
-sin cuenta:
-
-```bash
-docker run -d --name fake-gcs -p 4443:4443 fsouza/fake-gcs-server -scheme http
-export GCSGREP_TEST_BACKEND=emulador
-export STORAGE_EMULATOR_HOST=http://localhost:4443
-export GCSGREP_TEST_BUCKET=gcsgrep-test-emulador
-./scripts/testing-ground.sh all
-```
-
-`gcsgrep` no necesita ningún cambio para eso: el cliente de
-`google-cloud-storage` respeta `STORAGE_EMULATOR_HOST` por sí solo. **Lo que el
-emulador no verifica es ADC, IAM ni la red real**, así que sus resultados se
-anotan como *"emulador"* y el estado de "verificado contra GCS real" sigue en 0.
+Crear un bucket en GCS exige billing habilitado. Sin eso,
+`GCSGREP_TEST_BACKEND=emulador` corre el mismo campo de pruebas contra un
+emulador local, gratis y sin cuenta — con la salvedad de que no verifica ADC, IAM
+ni la red real, así que sus resultados no cuentan como "verificado contra GCS".
 
 Procedimiento completo, costo, los dos backends y wiring de CI en
 [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).

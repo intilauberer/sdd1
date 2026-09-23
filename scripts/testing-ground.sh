@@ -236,6 +236,7 @@ cmd_up() {
 
 cmd_verify() {
   resolver_bucket
+  [[ "$BACKEND" == "emulador" ]] && resolver_backend
   info "chequeos de integración contra gs://${BUCKET} — comando: ${GCSGREP[*]}"
   info "backend: ${BACKEND} · iteración verificada: ${ITERACION}"
   if [[ "$BACKEND" == "emulador" ]]; then
