@@ -14,6 +14,8 @@
 
 ## Qué cubre
 
+### Iteración 1
+
 | Chequeo | VC / decisión | Qué observa | Dónde corre |
 |---|---|---|---|
 | I-1 | VC-1, VC-4 | match real, con el URI `gs://…` en la salida | script + pytest |
@@ -21,10 +23,31 @@
 | I-3 | VC-5 | exit `1` y stdout vacío sin matches | script + pytest |
 | I-4 | VC-8 | exit `2` sin tocar la red | script |
 | I-5 | VC-17, NFR-1 | `\| head -3` corta sin leer el objeto de 200.000 líneas | script (pipe real) + pytest (primer match) |
+| I-7 | VC-18, FR-12 | bucket inexistente: exit `2`, mensaje que lo nombra, sin traceback | script + pytest |
+
+I-4 vive solo en el script porque no toca la red; I-7 necesita que **FR-12 esté
+implementado** (spec v1.2, pendiente de ticket), así que hasta entonces falla a
+propósito.
+
+### Iteración 2
+
+| Chequeo | VC / decisión | Qué observa | Dónde corre |
+|---|---|---|---|
 | I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script |
 
-I-4 e I-6 viven solo en el script: manipular las credenciales del proceso que
-corre pytest contamina el resto de la sesión.
+**Por qué I-6 se movió acá.** Hasta la spec v1.2 este runbook lo listaba como
+chequeo de la Iteración 1, pero verifica NFR-2, que el plan asigna a la Iteración 2
+— y `cli.py` no tiene el `try/except` que lo haría pasar. O sea: **no podía pasar
+por diseño**, y quien corriera `verify` iba a ver un ✗ y buscar el problema en el
+lugar equivocado. Ver
+[H-11](./hallazgos/H-11-runbook-vs-plan.md).
+
+I-6 vive solo en el script: manipular las credenciales del proceso que corre pytest
+contamina el resto de la sesión.
+
+Un chequeo de integración declara **a qué iteración pertenece**, igual que un VC.
+Un runbook escrito contra la spec completa verifica promesas que todavía no se
+hicieron.
 
 ## Costo
 
@@ -35,6 +58,24 @@ entra en el free tier de GCS; si no, es del orden de centavos.
 
 Lo que **sí** puede costar plata es olvidarse de correr `down`. El bucket
 persiste y se sigue cobrando el almacenamiento.
+
+### Decisión pendiente: cómo correr esto sin una cuenta con billing
+
+Crear un bucket en GCS exige una **billing account activa**, con medio de pago,
+incluso para quedarse dentro del free tier. Mientras el equipo no tenga una, H-9
+no se puede cerrar por este camino y **no está decidido cuál se toma**. Las
+opciones sobre la mesa, sin elegir:
+
+| Opción | Costo | Qué verificaría de verdad |
+|---|---|---|
+| Free tier de GCS (tarjeta, sin cargo) | $0 si no se excede | todo: GCS, ADC, IAM, red |
+| Crédito educativo de la facultad | $0, sin tarjeta | ídem, si existe el cupón |
+| Billing de un integrante del equipo | $0 | ídem; alcanza con una corrida |
+| Emulador local de la API de GCS | $0, sin cuenta | el cliente y el wiring; **no** ADC, IAM ni red real |
+
+La última cambiaría este runbook y el script, así que **no se documenta como
+procedimiento soportado hasta que se decida**. Lo que no cambia en ningún caso es
+la regla: lo que no se corrió contra GCS no se anota como verificado contra GCS.
 
 ## Requisitos
 
@@ -55,7 +96,7 @@ export GCSGREP_TEST_BUCKET="gcsgrep-test-$(whoami)-$(date +%s)"
 # 2 · Crear el bucket y sembrar las fixtures
 ./scripts/testing-ground.sh up
 
-# 3 · Chequeos I-1 … I-6 (el script imprime observado vs esperado)
+# 3 · Chequeos de la Iteración 1: I-1 … I-5 e I-7 (imprime observado vs esperado)
 ./scripts/testing-ground.sh verify
 
 # 4 · Los mismos chequeos desde pytest, si preferís esa salida
@@ -87,6 +128,10 @@ GCSGREP_TEST_YES=1 ./scripts/testing-ground.sh all
 Los dos últimos viven **fuera** de `logs/` a propósito: la Iteración 1 no sabe
 saltear binarios ni `.gz`, así que si estuvieran bajo `logs/` romperían I-1. Se
 siembran igual para que la Iteración 2 tenga el campo de pruebas listo.
+
+**I-7 no tiene fixture**, y eso es el punto: apunta a un bucket que no existe
+(`gcsgrep-test-no-existe-jamas`). El único cuidado es que el nombre siga sin
+existir, por eso es largo y lleva el prefijo del campo de pruebas.
 
 ## Después de correrlo
 

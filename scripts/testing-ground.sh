@@ -6,7 +6,7 @@
 # chequeos de integración de la Iteración 1, y lo destruye.
 #
 #   ./scripts/testing-ground.sh up       # crea el bucket y sube las fixtures
-#   ./scripts/testing-ground.sh verify   # corre los chequeos I-1 … I-6
+#   ./scripts/testing-ground.sh verify   # corre los chequeos de la iteración
 #   ./scripts/testing-ground.sh down     # borra objetos y bucket (pide confirmación)
 #   ./scripts/testing-ground.sh all      # up && verify && down
 #
@@ -27,6 +27,13 @@ readonly PREFIJO_OBLIGATORIO="gcsgrep-test-"
 
 BUCKET="${GCSGREP_TEST_BUCKET:-}"
 REGION="${GCSGREP_TEST_REGION:-us-central1}"
+
+# Qué iteración se verifica. Cada chequeo declara a qué iteración pertenece, así
+# que 'verify' no reporta como falla algo que todavía no se prometió (H-11).
+ITERACION="${GCSGREP_TEST_ITERACION:-1}"
+
+# Bucket que no tiene que existir nunca, para I-7 (FR-12).
+readonly BUCKET_INEXISTENTE="gcsgrep-test-no-existe-jamas"
 
 # gcsgrep: el entry point instalado si existe, si no el módulo.
 if command -v gcsgrep >/dev/null 2>&1; then
@@ -136,6 +143,7 @@ cmd_up() {
 cmd_verify() {
   resolver_bucket
   info "chequeos de integración contra gs://${BUCKET} — comando: ${GCSGREP[*]}"
+  info "iteración verificada: ${ITERACION}"
 
   chequeo I-1 0 "búsqueda con match (VC-1, VC-4)" -- \
     "timeout" "gs://${BUCKET}/logs/"
@@ -161,24 +169,58 @@ cmd_verify() {
     fallas=$((fallas + 1))
   fi
 
-  info "I-6 ADC ausente (ADR-0002) — se corre con las credenciales tapadas"
-  local rc err
+  # I-7 · FR-12 / VC-18: bucket inexistente. Apunta a un bucket que no existe a
+  # propósito, así que no depende de las fixtures.
+  info "I-7 bucket inexistente (VC-18, FR-12)"
+  local rc7 err7
   set +e
-  err="$(CLOUDSDK_CONFIG=/nonexistent GOOGLE_APPLICATION_CREDENTIALS=/nonexistent \
-        GOOGLE_CLOUD_PROJECT="" "${GCSGREP[@]}" "timeout" "gs://${BUCKET}/logs/" 2>&1 >/dev/null)"
-  rc=$?
+  err7="$("${GCSGREP[@]}" "x" "gs://${BUCKET_INEXISTENTE}/" 2>&1 >/dev/null)"
+  rc7=$?
   set -e
-  if [[ "$rc" -eq 2 ]]; then
-    ok "I-6 exit 2 sin credenciales"
+  if [[ "$rc7" -eq 2 ]]; then
+    ok "I-7 exit 2 sobre un bucket que no existe"
   else
-    fail "I-6 exit ${rc}, esperaba 2 (NFR-2 / ADR-0002)"
+    fail "I-7 exit ${rc7}, esperaba 2 (FR-12) — ¿está implementado el try/except de cli.py?"
     fallas=$((fallas + 1))
   fi
-  if grep -q Traceback <<<"$err"; then
-    fail "I-6 stderr contiene un Traceback — viola NFR-3"
+  if grep -q Traceback <<<"$err7"; then
+    fail "I-7 stderr contiene un Traceback — viola NFR-3 y FR-12"
     fallas=$((fallas + 1))
   else
-    ok "I-6 stderr sin Traceback"
+    ok "I-7 stderr sin Traceback"
+  fi
+  if grep -q "$BUCKET_INEXISTENTE" <<<"$err7"; then
+    ok "I-7 el mensaje nombra el bucket"
+  else
+    fail "I-7 el mensaje no nombra el bucket '${BUCKET_INEXISTENTE}' (FR-12)"
+    fallas=$((fallas + 1))
+  fi
+
+  # I-6 · NFR-2, alcance de la Iteración 2 (H-11). No se corre verificando la
+  # Iteración 1: fallaría por algo que todavía no se prometió.
+  if [[ "$ITERACION" -ge 2 ]]; then
+    info "I-6 ADC ausente (ADR-0002) — se corre con las credenciales tapadas"
+    local rc err
+    set +e
+    err="$(CLOUDSDK_CONFIG=/nonexistent GOOGLE_APPLICATION_CREDENTIALS=/nonexistent \
+          GOOGLE_CLOUD_PROJECT="" "${GCSGREP[@]}" "timeout" "gs://${BUCKET}/logs/" 2>&1 >/dev/null)"
+    rc=$?
+    set -e
+    if [[ "$rc" -eq 2 ]]; then
+      ok "I-6 exit 2 sin credenciales"
+    else
+      fail "I-6 exit ${rc}, esperaba 2 (NFR-2 / ADR-0002)"
+      fallas=$((fallas + 1))
+    fi
+    if grep -q Traceback <<<"$err"; then
+      fail "I-6 stderr contiene un Traceback — viola NFR-3"
+      fallas=$((fallas + 1))
+    else
+      ok "I-6 stderr sin Traceback"
+    fi
+  else
+    info "I-6 salteado: verifica NFR-2, que es alcance de la Iteración 2 (H-11)."
+    info "  Para correrlo: GCSGREP_TEST_ITERACION=2"
   fi
 
   echo
@@ -211,14 +253,18 @@ usage() {
 Campo de pruebas de gcsgrep contra GCS real.
 
   ./scripts/testing-ground.sh up       # crea el bucket y sube las fixtures
-  ./scripts/testing-ground.sh verify   # corre los chequeos I-1 … I-6
+  ./scripts/testing-ground.sh verify   # corre los chequeos de la iteración
   ./scripts/testing-ground.sh down     # borra objetos y bucket (pide confirmación)
   ./scripts/testing-ground.sh all      # up && verify && down
 
 Variables:
-  GCSGREP_TEST_BUCKET   nombre del bucket; tiene que empezar con 'gcsgrep-test-'
-  GCSGREP_TEST_REGION   región del bucket (default: us-central1)
-  GCSGREP_TEST_YES=1    saltea la confirmación interactiva de 'down'
+  GCSGREP_TEST_BUCKET     nombre del bucket; tiene que empezar con 'gcsgrep-test-'
+  GCSGREP_TEST_ITERACION  qué iteración se verifica (default: 1)
+  GCSGREP_TEST_REGION     región del bucket (default: us-central1)
+  GCSGREP_TEST_YES=1      saltea la confirmación interactiva de 'down'
+
+Chequeos por iteración:
+  1 → I-1 … I-5, I-7      2 → todos, incluido I-6 (NFR-2)
 
 Requiere gcloud autenticado (`gcloud auth application-default login`) y un
 proyecto por defecto (`gcloud config set project <id>`).

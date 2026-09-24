@@ -1,9 +1,18 @@
 # gcsgrep — plan de iteraciones
 
-> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.1.
+> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.2.
 >
 > Cada iteración termina con código andando y sus VCs pasando antes de que
 > empiece la siguiente.
+>
+> **Enmienda 2026-09-23 (spec v1.2):** la **frontera de manejo de excepciones del
+> CLI** se incorpora a la **Iteración 1**, que ya estaba implementada — FR-12 /
+> VC-18 (bucket inexistente o inaccesible) y **VC-16 (b)** (una excepción
+> inesperada no puede terminar en traceback). El fundamento está más abajo, en la
+> sección de la Iteración 1; el hallazgo que lo originó, en
+> [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md). Se registra como
+> enmienda explícita y no como edición muda porque agranda el alcance de una
+> iteración ya declarada completa.
 
 ## Quién dice qué
 
@@ -27,7 +36,7 @@ porque esté comprometida para esta entrega.
 
 | Iteración | Entrega | Cubre |
 |---|---|---|
-| 1 | Búsqueda literal de punta a punta, con `-i`/`-n` y salida incremental | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, NFR-1, NFR-3 (parcial) |
+| 1 | Búsqueda literal de punta a punta, con `-i`/`-n`, salida incremental y frontera de excepciones | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, **FR-12**, NFR-1, NFR-3 (parcial, con la parte universal verificable) |
 | 2 | Resiliencia, guardrail de costo y contenido no-texto | FR-6, FR-9, FR-10, BR-1, BR-2, BR-3, NFR-2, NFR-3 (completo) |
 | 3 | Concurrencia y el NFR de rendimiento que la justifica | NFR de rendimiento (a definir), revisión de ADR-0009 y ADR-0011 |
 
@@ -55,14 +64,63 @@ prefijo real y obtener matches con el formato correcto, sin bajar nada a disco.
 - **Salida incremental**: `core.search` es un generador, `cli` imprime cada
   match en cuanto aparece ([ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md),
   agregado en la revisión 1.1).
+- **Frontera de manejo de excepciones en `cli.main()`** (enmienda de la spec v1.2,
+  [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md)). **Es el único
+  punto de esta iteración que no está en el código.** Dos mitades:
+  - **FR-12 / VC-18:** bucket inexistente o inaccesible → exit `2` con un mensaje
+    que distingue "no existe" de "sin permiso", sin traceback.
+  - **VC-16 (b):** una excepción **inesperada** tampoco puede terminar en
+    traceback → exit `2` y mensaje legible. Es lo que hace verificable la parte
+    universal de NFR-3, que prometía "ningún caso de error" desde la v1.0.
+
+  Empieza con un **ADR**, no con código: dónde vive la frontera es una decisión de
+  arquitectura con alternativas reales, y `core` no debe aprender a manejar errores
+  del SDK de GCS (rompería `cli → core → gcs`).
 
 **Fuera de alcance de esta iteración:** manejo de objetos ilegibles, salteo de
 binarios/`.gz`, guardrail de tope, fallos de red simulados. Se asume, por ahora,
 que todos los objetos bajo el prefijo son de texto y legibles.
 
-**VCs en alcance:** VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, y
-VC-16 parcial (solo para los casos de VC-5 y VC-8, que son los únicos caminos de
-error que existen en esta iteración).
+**VCs en alcance:** VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17,
+**VC-18**, **VC-16 (b)**, y VC-16 (a) parcial (solo para los casos de VC-5, VC-8 y
+VC-18, que son los únicos caminos de error enumerados que existen en esta
+iteración).
+
+### Por qué esto entra acá y no en la Iteración 2
+
+La Iteración 2 es la iteración de resiliencia, así que el manejo de errores
+*parece* pertenecerle entero. Cuatro razones para adelantar esta parte:
+
+0. **NFR-3 ya lo prometía**, desde la v1.0 y sin condicionarlo a ninguna
+   iteración: *"ningún caso de error imprime un stack trace de Python"*. No es
+   alcance nuevo que se adelanta, es una promesa vigente que no se cumple.
+
+1. **Es el error más frecuente de la herramienta.** Un typo en el nombre del
+   bucket es lo primero que le va a pasar a cualquiera. Hoy responde con un
+   traceback de 20 líneas y exit `1`.
+2. **La Iteración 1 ya lo puede producir.** No es alcance nuevo que aparece con
+   código nuevo: el camino existe desde el primer commit, simplemente no estaba
+   especificado.
+3. **El enunciado pide que la Iteración 1 "corra una búsqueda real".** El primer
+   intento real de correrla fue el que destapó el problema
+   ([H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md)).
+
+FR-12 y VC-16 (b) van juntos porque son la misma línea de código: el `try/except`
+que FR-12 necesita **es** la frontera que hace verificable a NFR-3. Implementar uno
+sin el otro sería escribir la frontera y no verificarla, o verificarla sin tenerla.
+
+**Lo que explícitamente NO se adelanta.** FR-12 cubre el fallo del **listado
+inicial** por bucket inexistente o sin permiso, y VC-16 (b) exige que lo inesperado
+no crashee. No traen NFR-2 (mensajes específicos para fallos de red), ni FR-6
+(objeto ilegible, que además no aborta la corrida), ni BR-3 (precedencia de exit
+codes). Esa frontera importa: BR-3 es un cambio de contrato sobre corridas que ya
+funcionan, y meterlo a medias acá es justamente lo que el historial de la spec se
+compromete a no hacer en silencio.
+
+El riesgo de esta enmienda es el inverso del habitual: un `except Exception` de tope
+puede **tapar** los casos de la Iteración 2 y hacer que FR-6, BR-3 y NFR-2 parezcan
+implementados. El ADR tiene que dejar dicho que el caso genérico es un piso, no una
+implementación de NFR-2.
 
 **Demostrable así (contra un bucket real, con ADC configurado):**
 
@@ -76,6 +134,11 @@ gcsgrep "x" no-es-una-ruta-gs; echo "exit: $?"
 El runbook reproducible de esa demostración —incluido el script que crea y
 destruye el bucket de prueba— está en
 [`docs/integracion-gcs.md`](../../docs/integracion-gcs.md).
+
+**Qué chequeos de integración cierran esta iteración: I-1 … I-5, más I-7 (FR-12).**
+No I-6 (ADC ausente), que verifica NFR-2 y por lo tanto pertenece a la Iteración 2
+— ver [H-11](../../docs/hallazgos/H-11-runbook-vs-plan.md). El runbook reclamaba
+I-6 para esta iteración, lo que lo hacía imposible de pasar por diseño.
 
 **Nota sobre pruebas offline:** `core` no importa `google.cloud.storage`
 directamente — recibe el listado y la apertura de streams como colaboradores.
@@ -105,9 +168,18 @@ nadie curó para la demo: objetos rotos, binarios, `.gz`, y prefijos enormes.
 - Manejo de fallo de red en el listado inicial: exit `2`, sin traceback.
 - Auditoría completa de NFR-3: todo lo que no es un match va a stderr.
 
-**VCs en alcance:** VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, y VC-16
-completo. Los VCs de la Iteración 1 (VC-1 a VC-5, VC-7, VC-8, VC-14, VC-17)
-tienen que seguir pasando.
+**VCs en alcance:** VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, y **VC-16 (a)
+completo** — la lista enumerada, ahora con todos los casos de error implementados.
+VC-16 (b) ya se cierra en la Iteración 1. Los VCs de la Iteración 1 (VC-1 a VC-5,
+VC-7, VC-8, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir pasando.
+
+**Chequeo de integración I-6** (ADC ausente → exit `2` sin traceback) pertenece a
+esta iteración, no a la 1: verifica NFR-2
+([H-11](../../docs/hallazgos/H-11-runbook-vs-plan.md)). Si el `try/except` que
+implementa FR-12 en la Iteración 1 termina capturando también el error de
+credenciales —es probable, porque suben por el mismo camino— I-6 se reclama para
+la Iteración 1 con una fila nueva en la tabla de cobertura, no editando la
+resolución de H-11.
 
 **Precondición de VC-11 (hallazgo H-10 de la revisión).** VC-11 promete un test
 que falla si el doble de prueba recibe una llamada que no sea de lectura, pero

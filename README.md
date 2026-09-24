@@ -16,9 +16,10 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: Iteración 1 completa contra dobles de prueba.** La verificación
-> contra un bucket de GCS real está **pendiente** y es bloqueante de entrega —
-> ver [Estado](#estado) más abajo.
+> **Estado: Iteración 1 completa contra dobles de prueba**, más una frontera de
+> manejo de excepciones que está especificada y sin implementar. La
+> verificación contra un bucket de GCS real sigue **pendiente** y es bloqueante de
+> entrega — ver [Estado](#estado) más abajo.
 
 ## Este repo es un ejercicio de SDD
 
@@ -35,17 +36,25 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 1 | [`specs/gcsgrep/00-requirements-draft.md`](./specs/gcsgrep/00-requirements-draft.md) | El borrador vago del que se partió | **congelado**, nunca se edita |
 | 2 | [`specs/gcsgrep/01-base-context.md`](./specs/gcsgrep/01-base-context.md) | Índice de decisiones + notas de diseño | se actualiza |
 | 3 | [`docs/adr/`](./docs/adr/) | 12 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
-| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 17 requerimientos, 17 VCs | **versionada** (v1.1), con historial |
-| 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y 10 hallazgos | por revisión |
-| 6 | [`specs/gcsgrep/03-plan.md`](./specs/gcsgrep/03-plan.md) | 3 iteraciones; el alcance diferido vive acá, no en la spec | se actualiza |
-| 7 | [`specs/gcsgrep/04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md) | Qué VC pasa, con qué se ejercita y qué se observó | **append-only** por iteración |
-| 8 | [`docs/integracion-gcs.md`](./docs/integracion-gcs.md) | Runbook de la verificación contra GCS real | se actualiza |
+| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 18 requerimientos, 18 VCs | **versionada** (v1.2), con historial |
+| 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y los primeros 10 hallazgos | por revisión |
+| 6 | [`docs/hallazgos/`](./docs/hallazgos/) | Lo que se descubrió *después*: un archivo por hallazgo | **inmutables**, como los ADRs |
+| 7 | [`docs/proceso-cambios.md`](./docs/proceso-cambios.md) | Qué artefacto cambia según lo que aparezca. El carril de entrada del harness | se actualiza |
+| 8 | [`specs/gcsgrep/03-plan.md`](./specs/gcsgrep/03-plan.md) | 3 iteraciones; el alcance diferido vive acá, no en la spec | se actualiza |
+| 9 | [`specs/gcsgrep/04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md) | Qué VC pasa, con qué se ejercita y qué se observó | **append-only** por iteración |
+| 10 | [`docs/integracion-gcs.md`](./docs/integracion-gcs.md) | Runbook de la verificación contra GCS real | se actualiza |
 
 Las cuatro reglas de mutabilidad de la tabla son la parte que hace que esto
 funcione a lo largo del tiempo. Un borrador que se edita borra la evidencia de
 qué se pidió; una spec que se edita en silencio borra la evidencia de qué se
 prometió; un ADR que se edita borra la evidencia de por qué; una tabla de
 cobertura que se reescribe borra la evidencia de qué se verificó y cuándo.
+
+Ese pipeline es de ida: va de un borrador a código verificado. Para lo que
+aparece **después** —una excepción mientras se prueba, un reporte de un
+compañero— el carril de entrada es
+[`proceso-cambios.md`](./docs/proceso-cambios.md), y lo que se descubre queda en
+[`hallazgos/`](./docs/hallazgos/).
 
 ### Equivalencia con los nombres viejos
 
@@ -209,6 +218,7 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | | |
 |---|---|
 | Iteración 1 (búsqueda de punta a punta) | ✅ implementada, 10/10 VCs pasando contra dobles de prueba |
+| Frontera de excepciones en el CLI: FR-12 / VC-18 y VC-16 (b), incorporados a la Iteración 1 en la spec v1.2 | ⬜ **especificado, sin implementar** — [H-12](./docs/hallazgos/H-12-sin-frontera-de-excepciones.md) |
 | Verificación contra GCS real | ⚠️ **pendiente** — bloqueante de entrega |
 | Iteración 2 (resiliencia, guardrail de costo, no-texto) | ⬜ planificada, sin implementar |
 | Iteración 3 (concurrencia y su NFR de rendimiento) | ⬜ no comprometida; obligación registrada |
