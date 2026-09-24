@@ -7,6 +7,7 @@ from typing import Dict, Iterator, List
 class FakeGCS:
     def __init__(self) -> None:
         self._objects: Dict[str, Dict[str, str]] = {}
+        self._errors: Dict[str, Dict[str, Exception]] = {}
 
     def put(self, bucket: str, name: str, content: str) -> None:
         """Siembra contenido. Es setup del test, no parte de la superficie que
@@ -20,11 +21,24 @@ class FakeGCS:
         """
         self._objects.setdefault(bucket, {})[name] = content
 
+    def explode_on(self, bucket: str, name: str, error: Exception) -> None:
+        """Siembra un objeto que **aparece en el listado** y falla al abrirse.
+
+        Es el doble del caso en que el listado y la lectura no coinciden: el
+        objeto existe para GCS cuando se lista y ya no —o no se puede leer—
+        cuando se lo va a abrir. Es setup del test, igual que `put` (ver H-10).
+        """
+        self._objects.setdefault(bucket, {})[name] = ""
+        self._errors.setdefault(bucket, {})[name] = error
+
     def list_objects(self, bucket: str, prefix: str) -> Iterator[str]:
         names = self._objects.get(bucket, {})
         return iter(sorted(n for n in names if n.startswith(prefix)))
 
     def open_text_stream(self, bucket: str, name: str) -> io.StringIO:
+        error = self._errors.get(bucket, {}).get(name)
+        if error is not None:
+            raise error
         return io.StringIO(self._objects[bucket][name])
 
 

@@ -16,10 +16,10 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: Iteración 1 completa contra dobles de prueba**, más una frontera de
-> manejo de excepciones que está especificada y sin implementar. La
-> verificación contra un bucket de GCS real sigue **pendiente** y es bloqueante de
-> entrega — ver [Estado](#estado) más abajo.
+> **Estado: Iteración 1 completa.** 12/12 VCs pasando contra dobles de prueba, y la
+> verificación de integración **ejecutada** contra el emulador `floci-gcp`
+> ([ADR-0014](./docs/adr/ADR-0014-emulacion-local-floci.md)). Contra GCS real sigue
+> pendiente, y es una afirmación distinta — ver [Estado](#estado).
 
 ## Este repo es un ejercicio de SDD
 
@@ -35,7 +35,7 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 0 | [`enunciado.md`](./enunciado.md) | La consigna, tal como se recibió | externa |
 | 1 | [`specs/gcsgrep/00-requirements-draft.md`](./specs/gcsgrep/00-requirements-draft.md) | El borrador vago del que se partió | **congelado**, nunca se edita |
 | 2 | [`specs/gcsgrep/01-base-context.md`](./specs/gcsgrep/01-base-context.md) | Índice de decisiones + notas de diseño | se actualiza |
-| 3 | [`docs/adr/`](./docs/adr/) | 12 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
+| 3 | [`docs/adr/`](./docs/adr/) | 14 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
 | 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 18 requerimientos, 18 VCs | **versionada** (v1.2), con historial |
 | 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y los primeros 10 hallazgos | por revisión |
 | 6 | [`docs/hallazgos/`](./docs/hallazgos/) | Lo que se descubrió *después*: un archivo por hallazgo | **inmutables**, como los ADRs |
@@ -115,6 +115,11 @@ gcsgrep [-i] [-n] <patrón> gs://bucket/prefijo
 | `-i` | Búsqueda sin distinguir mayúsculas |
 | `-n` | Agrega el número de línea a cada match |
 
+Ante un error, `gcsgrep` nunca imprime un traceback: sale con `2` y un mensaje
+legible por stderr ([ADR-0013](./docs/adr/ADR-0013-frontera-de-excepciones.md)).
+Para diagnosticar un fallo inesperado, `GCSGREP_DEBUG=1` re-expone la excepción
+original.
+
 El patrón es **texto literal**, no una regex
 ([ADR-0001](./docs/adr/ADR-0001-busqueda-literal.md)). `gs://bucket` sin prefijo
 busca en todo el bucket.
@@ -148,14 +153,19 @@ en el ADR correspondiente:
 - S3 o Azure Blob
 
 Además, el guardrail de costo (`--max`) y el manejo de objetos ilegibles son
-alcance de la **Iteración 2**: todavía no están implementados.
+alcance de la **Iteración 2**: todavía no están implementados. Un objeto que falla
+al leerse **aborta** la corrida con exit `2` en vez de saltearse (FR-6), y no hay
+mensajes específicos para fallos de red (NFR-2).
 
 ## Arquitectura
 
 ```
-cli   → parsea argv, imprime cada match, traduce el resultado a exit code
-core  → orquesta la búsqueda: matchea líneas y emite matches (generador)
-gcs   → única capa que habla con la API de GCS: listar objetos, abrir streams
+cli    → parsea argv, imprime cada match, traduce el resultado a exit code,
+         y es la frontera de excepciones del proceso
+core   → orquesta la búsqueda: matchea líneas y emite matches (generador)
+gcs    → única capa que habla con la API de GCS: listar objetos, abrir streams,
+         y traducir las excepciones del SDK a errores de dominio
+errors → los errores de dominio, para que cli no tenga que importar el SDK
 ```
 
 La dependencia va en una sola dirección: `cli → core → gcs`. `core` **no** importa
@@ -169,12 +179,17 @@ acumular ([ADR-0011](./docs/adr/ADR-0011-salida-incremental.md)). Eso es lo que
 mantiene la memoria acotada sobre objetos grandes y lo que hace que la salida
 aparezca mientras la búsqueda avanza.
 
+El manejo de errores sigue la misma dirección: `gcs` traduce las excepciones de
+`google.api_core` a los errores de `errors.py`, y `cli` —el borde del proceso, el
+único que ve todas las excepciones— las convierte en un mensaje y un exit code.
+`core` no participa ([ADR-0013](./docs/adr/ADR-0013-frontera-de-excepciones.md)).
+
 ## Desarrollo
 
 Con `uv`, cada comando se ejecuta mediante `uv run`:
 
 ```bash
-uv run pytest                              # 23 tests, offline, sin credenciales
+uv run pytest                              # 35 tests, offline, sin credenciales
 uv run pytest -v                           # con el nombre de cada VC
 uv run python scripts/check-doc-links.py   # enlaces entre artefactos
 ```
@@ -198,8 +213,8 @@ chequeo de enlaces, en cada push y cada PR.
 
 ### Verificación de integración
 
-Los 23 tests corren contra dobles de prueba. Para verificar contra GCS real hay
-un campo de pruebas desechable:
+Los 35 tests corren contra dobles de prueba. Para verificar contra un GCS de
+verdad hay un campo de pruebas desechable:
 
 ```bash
 export GCSGREP_TEST_BUCKET="gcsgrep-test-$(whoami)-$(date +%s)"
@@ -217,15 +232,19 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 
 | | |
 |---|---|
-| Iteración 1 (búsqueda de punta a punta) | ✅ implementada, 10/10 VCs pasando contra dobles de prueba |
-| Frontera de excepciones en el CLI: FR-12 / VC-18 y VC-16 (b), incorporados a la Iteración 1 en la spec v1.2 | ⬜ **especificado, sin implementar** — [H-12](./docs/hallazgos/H-12-sin-frontera-de-excepciones.md) |
-| Verificación contra GCS real | ⚠️ **pendiente** — bloqueante de entrega |
+| Iteración 1 (búsqueda de punta a punta + frontera de excepciones) | ✅ implementada, **12/12 VCs** pasando contra dobles de prueba |
+| Verificación de integración (backend `floci`) | ✅ **ejecutada 2026-09-24** — I-1…I-5 e I-7 pasan, por script y por pytest |
+| Verificación contra GCS real | ⬜ pendiente — afirmación más fuerte (ADC, IAM, red); no se cierra con el emulador |
 | Iteración 2 (resiliencia, guardrail de costo, no-texto) | ⬜ planificada, sin implementar |
 | Iteración 3 (concurrencia y su NFR de rendimiento) | ⬜ no comprometida; obligación registrada |
 
-**El único pendiente bloqueante es la corrida contra un bucket real.** El
-enunciado pide que la Iteración 1 "corra una búsqueda real y sus chequeos de
-verificación pasen"; pasar contra un doble de prueba y pasar contra GCS son dos
-afirmaciones distintas, y este repo no las mezcla. El runbook está listo para
-cerrarlo: falta ejecutarlo y anotar lo observado en la tabla de integración de
+El enunciado pide que la Iteración 1 "corra una búsqueda real y sus chequeos de
+verificación pasen". Eso **está cumplido** contra el emulador: los seis chequeos
+corren y pasan, con lo observado anotado en la tabla de integración de
 [`04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md).
+
+Lo que queda abierto, dicho con precisión: pasar contra un doble de prueba, pasar
+contra un emulador y pasar contra GCS son **tres afirmaciones distintas**, y este
+repo no las mezcla. Falta la tercera, que es la única que verifica ADC, IAM, red y
+latencia — y de hecho I-6 (ADC ausente) es *imposible* de verificar en el emulador
+([H-14](./docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).

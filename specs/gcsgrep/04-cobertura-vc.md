@@ -24,12 +24,12 @@
 | | |
 |---|---|
 | VCs en el alcance de la Iteración 1 | 11 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, **VC-18**, VC-16 (a) parcial + **(b)**) |
-| VCs con cobertura ejecutable | 10 |
-| VCs pasando contra dobles de prueba | 10 |
-| VCs **sin implementar** | **2 — VC-18 y VC-16 (b)** (FR-12 y la frontera de excepciones, incorporados por la enmienda de la spec v1.2) |
+| VCs con cobertura ejecutable | 12 |
+| VCs pasando contra dobles de prueba | 12 |
+| VCs **sin implementar** | **0** |
 | VCs verificados contra GCS real | **0 — ver la sección de integración** |
-| VCs de la Iteración 2 (pendientes) | VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, VC-16 (completo) |
-| Tests que ejercitan todo esto | 23, en 4 archivos |
+| VCs de la Iteración 2 (pendientes) | VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, VC-16 (a) completo |
+| Tests que ejercitan todo esto | **35**, en 5 archivos |
 
 ## Cobertura, uno por uno
 
@@ -62,24 +62,31 @@ lo que demuestra que ahora el VC **puede** fallar por la razón correcta. Ver
 [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgo H-3, y
 [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md).
 
-### Por qué VC-18 y VC-16 (b) están sin ejercitador
+### Por qué VC-16 (b) existe, y qué se aprendió
 
-Son las dos filas ⬜ del documento, y están a propósito. Las dos salieron de
-[H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md) e ingresaron a la
-Iteración 1 por la enmienda de la spec v1.2, **después** de que la iteración se
-declarara completa: hay una ventana en la que el contrato promete algo que el
-código todavía no hace.
+**NFR-3 prometía esto desde la v1.0** ("ningún caso de error imprime un stack
+trace de Python") y VC-16 pasaba igual: verificaba una **lista cerrada** de casos,
+y todos los caminos de error del SDK quedaban fuera de la lista. El ✅ de VC-16 era
+verdadero sobre lo que medía y falso sobre lo que NFR-3 prometía.
 
-VC-16 (b) es la más incómoda de las dos, porque **NFR-3 prometía esto desde la
-v1.0** ("ningún caso de error imprime un stack trace de Python") y VC-16 pasaba
-igual: verificaba una lista cerrada de casos, y todos los caminos de error del SDK
-quedaban fuera de la lista. El ✅ de VC-16 era verdadero sobre lo que medía y falso
-sobre lo que NFR-3 prometía.
+VC-16 (b) es el caso adverso que lo hace falsable: una excepción de una clase que
+el código no conoce. No se puede enumerar "todos los errores", pero sí se puede
+exigir que uno **desconocido** se maneje. Ver
+[H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md) y
+[ADR-0013](../../docs/adr/ADR-0013-frontera-de-excepciones.md).
 
-La alternativa —no registrar los VCs hasta que existan los tests— dejaría la tabla
-diciendo "10 de 10 pasando" mientras la spec tiene 18 requerimientos. Esa es
-exactamente la clase de afirmación cómoda que este documento existe para evitar.
-La columna "Se observa" registra el comportamiento actual, que es el traceback.
+Es la segunda vez que el mismo modo de falla aparece en este repo: VC-14 lo tuvo
+(H-3), se arregló, y no se le volvió a preguntar al resto de los VCs. De ahí la
+regla que quedó en el checklist de revisión.
+
+### Por qué VC-17 tiene una fila nueva
+
+La fila original sigue arriba y **no se editó**. El test de VC-17 esperaba que la
+excepción de lectura escapara (`pytest.raises(OSError)`), porque en la Iteración 1
+no había frontera; con ADR-0013 la corrida termina con exit `2`. Lo que el VC
+afirma —que los matches ya emitidos salieron *antes* del fallo— es idéntico, y el
+test sigue observando eso. Cambió el final de la corrida, así que va una fila
+nueva con fecha, no una edición encima de la vieja.
 
 El ticket que lo cierra está planificado y **no** se implementó en la misma sesión
 donde se descubrió, por [`docs/proceso-cambios.md`](../../docs/proceso-cambios.md).
@@ -95,7 +102,7 @@ es parte de la verificación de integración (paso 5 del runbook).
 ## Cómo se ejercita todo
 
 ```bash
-python -m pytest            # 23 tests, sin credenciales ni red
+python -m pytest            # 35 tests, sin credenciales ni red
 ```
 
 Los tests corren en dos niveles:
@@ -107,8 +114,11 @@ Los tests corren en dos niveles:
 - `gcs.py` (`tests/test_gcs.py`) se testea mockeando el **cliente del SDK** en el
   punto donde `gcs._get_client()` lo entrega, con un `_FakeClient` /
   `_FakeBucket` / `_FakeBlob` de mano. Esto confirma que `list_objects` llama a
-  `list_blobs(bucket, prefix=...)` con los argumentos correctos y que
-  `open_text_stream` abre el blob correcto en modo `"r"`.
+  `list_blobs(bucket, prefix=...)` con los argumentos correctos, que
+  `open_text_stream` abre el blob correcto en modo `"r"`, y que las excepciones
+  **reales** de `google.api_core` (`NotFound`, `Forbidden`) se traducen a los
+  errores de dominio de `errors.py` (VC-18). Sin esa última parte, FR-12 podría
+  estar verificado de punta a punta contra un error que el SDK nunca produce.
 
 En CI, [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) corre
 esta misma suite en Python 3.9 y 3.12 en cada push y cada PR. Eso es lo que
@@ -124,15 +134,27 @@ integración.
 
 ## Verificación de integración (contra un bucket real)
 
-> ### ⚠️ Estado: PENDIENTE — bloqueante de entrega
+> ### ✅ Estado: ejecutada contra el emulador `floci-gcp` el 2026-09-24
 >
-> **Ningún VC de esta tabla se verificó todavía contra GCS real.** Los 10 pasan
-> contra dobles de prueba.
+> **I-1, I-2, I-3, I-4, I-5 e I-7 pasaron**, por el script y por pytest. Es la
+> primera vez que los chequeos de integración se ejecutan: hasta ahora H-9 estaba
+> **bloqueado** por no tener una cuenta con billing, y
+> [ADR-0014](../../docs/adr/ADR-0014-emulacion-local-floci.md) lo desbloqueó con el
+> backend `floci`.
 >
-> El enunciado pide que el código de la Iteración 1 "corra una búsqueda real y
-> sus chequeos de verificación pasen". Hasta que esta sección se complete con
-> resultados observados, **ese criterio de entrega no está cumplido**. Es el
-> hallazgo H-9 de la revisión.
+> **Qué queda abierto, y son dos cosas distintas:**
+>
+> - **La verificación contra GCS real.** Es una afirmación más fuerte —ADC, IAM,
+>   red, latencia— y **no se cierra con el emulador**. Sigue en 0.
+> - **I-6 (ADC ausente).** No es verificable contra `floci`: con
+>   `STORAGE_EMULATOR_HOST` seteada el SDK no mira las credenciales, así que taparlas
+>   no tiene efecto ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).
+>   Su observable se registró por otra vía, abajo.
+>
+> Entorno de la corrida: `floci-gcp 0.9.0` (imagen `floci/floci-gcp:latest`,
+> digest `sha256:ea29a53b…1138ea`) en `localhost:4588`, bucket
+> `gcsgrep-test-floci`, `gcsgrep` instalado con `pip install -e '.[dev]'` sobre
+> Python 3.10.12.
 
 El procedimiento reproducible —creación del bucket de prueba, siembra de
 fixtures, los cinco chequeos, y destrucción— está en

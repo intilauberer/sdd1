@@ -6,7 +6,7 @@
 | **Estado** | habilitada, con la excepción registrada en la revisión (ver más abajo) |
 | **Fecha** | 2026-09-23 |
 | **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-13, 12 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) |
-| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) |
+| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (14 ADRs) |
 | **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
 > **Cómo cambia este documento.** No es inmutable, pero tampoco se edita en el

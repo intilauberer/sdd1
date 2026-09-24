@@ -10,8 +10,14 @@
 #   ./scripts/testing-ground.sh down     # borra objetos y bucket (pide confirmación)
 #   ./scripts/testing-ground.sh all      # up && verify && down
 #
-# Requiere: gcloud autenticado (`gcloud auth application-default login`) y un
-# proyecto por defecto (`gcloud config set project <id>`).
+# Dos backends (GCSGREP_TEST_BACKEND), ver ADR-0014:
+#   gcs     (default) Google Cloud Storage real. Requiere gcloud autenticado
+#           (`gcloud auth application-default login`), un proyecto por defecto
+#           (`gcloud config set project <id>`) y billing habilitado.
+#   floci   floci-gcp local, gratis y sin cuenta. Requiere el emulador corriendo
+#           y STORAGE_EMULATOR_HOST apuntándole. Verifica el wiring y el cliente
+#           de google-cloud-storage, NO ADC/IAM ni la red real: los resultados se
+#           anotan como "floci", no como GCS.
 #
 # Documentación del procedimiento y de qué VC cubre cada chequeo:
 #   docs/integracion-gcs.md
@@ -27,6 +33,11 @@ readonly PREFIJO_OBLIGATORIO="gcsgrep-test-"
 
 BUCKET="${GCSGREP_TEST_BUCKET:-}"
 REGION="${GCSGREP_TEST_REGION:-us-central1}"
+
+# Backend del campo de pruebas: 'gcs' (real) o 'floci' (emulador). Ver ADR-0014.
+BACKEND="${GCSGREP_TEST_BACKEND:-gcs}"
+# floci-gcp expone todas las APIs de GCP en un solo puerto.
+EMULADOR="${STORAGE_EMULATOR_HOST:-http://localhost:4588}"
 
 # Qué iteración se verifica. Cada chequeo declara a qué iteración pertenece, así
 # que 'verify' no reporta como falla algo que todavía no se prometió (H-11).
@@ -53,6 +64,88 @@ fallas=0
 
 requiere_gcloud() {
   command -v gcloud >/dev/null 2>&1 || die "no encontré 'gcloud' en el PATH"
+}
+
+requiere_curl() {
+  command -v curl >/dev/null 2>&1 || die "no encontré 'curl' en el PATH"
+}
+
+resolver_backend() {
+  case "$BACKEND" in
+    gcs)
+      requiere_gcloud
+      ;;
+    floci)
+      requiere_curl
+      if [[ -z "${STORAGE_EMULATOR_HOST:-}" ]]; then
+        die "backend 'floci' sin STORAGE_EMULATOR_HOST.
+  El cliente de google-cloud-storage lo necesita para hablarle al emulador en
+  vez de a GCS (ADR-0014). No hay que tocar código:
+      export STORAGE_EMULATOR_HOST=${EMULADOR}
+  o, si tenés el binario:  eval \$(floci gcp env)"
+      fi
+      curl -fsS -o /dev/null "${EMULADOR}/storage/v1/b?project=gcsgrep-test" 2>/dev/null \
+        || die "no pude hablar con floci-gcp en ${EMULADOR}.
+  Levantalo con una de las dos:
+      docker run -d --name floci-gcp -p 4588:4588 floci/floci-gcp:latest
+      floci gcp up"
+      ;;
+    *)
+      die "GCSGREP_TEST_BACKEND inválido: '${BACKEND}'. Valores: gcs | floci"
+      ;;
+  esac
+}
+
+# --- Capa de almacenamiento --------------------------------------------------
+# Las tres operaciones que el campo de pruebas necesita para armar y desarmar el
+# escenario, una implementación por backend. Es el único lugar del script que
+# sabe con cuál está hablando: 'verify' corre los mismos chequeos contra los dos.
+
+crear_bucket() {
+  if [[ "$BACKEND" == "floci" ]]; then
+    curl -fsS -o /dev/null -X POST \
+      -H 'Content-Type: application/json' \
+      -d "{\"name\":\"${BUCKET}\"}" \
+      "${EMULADOR}/storage/v1/b?project=gcsgrep-test"
+  else
+    gcloud storage buckets create "gs://${BUCKET}" \
+      --location="${REGION}" \
+      --uniform-bucket-level-access \
+      --public-access-prevention
+  fi
+}
+
+# uso: subir_objeto <archivo local> <nombre del objeto>   p. ej. 'logs/a.txt'
+subir_objeto() {
+  local local_path="$1" nombre="$2"
+  if [[ "$BACKEND" == "floci" ]]; then
+    # El '/' del nombre va escapado en el query param, o el emulador lo toma
+    # como parte de la ruta del endpoint.
+    local escapado
+    escapado="$(printf '%s' "$nombre" | sed 's|/|%2F|g')"
+    curl -fsS -o /dev/null -X POST \
+      -H 'Content-Type: application/octet-stream' \
+      --data-binary "@${local_path}" \
+      "${EMULADOR}/upload/storage/v1/b/${BUCKET}/o?uploadType=media&name=${escapado}"
+  else
+    gcloud storage cp "$local_path" "gs://${BUCKET}/${nombre}"
+  fi
+}
+
+borrar_bucket() {
+  if [[ "$BACKEND" == "floci" ]]; then
+    # Sin borrado recursivo: se listan los objetos y se borran de a uno.
+    local nombres n
+    nombres="$(curl -fsS "${EMULADOR}/storage/v1/b/${BUCKET}/o" 2>/dev/null \
+      | grep -o '"name": *"[^"]*"' | sed 's/.*: *"//;s/"$//' || true)"
+    for n in $nombres; do
+      curl -fsS -o /dev/null -X DELETE \
+        "${EMULADOR}/storage/v1/b/${BUCKET}/o/$(printf '%s' "$n" | sed 's|/|%2F|g')" || true
+    done
+    curl -fsS -o /dev/null -X DELETE "${EMULADOR}/storage/v1/b/${BUCKET}" || true
+  else
+    gcloud storage rm --recursive "gs://${BUCKET}" || true
+  fi
 }
 
 resolver_bucket() {
@@ -99,13 +192,14 @@ chequeo() {
 
 cmd_up() {
   resolver_bucket
-  requiere_gcloud
+  resolver_backend
 
-  info "creando gs://${BUCKET} en ${REGION}"
-  gcloud storage buckets create "gs://${BUCKET}" \
-    --location="${REGION}" \
-    --uniform-bucket-level-access \
-    --public-access-prevention
+  if [[ "$BACKEND" == "floci" ]]; then
+    info "creando gs://${BUCKET} en floci-gcp (${EMULADOR})"
+  else
+    info "creando gs://${BUCKET} en ${REGION}"
+  fi
+  crear_bucket
 
   local tmp
   tmp="$(mktemp -d)"
@@ -129,21 +223,31 @@ cmd_up() {
   printf 'contenido comprimido irrelevante\n' | gzip > "${tmp}/access.log.gz"
 
   info "subiendo fixtures"
-  gcloud storage cp "${tmp}/a.txt" "gs://${BUCKET}/logs/a.txt"
-  gcloud storage cp "${tmp}/b.txt" "gs://${BUCKET}/logs/b.txt"
-  gcloud storage cp "${tmp}/c.txt" "gs://${BUCKET}/logs/c.txt"
-  gcloud storage cp "${tmp}/big.txt" "gs://${BUCKET}/grande/big.txt"
-  gcloud storage cp "${tmp}/blob.bin" "gs://${BUCKET}/raros/blob.bin"
-  gcloud storage cp "${tmp}/access.log.gz" "gs://${BUCKET}/raros/access.log.gz"
+  subir_objeto "${tmp}/a.txt" "logs/a.txt"
+  subir_objeto "${tmp}/b.txt" "logs/b.txt"
+  subir_objeto "${tmp}/c.txt" "logs/c.txt"
+  subir_objeto "${tmp}/big.txt" "grande/big.txt"
+  subir_objeto "${tmp}/blob.bin" "raros/blob.bin"
+  subir_objeto "${tmp}/access.log.gz" "raros/access.log.gz"
 
   ok "campo de pruebas listo en gs://${BUCKET}"
-  info "acordate de correr 'down' cuando termines: el bucket sigue costando plata"
+  if [[ "$BACKEND" == "floci" ]]; then
+    info "backend floci: no cuesta plata, pero 'down' deja limpio para la próxima"
+  else
+    info "acordate de correr 'down' cuando termines: el bucket sigue costando plata"
+  fi
 }
 
 cmd_verify() {
   resolver_bucket
+  [[ "$BACKEND" == "floci" ]] && resolver_backend
   info "chequeos de integración contra gs://${BUCKET} — comando: ${GCSGREP[*]}"
-  info "iteración verificada: ${ITERACION}"
+  info "backend: ${BACKEND} · iteración verificada: ${ITERACION}"
+  if [[ "$BACKEND" == "floci" ]]; then
+    info "recordatorio (ADR-0014): 'floci' NO verifica ADC, IAM ni la red real."
+    info "  Anotá los resultados como 'floci' en la tabla de integración;"
+    info "  'VCs verificados contra GCS real' sigue en 0."
+  fi
 
   chequeo I-1 0 "búsqueda con match (VC-1, VC-4)" -- \
     "timeout" "gs://${BUCKET}/logs/"
@@ -195,10 +299,30 @@ cmd_verify() {
     fail "I-7 el mensaje no nombra el bucket '${BUCKET_INEXISTENTE}' (FR-12)"
     fallas=$((fallas + 1))
   fi
+  # Sin esta última afirmación, I-7 pasa por el camino genérico (ADR-0013) cuando
+  # no hay credenciales: exit 2 sin traceback y el bucket en el mensaje, pero por
+  # la razón equivocada. Exigir el texto de FR-12 es lo que lo hace fallar por la
+  # razón correcta (C-8 del checklist de revisión).
+  if grep -q "no existe" <<<"$err7"; then
+    ok "I-7 el mensaje identifica el caso: el bucket no existe (FR-12)"
+  else
+    fail "I-7 el mensaje no dice que el bucket no existe — ¿entró por el caso genérico?"
+    printf '      stderr: %s\n' "$(head -1 <<<"$err7")"
+    fallas=$((fallas + 1))
+  fi
 
-  # I-6 · NFR-2, alcance de la Iteración 2 (H-11). No se corre verificando la
-  # Iteración 1: fallaría por algo que todavía no se prometió.
-  if [[ "$ITERACION" -ge 2 ]]; then
+  # I-6 · NFR-2, alcance de la Iteración 2 (H-11). Dos condiciones para correrlo:
+  #
+  #   - la iteración: verificando la Iteración 1 fallaría por algo que todavía no
+  #     se prometió (H-11);
+  #   - el backend: con STORAGE_EMULATOR_HOST seteada el SDK saltea el chequeo de
+  #     credenciales, así que taparlas no tiene efecto y la corrida termina con 0.
+  #     El emulador no puede verificar ADC (ADR-0014, H-14).
+  if [[ "$ITERACION" -ge 2 && "$BACKEND" == "floci" ]]; then
+    info "I-6 salteado: el backend 'floci' no puede verificar ADC — con"
+    info "  STORAGE_EMULATOR_HOST seteada el SDK no mira las credenciales."
+    info "  Corré I-6 con GCSGREP_TEST_BACKEND=gcs (ADR-0014, H-14)."
+  elif [[ "$ITERACION" -ge 2 ]]; then
     info "I-6 ADC ausente (ADR-0002) — se corre con las credenciales tapadas"
     local rc err
     set +e
@@ -234,7 +358,7 @@ cmd_verify() {
 
 cmd_down() {
   resolver_bucket
-  requiere_gcloud
+  resolver_backend
 
   info "esto borra TODOS los objetos y el bucket gs://${BUCKET}"
   if [[ "${GCSGREP_TEST_YES:-}" != "1" ]]; then
@@ -242,7 +366,7 @@ cmd_down() {
     [[ "$confirmacion" == "$BUCKET" ]] || die "no coincide; no se borró nada"
   fi
 
-  gcloud storage rm --recursive "gs://${BUCKET}" || true
+  borrar_bucket
   ok "gs://${BUCKET} borrado"
 }
 
@@ -259,15 +383,22 @@ Campo de pruebas de gcsgrep contra GCS real.
 
 Variables:
   GCSGREP_TEST_BUCKET     nombre del bucket; tiene que empezar con 'gcsgrep-test-'
+  GCSGREP_TEST_BACKEND    gcs (default) | floci
   GCSGREP_TEST_ITERACION  qué iteración se verifica (default: 1)
-  GCSGREP_TEST_REGION     región del bucket (default: us-central1)
+  GCSGREP_TEST_REGION     región del bucket (default: us-central1; solo backend gcs)
   GCSGREP_TEST_YES=1      saltea la confirmación interactiva de 'down'
+  STORAGE_EMULATOR_HOST   endpoint de floci-gcp (obligatorio con backend=floci)
 
 Chequeos por iteración:
   1 → I-1 … I-5, I-7      2 → todos, incluido I-6 (NFR-2)
 
-Requiere gcloud autenticado (`gcloud auth application-default login`) y un
-proyecto por defecto (`gcloud config set project <id>`).
+Backend 'gcs' requiere gcloud autenticado (`gcloud auth application-default
+login`), un proyecto por defecto (`gcloud config set project <id>`) y billing.
+
+Backend 'floci' no requiere cuenta ni tarjeta:
+  docker run -d --name floci-gcp -p 4588:4588 floci/floci-gcp:latest
+  export STORAGE_EMULATOR_HOST=http://localhost:4588
+No verifica ADC, IAM ni la red real: los resultados se anotan como 'floci'.
 
 Procedimiento completo y qué VC cubre cada chequeo: docs/integracion-gcs.md
 USO

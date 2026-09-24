@@ -6,7 +6,7 @@
 | **Fecha** | 2026-09-23 |
 | **Detectado en** | Primer intento de correr `gcsgrep` contra almacenamiento real, con un bucket que no existía |
 | **Artefactos afectados** | `gcsgrep/cli.py`, [`02-spec.md`](../../specs/gcsgrep/02-spec.md) (NFR-3 / VC-16) |
-| **Estado** | resuelto en la spec (v1.2: FR-12/VC-18, VC-16 reforzado); **pendiente en el código** |
+| **Estado** | **resuelto** — spec v1.2 (FR-12/VC-18, VC-16 reforzado) e implementado el 2026-09-24 ([ADR-0013](../adr/ADR-0013-frontera-de-excepciones.md)) |
 
 ## El hallazgo
 
@@ -91,24 +91,26 @@ correcta?**) se aplicó a VC-14 y no se volvió a aplicar al resto.
    mandan a revisar cosas distintas. El hueco de contrato que lo hacía invisible
    está en [H-13](./H-13-actores-sin-trazar.md).
 
-### En el código (pendiente, ticket aparte)
+### En el código (hecho — [ADR-0013](../adr/ADR-0013-frontera-de-excepciones.md))
 
 Una **frontera de excepciones en `cli.main()`**: el borde del proceso es el único
 lugar donde se puede garantizar "ningún traceback, nunca", porque es el único que
-ve todas las excepciones. Lo que hay que decidir al implementarlo:
+ve todas las excepciones. Lo que hubo que decidir, y cómo quedó:
 
-- **Qué excepciones se traducen a un mensaje específico** (404, 403, credenciales)
-  y cuáles caen en el caso genérico.
-- **Que el caso genérico exista y no se tape el problema**: una excepción
-  inesperada tiene que dar exit `2` con un mensaje legible, y seguir siendo
-  diagnosticable — por ejemplo con el detalle completo detrás de una variable de
-  entorno, en vez de perderlo.
-- **Que `core` no aprenda a manejar errores de GCS.** La arquitectura dice
-  `cli → core → gcs` y que `core` no conoce el SDK; atrapar `google.api_core` en
-  `core` rompería eso.
+- **Qué se traduce a un mensaje específico:** `NotFound` y `Forbidden` al listar
+  (FR-12), más `NotFound` al abrir un objeto. El resto cae en el genérico. Las
+  credenciales ausentes **no** tienen mensaje propio: eso sigue siendo Iteración 2.
+- **Que el caso genérico no tape el problema:** `GCSGREP_DEBUG=1` re-lanza la
+  excepción con su traceback. Sin esa vía de escape, el genérico convierte cualquier
+  bug futuro en una línea sin diagnóstico.
+- **Que `core` no aprenda a manejar errores de GCS:** la traducción vive en `gcs`,
+  que ya es la única capa que conoce el SDK, y levanta los errores de dominio de
+  `gcsgrep/errors.py`. `cli` los atrapa sin importar `google.api_core`, así que
+  `cli → core → gcs` se mantiene.
 
-Ese último punto es decisión de arquitectura con alternativas reales, así que **el
-ticket empieza escribiendo un ADR**, no código.
+**Riesgo asumido, registrado en ADR-0013:** un `except Exception` de tope hace que
+FR-6, BR-3 y NFR-2 *parezcan* implementados. No lo están — hoy cualquiera de esos
+casos aborta la corrida con un mensaje genérico.
 
 ## Regla que deja
 

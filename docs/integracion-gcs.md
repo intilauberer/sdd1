@@ -1,6 +1,6 @@
 # Verificación de integración contra GCS real
 
-> Por qué existe este documento: los 23 tests del repo corren contra dobles de
+> Por qué existe este documento: los 35 tests del repo corren contra dobles de
 > prueba, sin red ni credenciales. Eso verifica el *wiring* del código, no que
 > `google-cloud-storage` se comporte como creemos. El enunciado pide que la
 > Iteración 1 "corra una búsqueda real y sus chequeos de verificación pasen", y
@@ -33,7 +33,7 @@ propósito.
 
 | Chequeo | VC / decisión | Qué observa | Dónde corre |
 |---|---|---|---|
-| I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script |
+| I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script, **solo backend `gcs`** |
 
 **Por qué I-6 se movió acá.** Hasta la spec v1.2 este runbook lo listaba como
 chequeo de la Iteración 1, pero verifica NFR-2, que el plan asigna a la Iteración 2
@@ -44,6 +44,12 @@ lugar equivocado. Ver
 
 I-6 vive solo en el script: manipular las credenciales del proceso que corre pytest
 contamina el resto de la sesión.
+
+**I-6 tampoco corre con el backend `floci`.** Con `STORAGE_EMULATOR_HOST` seteada el
+SDK saltea el chequeo de credenciales, así que taparlas no tiene efecto y la corrida
+termina con exit `0`: el chequeo no puede pasar, y su ✗ no dice nada sobre `gcsgrep`.
+El script lo saltea con un mensaje. Ver
+[H-14](./hallazgos/H-14-i6-no-verificable-en-emulador.md).
 
 Un chequeo de integración declara **a qué iteración pertenece**, igual que un VC.
 Un runbook escrito contra la spec completa verifica promesas que todavía no se
@@ -59,23 +65,41 @@ entra en el free tier de GCS; si no, es del orden de centavos.
 Lo que **sí** puede costar plata es olvidarse de correr `down`. El bucket
 persiste y se sigue cobrando el almacenamiento.
 
-### Decisión pendiente: cómo correr esto sin una cuenta con billing
+### Sin una cuenta con billing: backend `floci`
 
 Crear un bucket en GCS exige una **billing account activa**, con medio de pago,
-incluso para quedarse dentro del free tier. Mientras el equipo no tenga una, H-9
-no se puede cerrar por este camino y **no está decidido cuál se toma**. Las
-opciones sobre la mesa, sin elegir:
+incluso para quedarse dentro del free tier. La cátedra habilitó emular, y el
+emulador elegido es [`floci-gcp`](https://floci.io/gcp/)
+([ADR-0014](./adr/ADR-0014-emulacion-local-floci.md)):
 
-| Opción | Costo | Qué verificaría de verdad |
-|---|---|---|
-| Free tier de GCS (tarjeta, sin cargo) | $0 si no se excede | todo: GCS, ADC, IAM, red |
-| Crédito educativo de la facultad | $0, sin tarjeta | ídem, si existe el cupón |
-| Billing de un integrante del equipo | $0 | ídem; alcanza con una corrida |
-| Emulador local de la API de GCS | $0, sin cuenta | el cliente y el wiring; **no** ADC, IAM ni red real |
+```bash
+docker run -d --name floci-gcp -p 4588:4588 floci/floci-gcp:latest
+# o, con el binario nativo:  floci gcp up
 
-La última cambiaría este runbook y el script, así que **no se documenta como
-procedimiento soportado hasta que se decida**. Lo que no cambia en ningún caso es
-la regla: lo que no se corrió contra GCS no se anota como verificado contra GCS.
+export GCSGREP_TEST_BACKEND=floci
+export STORAGE_EMULATOR_HOST=http://localhost:4588   # o: eval $(floci gcp env)
+export GCSGREP_TEST_BUCKET=gcsgrep-test-floci
+
+./scripts/testing-ground.sh all
+```
+
+**`gcsgrep` no necesita ningún cambio de código para esto.** El cliente de
+`google-cloud-storage` respeta `STORAGE_EMULATOR_HOST` por sí solo y saltea el
+chequeo de credenciales cuando está seteada, así que
+[ADR-0002](./adr/ADR-0002-autenticacion-adc.md) no se toca: no hay flag nuevo ni
+ruta de credenciales alternativa. Lo único que distingue los backends son las tres
+operaciones de `up`/`down` del script; `verify` corre los mismos chequeos contra
+los dos.
+
+**LocalStack no sirve acá**, aunque también estaba autorizado: es un emulador de
+AWS y su cobertura de GCS es una extensión comunitaria. Usarlo significaría apuntar
+`gcsgrep` a S3, lo que contradice [ADR-0003](./adr/ADR-0003-sintaxis-ubicacion.md) y
+la lista *Fuera* de la spec. El fundamento completo está en ADR-0014.
+
+**Regla de registro.** Un resultado obtenido con `floci` se anota con **`floci`** en
+la columna *Observado* de la tabla de integración, y *"VCs verificados contra GCS
+real"* sigue en **0** hasta que alguien corra el backend `gcs`. Pasar contra un
+emulador y pasar contra GCS son dos afirmaciones distintas.
 
 ## Requisitos
 

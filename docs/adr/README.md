@@ -42,6 +42,8 @@ el "por qué" se escribe una sola vez, en un solo lugar.
 | [ADR-0010](./ADR-0010-objeto-modificado.md) | Objeto modificado durante la lectura: riesgo aceptado | aceptado |
 | [ADR-0011](./ADR-0011-salida-incremental.md) | Salida incremental por streaming (resuelve FR-g del borrador) | aceptado |
 | [ADR-0012](./ADR-0012-nfr-rendimiento-diferido.md) | NFR de rendimiento declinado en v1, diferido a la Iteración 3 | aceptado |
+| [ADR-0013](./ADR-0013-frontera-de-excepciones.md) | Frontera de excepciones en `cli`, errores de dominio traducidos en `gcs` | aceptado |
+| [ADR-0014](./ADR-0014-emulacion-local-floci.md) | Emulación local con `floci-gcp` para la verificación de integración | aceptado |
 
 ## Trazabilidad hacia atrás
 
@@ -50,3 +52,8 @@ ADR-0001 a ADR-0010 son la formalización de las 10 preguntas abiertas del
 su momento dentro de `01-base-context.md`. ADR-0011 y ADR-0012 salieron de la
 [revisión de la spec](../revision-spec.md), que detectó dos requerimientos del
 borrador que no habían quedado ni resueltos ni descartados.
+
+ADR-0013 y ADR-0014 salieron de los [hallazgos](../hallazgos/) posteriores a esa
+revisión: el primero de [H-12](../hallazgos/H-12-sin-frontera-de-excepciones.md)
+(el CLI no atrapaba excepciones), el segundo de H-9 (la verificación de
+integración no se podía correr sin una cuenta con billing).
