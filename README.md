@@ -16,10 +16,10 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: Iteración 1 completa, 12/12 VCs pasando contra dobles de prueba.** La
-> verificación de integración se puede correr sin cuenta paga
-> ([ADR-0014](./docs/adr/ADR-0014-emulacion-local-floci.md)) y **todavía no se
-> ejecutó** — ver [Estado](#estado) más abajo.
+> **Estado: Iteración 1 completa.** 12/12 VCs pasando contra dobles de prueba, y la
+> verificación de integración **ejecutada** contra el emulador `floci-gcp`
+> ([ADR-0014](./docs/adr/ADR-0014-emulacion-local-floci.md)). Contra GCS real sigue
+> pendiente, y es una afirmación distinta — ver [Estado](#estado).
 
 ## Este repo es un ejercicio de SDD
 
@@ -233,16 +233,18 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | | |
 |---|---|
 | Iteración 1 (búsqueda de punta a punta + frontera de excepciones) | ✅ implementada, **12/12 VCs** pasando contra dobles de prueba |
-| Verificación de integración (backend `floci`) | ⬜ **sin ejecutar** — ya no bloqueada: corre sin cuenta paga ([ADR-0014](./docs/adr/ADR-0014-emulacion-local-floci.md)) |
-| Verificación contra GCS real | ⬜ pendiente — afirmación más fuerte, no se cierra con el emulador |
+| Verificación de integración (backend `floci`) | ✅ **ejecutada 2026-09-24** — I-1…I-5 e I-7 pasan, por script y por pytest |
+| Verificación contra GCS real | ⬜ pendiente — afirmación más fuerte (ADC, IAM, red); no se cierra con el emulador |
 | Iteración 2 (resiliencia, guardrail de costo, no-texto) | ⬜ planificada, sin implementar |
 | Iteración 3 (concurrencia y su NFR de rendimiento) | ⬜ no comprometida; obligación registrada |
 
-**El pendiente es ejecutar la verificación de integración.** El enunciado pide que
-la Iteración 1 "corra una búsqueda real y sus chequeos de verificación pasen";
-pasar contra un doble de prueba, pasar contra un emulador y pasar contra GCS son
-tres afirmaciones distintas, y este repo no las mezcla. Hasta el 2026-09-24 esto
-estaba bloqueado por no tener una cuenta con billing; con el backend `floci`
-([ADR-0014](./docs/adr/ADR-0014-emulacion-local-floci.md)) corre sin cuenta, así que
-**falta correrlo** y anotar lo observado en la tabla de integración de
+El enunciado pide que la Iteración 1 "corra una búsqueda real y sus chequeos de
+verificación pasen". Eso **está cumplido** contra el emulador: los seis chequeos
+corren y pasan, con lo observado anotado en la tabla de integración de
 [`04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md).
+
+Lo que queda abierto, dicho con precisión: pasar contra un doble de prueba, pasar
+contra un emulador y pasar contra GCS son **tres afirmaciones distintas**, y este
+repo no las mezcla. Falta la tercera, que es la única que verifica ADC, IAM, red y
+latencia — y de hecho I-6 (ADC ausente) es *imposible* de verificar en el emulador
+([H-14](./docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).

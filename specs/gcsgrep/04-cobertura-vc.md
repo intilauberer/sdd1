@@ -134,22 +134,27 @@ integración.
 
 ## Verificación de integración (contra un bucket real)
 
-> ### ⚠️ Estado: sin ejecutar — ya no bloqueado, pero sin resultados
+> ### ✅ Estado: ejecutada contra el emulador `floci-gcp` el 2026-09-24
 >
-> **Ningún chequeo de esta tabla se ejecutó todavía.** Los 12 VCs pasan contra
-> dobles de prueba.
+> **I-1, I-2, I-3, I-4, I-5 e I-7 pasaron**, por el script y por pytest. Es la
+> primera vez que los chequeos de integración se ejecutan: hasta ahora H-9 estaba
+> **bloqueado** por no tener una cuenta con billing, y
+> [ADR-0014](../../docs/adr/ADR-0014-emulacion-local-floci.md) lo desbloqueó con el
+> backend `floci`.
 >
-> Lo que cambió el 2026-09-24: hasta ahora esto estaba **bloqueado** por no tener
-> una cuenta con billing. Con [ADR-0014](../../docs/adr/ADR-0014-emulacion-local-floci.md)
-> el campo de pruebas corre contra `floci-gcp` sin cuenta ni tarjeta, así que
-> **H-9 deja de ser bloqueante de entrega**: la cátedra habilitó la emulación como
-> vía válida.
+> **Qué queda abierto, y son dos cosas distintas:**
 >
-> Falta **ejecutarlo**. Un chequeo que se puede correr y no se corrió sigue siendo
-> un chequeo sin resultado, y esta tabla no lo cuenta como verificado.
+> - **La verificación contra GCS real.** Es una afirmación más fuerte —ADC, IAM,
+>   red, latencia— y **no se cierra con el emulador**. Sigue en 0.
+> - **I-6 (ADC ausente).** No es verificable contra `floci`: con
+>   `STORAGE_EMULATOR_HOST` seteada el SDK no mira las credenciales, así que taparlas
+>   no tiene efecto ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).
+>   Su observable se registró por otra vía, abajo.
 >
-> La verificación contra **GCS real** sigue abierta y es una afirmación más fuerte,
-> registrada aparte: no se cierra con el emulador.
+> Entorno de la corrida: `floci-gcp 0.9.0` (imagen `floci/floci-gcp:latest`,
+> digest `sha256:ea29a53b…1138ea`) en `localhost:4588`, bucket
+> `gcsgrep-test-floci`, `gcsgrep` instalado con `pip install -e '.[dev]'` sobre
+> Python 3.10.12.
 
 El procedimiento reproducible —creación del bucket de prueba, siembra de
 fixtures, los cinco chequeos, y destrucción— está en

@@ -54,6 +54,12 @@ sabe con cuál está hablando: corre los mismos chequeos contra los dos.
 | ADC, IAM, permisos reales | ❌ | ✅ |
 | Latencia y comportamiento bajo carga | ❌ | ✅ |
 
+**Cada ❌ de esta tabla es una condición que el script tiene que respetar**, no una
+nota al pie: un chequeo que verifica algo marcado ❌ se saltea con un mensaje, no se
+deja fallando. Se aprendió corriéndolo —I-6 fallaba con exit `0` contra el
+emulador— y está registrado como
+[H-14](../hallazgos/H-14-i6-no-verificable-en-emulador.md).
+
 **Regla de registro, no negociable:** un resultado obtenido contra `floci` se
 anota en la tabla de integración con **`floci`** en la columna *Observado*, y la
 fila *"VCs verificados contra GCS real"* del resumen sigue en **0** hasta que
@@ -81,6 +87,17 @@ contra GCS real, que es una afirmación más fuerte y está registrada como tal.
 - Si `floci-gcp` difiere de GCS en algún comportamiento, un chequeo puede pasar
   contra el emulador y fallar contra GCS. La mitigación es la regla de registro:
   mientras la fila diga `floci`, nadie puede afirmar lo otro.
+- **Hay chequeos que el emulador vuelve imposibles, no solo débiles.** I-6 (ADC
+  ausente) termina con exit `0` porque el SDK no mira las credenciales cuando
+  `STORAGE_EMULATOR_HOST` está seteada. Esos se saltean declarando el backend que
+  necesitan ([H-14](../hallazgos/H-14-i6-no-verificable-en-emulador.md)).
+
+## Verificado
+
+Ejecutado el 2026-09-24 con `floci-gcp 0.9.0` en `localhost:4588`: **I-1, I-2, I-3,
+I-4, I-5 e I-7 pasan**, por el script y por `pytest -m integration`. Los resultados
+observados están en la tabla de integración de
+[`04-cobertura-vc.md`](../../specs/gcsgrep/04-cobertura-vc.md).
 
 ## Alternativas descartadas
 

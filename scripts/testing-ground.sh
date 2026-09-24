@@ -311,9 +311,18 @@ cmd_verify() {
     fallas=$((fallas + 1))
   fi
 
-  # I-6 · NFR-2, alcance de la Iteración 2 (H-11). No se corre verificando la
-  # Iteración 1: fallaría por algo que todavía no se prometió.
-  if [[ "$ITERACION" -ge 2 ]]; then
+  # I-6 · NFR-2, alcance de la Iteración 2 (H-11). Dos condiciones para correrlo:
+  #
+  #   - la iteración: verificando la Iteración 1 fallaría por algo que todavía no
+  #     se prometió (H-11);
+  #   - el backend: con STORAGE_EMULATOR_HOST seteada el SDK saltea el chequeo de
+  #     credenciales, así que taparlas no tiene efecto y la corrida termina con 0.
+  #     El emulador no puede verificar ADC (ADR-0014, H-14).
+  if [[ "$ITERACION" -ge 2 && "$BACKEND" == "floci" ]]; then
+    info "I-6 salteado: el backend 'floci' no puede verificar ADC — con"
+    info "  STORAGE_EMULATOR_HOST seteada el SDK no mira las credenciales."
+    info "  Corré I-6 con GCSGREP_TEST_BACKEND=gcs (ADR-0014, H-14)."
+  elif [[ "$ITERACION" -ge 2 ]]; then
     info "I-6 ADC ausente (ADR-0002) — se corre con las credenciales tapadas"
     local rc err
     set +e

@@ -33,7 +33,7 @@ propósito.
 
 | Chequeo | VC / decisión | Qué observa | Dónde corre |
 |---|---|---|---|
-| I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script |
+| I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script, **solo backend `gcs`** |
 
 **Por qué I-6 se movió acá.** Hasta la spec v1.2 este runbook lo listaba como
 chequeo de la Iteración 1, pero verifica NFR-2, que el plan asigna a la Iteración 2
@@ -44,6 +44,12 @@ lugar equivocado. Ver
 
 I-6 vive solo en el script: manipular las credenciales del proceso que corre pytest
 contamina el resto de la sesión.
+
+**I-6 tampoco corre con el backend `floci`.** Con `STORAGE_EMULATOR_HOST` seteada el
+SDK saltea el chequeo de credenciales, así que taparlas no tiene efecto y la corrida
+termina con exit `0`: el chequeo no puede pasar, y su ✗ no dice nada sobre `gcsgrep`.
+El script lo saltea con un mensaje. Ver
+[H-14](./hallazgos/H-14-i6-no-verificable-en-emulador.md).
 
 Un chequeo de integración declara **a qué iteración pertenece**, igual que un VC.
 Un runbook escrito contra la spec completa verifica promesas que todavía no se
