@@ -65,17 +65,20 @@ prefijo real y obtener matches con el formato correcto, sin bajar nada a disco.
   match en cuanto aparece ([ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md),
   agregado en la revisión 1.1).
 - **Frontera de manejo de excepciones en `cli.main()`** (enmienda de la spec v1.2,
-  [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md)). **Es el único
-  punto de esta iteración que no está en el código.** Dos mitades:
+  [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md); implementada el
+  2026-09-24 según [ADR-0013](../../docs/adr/ADR-0013-frontera-de-excepciones.md)).
+  Dos mitades:
   - **FR-12 / VC-18:** bucket inexistente o inaccesible → exit `2` con un mensaje
     que distingue "no existe" de "sin permiso", sin traceback.
   - **VC-16 (b):** una excepción **inesperada** tampoco puede terminar en
     traceback → exit `2` y mensaje legible. Es lo que hace verificable la parte
     universal de NFR-3, que prometía "ningún caso de error" desde la v1.0.
 
-  Empieza con un **ADR**, no con código: dónde vive la frontera es una decisión de
-  arquitectura con alternativas reales, y `core` no debe aprender a manejar errores
-  del SDK de GCS (rompería `cli → core → gcs`).
+  Se resolvió con [ADR-0013](../../docs/adr/ADR-0013-frontera-de-excepciones.md): la
+  frontera vive en `cli.main()` y la **traducción** de las excepciones del SDK vive
+  en `gcs`, que las convierte en los errores de dominio de `gcsgrep/errors.py`. Así
+  `cli` reporta fallos de GCS sin importar `google.api_core` y `core` sigue sin
+  saber que GCS existe.
 
 **Fuera de alcance de esta iteración:** manejo de objetos ilegibles, salteo de
 binarios/`.gz`, guardrail de tope, fallos de red simulados. Se asume, por ahora,

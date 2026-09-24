@@ -167,8 +167,14 @@ real no se probó nunca.
 [`docs/integracion-gcs.md`](./integracion-gcs.md) (runbook reproducible del
 campo de pruebas), `scripts/testing-ground.sh` (crea, siembra y destruye el
 bucket) y un workflow de CI manual (`integration.yml`). **La corrida sigue
-pendiente y sigue siendo bloqueante**: el runbook la hace fácil y reproducible,
-no la reemplaza.
+pendiente**: el runbook la hace fácil y reproducible, no la reemplaza.
+
+**Actualización 2026-09-24 — deja de ser bloqueante de entrega.** El bloqueo real
+no era el runbook: era que crear un bucket en GCS exige una cuenta con billing. La
+cátedra habilitó emular, y [ADR-0014](./adr/ADR-0014-emulacion-local-floci.md)
+agrega el backend `floci` al campo de pruebas, que corre sin cuenta ni tarjeta. Lo
+que queda abierto es **ejecutarlo**, y por separado la verificación contra GCS real,
+que es una afirmación más fuerte y no se cierra con el emulador.
 
 ### H-10 · El doble de prueba expone un método de escritura — **menor, para Iteración 2**
 

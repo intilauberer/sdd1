@@ -14,11 +14,15 @@ Para correrlos:
 Dependen de las fixtures exactas que siembra `scripts/testing-ground.sh`; sin ese
 bucket no tienen sentido y se saltean.
 
-Cobertura: I-1, I-2, I-3 e I-5 de la tabla de integración de
+Cobertura: I-1, I-2, I-3, I-5 e I-7 de la tabla de integración de
 `specs/gcsgrep/04-cobertura-vc.md`. Los chequeos I-4 (ubicación inválida, que no
 toca la red) e I-6 (ADC ausente, que requiere tapar las credenciales del proceso)
 viven en el runbook de shell, no acá: manipular las credenciales del intérprete
 que corre pytest contamina al resto de la sesión.
+
+Corren igual contra GCS real o contra el emulador `floci-gcp`: lo único que cambia
+es a qué host apunta el SDK (ADR-0014). Lo que el emulador NO verifica —ADC, IAM,
+red real— está en la tabla comparativa de ese ADR.
 """
 
 import os
@@ -107,3 +111,28 @@ def test_i5_primer_match_sin_leer_el_objeto_completo(capsys):
 
     assert primero.object_name == "grande/big.txt"
     assert primero.line_number == 1
+
+
+@requiere_bucket
+def test_i7_bucket_inexistente_no_deja_traceback(capsys):
+    """I-7 · VC-18 y FR-12 contra un backend real.
+
+    Apunta a un bucket que no existe, así que no depende de las fixtures — solo de
+    que el nombre siga sin existir. Es el chequeo que cierra el hallazgo H-12: el
+    traceback de `google.api_core.exceptions.NotFound` que destapó todo esto.
+
+    La afirmación fuerte no es el exit code, es que el mensaje **identifique el
+    caso**. Sin credenciales, o contra un emulador mal apuntado, el exit 2 llega
+    igual por el caso genérico de ADR-0013: exigir el texto de FR-12 es lo que hace
+    que este chequeo pueda fallar por la razón correcta.
+    """
+    from gcsgrep import cli
+
+    exit_code = cli.main(["x", "gs://gcsgrep-test-no-existe-jamas/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert "gcsgrep-test-no-existe-jamas" in captured.err
+    assert "no existe" in captured.err

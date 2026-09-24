@@ -2,7 +2,7 @@
 
 import pytest
 
-from gcsgrep import cli, gcs
+from gcsgrep import cli, errors, gcs
 from .fakes import ExplodingStream, FakeGCS
 
 
@@ -113,10 +113,15 @@ def test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida(monkeypatc
     se llevaría los dos matches y stdout quedaría vacío. Con salida incremental
     ya salieron.
 
-    Este test NO especifica nada sobre el manejo de errores de lectura: que la
-    excepción se propague es el estado actual de la Iteración 1. FR-6 la va a
-    convertir en un mensaje por stderr en la Iteración 2, y este test seguirá
-    valiendo porque solo mira lo que ya se imprimió.
+    Este test NO especifica nada sobre *cómo* se maneja el error de lectura: solo
+    mira lo que ya se imprimió antes de que apareciera. Por eso siguió valiendo
+    cuando la frontera de excepciones de la spec v1.2 cambió el final de la
+    corrida —antes la excepción escapaba, ahora da exit 2 sin traceback— y va a
+    seguir valiendo cuando FR-6 (Iteración 2) la convierta en un mensaje por
+    stderr que no aborte.
+
+    Cambio de observable registrado el 2026-09-24 en 04-cobertura-vc.md: lo que
+    se afirma es lo mismo, lo que se observa al final cambió.
     """
     boom = OSError("fallo de lectura simulado")
 
@@ -129,11 +134,160 @@ def test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida(monkeypatc
     monkeypatch.setattr(gcs, "list_objects", list_objects)
     monkeypatch.setattr(gcs, "open_text_stream", open_text_stream)
 
-    with pytest.raises(OSError):
-        cli.main(["timeout", "gs://b/logs/"])
+    exit_code = cli.main(["timeout", "gs://b/logs/"])
 
+    # Con la frontera de la v1.2 el fallo se reporta en vez de escapar (VC-16 b);
+    # lo que este VC observa es que los dos matches salieron *antes*.
+    assert exit_code == 2
     out = capsys.readouterr().out
     assert out.splitlines() == [
         "gs://b/logs/a.txt:timeout uno",
         "gs://b/logs/a.txt:timeout dos",
     ]
+
+
+# --- VC-18 · FR-12 bucket inexistente o inaccesible --------------------------
+#
+# El colaborador de `gcs` levanta el error de dominio que `gcs.list_objects`
+# produce cuando el SDK devuelve 404 o 403. Que la traducción del SDK sea la
+# correcta se verifica aparte, en test_gcs.py.
+
+
+def test_vc18_bucket_inexistente_exit_2_mensaje_sin_traceback(monkeypatch, capsys):
+    def explota(bucket, prefix):
+        raise errors.BucketNoEncontrado(bucket)
+        yield  # pragma: no cover — lo hace generador, como el real
+
+    monkeypatch.setattr(gcs, "list_objects", explota)
+
+    exit_code = cli.main(["x", "gs://no-existe/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "no-existe" in captured.err
+    assert "no existe" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_vc18_sin_permiso_da_un_mensaje_distinto_al_de_inexistente(monkeypatch, capsys):
+    """El mensaje tiene que distinguir los dos casos: mandan a revisar cosas
+    distintas (el nombre vs. IAM). Un mensaje único obliga a diagnosticar dos
+    veces."""
+
+    def denegado(bucket, prefix):
+        raise errors.AccesoDenegado(bucket)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(gcs, "list_objects", denegado)
+
+    assert cli.main(["x", "gs://ajeno/logs/"]) == 2
+    err_denegado = capsys.readouterr().err
+
+    def inexistente(bucket, prefix):
+        raise errors.BucketNoEncontrado(bucket)
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(gcs, "list_objects", inexistente)
+
+    assert cli.main(["x", "gs://ajeno/logs/"]) == 2
+    err_inexistente = capsys.readouterr().err
+
+    assert err_denegado != err_inexistente
+    assert "permiso" in err_denegado
+    assert "permiso" not in err_inexistente
+    assert "Traceback" not in err_denegado
+
+
+def test_vc18_no_abre_ningun_objeto_cuando_falla_el_listado(monkeypatch, capsys):
+    aperturas = []
+
+    def explota(bucket, prefix):
+        raise errors.BucketNoEncontrado(bucket)
+        yield  # pragma: no cover
+
+    def registrar_apertura(bucket, object_name):  # pragma: no cover
+        aperturas.append(object_name)
+        raise AssertionError("no se debería abrir ningún objeto")
+
+    monkeypatch.setattr(gcs, "list_objects", explota)
+    monkeypatch.setattr(gcs, "open_text_stream", registrar_apertura)
+
+    assert cli.main(["x", "gs://no-existe/"]) == 2
+    assert aperturas == []
+
+
+# --- VC-16 (b) · NFR-3 ante una excepción inesperada -------------------------
+#
+# La parte (a) de VC-16 verifica una lista cerrada de casos de error. Esta
+# verifica la parte universal de NFR-3 ("ningún caso de error imprime un stack
+# trace"): una excepción que el código no conoce tampoco puede crashear.
+
+
+class ExcepcionQueNadiePrevio(Exception):
+    """Una clase que `gcsgrep` no conoce ni podría conocer."""
+
+
+def test_vc16b_excepcion_inesperada_al_listar_no_deja_traceback(monkeypatch, capsys):
+    def explota(bucket, prefix):
+        raise ExcepcionQueNadiePrevio("algo que nadie modeló")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(gcs, "list_objects", explota)
+
+    exit_code = cli.main(["x", "gs://b/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+    assert "ExcepcionQueNadiePrevio" in captured.err
+    assert "GCSGREP_DEBUG" in captured.err
+
+
+def test_vc16b_excepcion_inesperada_al_abrir_un_objeto_no_deja_traceback(
+    fake_gcs, monkeypatch, capsys
+):
+    fake_gcs.put("b", "logs/a.txt", "timeout\n")
+
+    def explota_al_abrir(bucket, object_name):
+        raise ExcepcionQueNadiePrevio("falló al abrir")
+
+    monkeypatch.setattr(gcs, "open_text_stream", explota_al_abrir)
+
+    exit_code = cli.main(["timeout", "gs://b/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert captured.out == ""
+    assert "Traceback" not in captured.err
+
+
+def test_vc16b_los_matches_ya_emitidos_sobreviven_al_fallo(fake_gcs, capsys):
+    """La frontera no puede tragarse la salida incremental: lo que ya salió por
+    stdout queda, y el exit code refleja el fallo (VC-17 + VC-16 b)."""
+    fake_gcs.put("b", "logs/a.txt", "timeout uno\ntimeout dos\n")
+    fake_gcs.explode_on("b", "logs/b.txt", ExcepcionQueNadiePrevio("boom"))
+
+    exit_code = cli.main(["timeout", "gs://b/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "timeout uno" in captured.out
+    assert "timeout dos" in captured.out
+    assert "Traceback" not in captured.err
+
+
+def test_vc16b_debug_reexpone_la_excepcion_para_diagnosticar(monkeypatch):
+    """La vía de escape explícita: el caso genérico no puede esconder el problema
+    para siempre (ADR-0013)."""
+
+    def explota(bucket, prefix):
+        raise ExcepcionQueNadiePrevio("detalle que hace falta ver")
+        yield  # pragma: no cover
+
+    monkeypatch.setattr(gcs, "list_objects", explota)
+    monkeypatch.setenv(cli.DEBUG_ENV, "1")
+
+    with pytest.raises(ExcepcionQueNadiePrevio):
+        cli.main(["x", "gs://b/logs/"])
