@@ -1,6 +1,6 @@
 # Verificación de integración contra GCS real
 
-> Por qué existe este documento: los 35 tests del repo corren contra dobles de
+> Por qué existe este documento: los 48 tests del repo corren contra dobles de
 > prueba, sin red ni credenciales. Eso verifica el *wiring* del código, no que
 > `google-cloud-storage` se comporte como creemos. El enunciado pide que la
 > Iteración 1 "corra una búsqueda real y sus chequeos de verificación pasen", y

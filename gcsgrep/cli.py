@@ -26,6 +26,17 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("-i", "--ignore-case", action="store_true", help="búsqueda sin distinguir mayúsculas")
     parser.add_argument("-n", "--line-number", action="store_true", help="mostrar el número de línea de cada match")
+    parser.add_argument(
+        "--max",
+        type=int,
+        default=core.TOPE_POR_DEFECTO,
+        metavar="N",
+        dest="max_objetos",
+        help=(
+            f"guardrail de costo: no leer nada si el prefijo tiene más de N objetos "
+            f"(default: {core.TOPE_POR_DEFECTO}; 0 quita el tope)"
+        ),
+    )
     parser.add_argument("pattern", help="texto literal a buscar")
     parser.add_argument("location", help="gs://bucket/prefijo")
     return parser
@@ -49,10 +60,18 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         print(str(exc), file=sys.stderr)
         return 2
 
+    if args.max_objetos < 0:
+        print(
+            f"--max tiene que ser 0 o mayor, se recibió {args.max_objetos}",
+            file=sys.stderr,
+        )
+        return 2
+
     config = core.SearchConfig(
         pattern=args.pattern,
         ignore_case=args.ignore_case,
         show_line_numbers=args.line_number,
+        max_objetos=args.max_objetos,
     )
 
     # Se imprime cada match en cuanto aparece, con flush, para que la salida
@@ -67,6 +86,12 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         for match in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_text_stream):
             found_any = True
             print(format_match(match, args.line_number), flush=True)
+    except errors.TopeExcedido as exc:
+        # BR-2: no es un error, es la herramienta negándose a hacer algo caro. Sale
+        # con 1, no con 2 (ADR-0006). Va antes del genérico porque `TopeExcedido`
+        # no hereda de `ErrorDeAcceso`.
+        print(f"gcsgrep: {exc}", file=sys.stderr)
+        return 1
     except errors.ErrorDeAcceso as exc:
         # Fallos que `gcs` supo identificar: el mensaje ya está escrito para
         # quien corrió el comando (FR-12 / VC-18).

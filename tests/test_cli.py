@@ -3,7 +3,7 @@
 import pytest
 
 from gcsgrep import cli, errors, gcs
-from .fakes import ExplodingStream, FakeGCS
+from .fakes import ExplodingStream, FakeGCS, RecordingFakeGCS
 
 
 @pytest.fixture
@@ -291,3 +291,60 @@ def test_vc16b_debug_reexpone_la_excepcion_para_diagnosticar(monkeypatch):
 
     with pytest.raises(ExcepcionQueNadiePrevio):
         cli.main(["x", "gs://b/logs/"])
+
+
+# --- VC-12 · BR-2 de punta a punta, incluido el exit code ---------------------
+
+
+def _sembrar(fake, n):
+    for i in range(n):
+        fake.put("b", f"logs/{i:05d}.txt", "connection timeout\n")
+
+
+def test_vc12_tope_excedido_sale_con_1_y_no_lee_nada(monkeypatch, capsys):
+    """BR-2 sale con `1`, no con `2`: no es un error, es una negativa (ADR-0006)."""
+    fake = RecordingFakeGCS()
+    _sembrar(fake, 1001)
+    monkeypatch.setattr(gcs, "list_objects", fake.list_objects)
+    monkeypatch.setattr(gcs, "open_text_stream", fake.open_text_stream)
+
+    exit_code = cli.main(["timeout", "gs://b/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 1
+    assert captured.out == ""
+    assert fake.opened == []
+    assert "1001" in captured.err and "1000" in captured.err
+    assert "Traceback" not in captured.err
+
+
+def test_vc12_max_0_quita_el_tope_de_punta_a_punta(monkeypatch, capsys):
+    fake = RecordingFakeGCS()
+    _sembrar(fake, 1001)
+    monkeypatch.setattr(gcs, "list_objects", fake.list_objects)
+    monkeypatch.setattr(gcs, "open_text_stream", fake.open_text_stream)
+
+    exit_code = cli.main(["--max", "0", "timeout", "gs://b/logs/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 0
+    assert len(captured.out.strip().splitlines()) == 1001
+    assert len(fake.opened) == 1001
+
+
+def test_vc12_max_explicito_bajo(fake_gcs, capsys):
+    fake_gcs.put("b", "logs/a.txt", "timeout\n")
+    fake_gcs.put("b", "logs/b.txt", "timeout\n")
+
+    assert cli.main(["--max", "1", "timeout", "gs://b/logs/"]) == 1
+    assert "2 objetos" in capsys.readouterr().err
+
+
+def test_vc12_max_negativo_es_argumento_invalido(capsys):
+    """Un tope negativo no tiene significado: `0` ya es "sin tope" (ADR-0006)."""
+    exit_code = cli.main(["--max", "-1", "x", "gs://b/"])
+    captured = capsys.readouterr()
+
+    assert exit_code == 2
+    assert "--max" in captured.err
+    assert "Traceback" not in captured.err

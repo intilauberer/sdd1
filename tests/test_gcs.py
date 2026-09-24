@@ -14,6 +14,7 @@ import pytest
 from google.api_core import exceptions as api_exceptions
 
 from gcsgrep import errors, gcs
+from .fakes import ClienteSoloLectura
 
 
 class _FakeBlob:
@@ -187,3 +188,79 @@ def test_vc18_open_text_stream_traduce_notfound_a_objeto_no_encontrado(monkeypat
 
     with pytest.raises(errors.ObjetoNoEncontrado):
         gcs.open_text_stream("b", "logs/a.txt")
+
+
+# --- VC-11 · BR-1 solo lectura ------------------------------------------------
+#
+# VC-11 pide dos cosas: inspección del módulo `gcs` y un doble que falle si recibe
+# una llamada que no sea de lectura. Acá están las dos, automatizadas.
+
+#: Métodos de escritura / borrado / IAM del SDK de GCS. Si alguno aparece en
+#: gcsgrep/gcs.py, BR-1 está violado.
+OPERACIONES_PROHIBIDAS = (
+    "upload_from_file", "upload_from_filename", "upload_from_string",
+    "create_bucket", "delete", "delete_blob", "delete_bucket", "delete_blobs",
+    "copy_blob", "rename_blob", "compose", "rewrite", "patch", "update",
+    "set_iam_policy", "make_public", "make_private", "acl", "create_resumable_upload_session",
+)
+
+
+def test_vc11_el_modulo_gcs_no_nombra_ninguna_operacion_de_escritura():
+    """VC-11 (a) · BR-1 por inspección, automatizada.
+
+    `gcs` es la única capa que llama a la API, así que alcanza con mirar ese
+    archivo. Se busca sobre el AST y no con un grep de texto para no cazar
+    menciones en comentarios: lo que importa son los atributos que el código
+    realmente toca.
+    """
+    import ast
+    import pathlib
+
+    fuente = pathlib.Path(gcs.__file__).read_text(encoding="utf-8")
+    arbol = ast.parse(fuente)
+
+    atributos = {n.attr for n in ast.walk(arbol) if isinstance(n, ast.Attribute)}
+    llamados = {
+        n.func.attr
+        for n in ast.walk(arbol)
+        if isinstance(n, ast.Call) and isinstance(n.func, ast.Attribute)
+    }
+    tocados = atributos | llamados
+
+    prohibidos_presentes = sorted(tocados & set(OPERACIONES_PROHIBIDAS))
+    assert prohibidos_presentes == [], (
+        f"BR-1: gcs.py toca operaciones que no son de lectura: {prohibidos_presentes}"
+    )
+
+
+def test_vc11_un_doble_que_solo_permite_leer_no_registra_llamadas_prohibidas(monkeypatch):
+    """VC-11 (b) · el test que falla si el doble recibe algo que no es lectura.
+
+    `ClienteSoloLectura` explota ante cualquier atributo fuera de la lista blanca,
+    así que este test falla —no "reporta"— si `gcs` intentara escribir, incluso con
+    un método que el SDK todavía no tenga.
+    """
+    cliente = ClienteSoloLectura(["logs/a.txt", "logs/b.txt"])
+    monkeypatch.setattr(gcs, "_get_client", lambda: cliente)
+
+    assert list(gcs.list_objects("b", "logs/")) == ["logs/a.txt", "logs/b.txt"]
+    with gcs.open_text_stream("b", "logs/a.txt") as stream:
+        assert list(stream) == ["contenido\n"]
+
+    assert cliente.invocaciones_prohibidas == []
+    assert set(cliente.invocaciones) <= {"list_blobs", "bucket", "bucket.blob", "blob.open(r)"}
+
+
+def test_vc11_el_doble_efectivamente_detecta_una_escritura():
+    """Sin esto, VC-11 (b) podría pasar porque el doble no sabe detectar nada.
+
+    Es la pregunta de C-8 aplicada al ejercitador: ¿puede fallar por la razón
+    correcta? Se comprueba provocando la violación a propósito.
+    """
+    cliente = ClienteSoloLectura([])
+
+    with pytest.raises(AssertionError, match="BR-1 violado"):
+        cliente.delete_bucket("b")
+
+    with pytest.raises(AssertionError, match="BR-1 violado"):
+        cliente.bucket("b").blob("x").upload_from_string("dato")

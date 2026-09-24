@@ -46,8 +46,8 @@ es un hallazgo, es alcance pendiente.
 | H-6 | Alias de tipo incorrecto en `core.py` | menor | [revisión v1.1](../revision-spec.md) | resuelto |
 | H-7 | Faltaba el invariante de trazabilidad hacia atrás | mayor | [revisión v1.1](../revision-spec.md) | resuelto (tabla borrador → spec) |
 | H-8 | La spec no estaba versionada | mayor | [revisión v1.1](../revision-spec.md) | resuelto (encabezado + historial) |
-| H-9 | La verificación de integración nunca se ejecutó | mayor (**ya no bloqueante**) | [revisión v1.1](../revision-spec.md) | **ejecutada el 2026-09-24** contra `floci-gcp`: I-1…I-5 e I-7 pasan. Contra GCS real sigue abierto |
-| H-10 | El doble de prueba expone un método de escritura | menor | [revisión v1.1](../revision-spec.md) | abierto — precondición de VC-11, Iteración 2 |
+| H-9 | La verificación de integración nunca se ejecutó | mayor | [revisión v1.1](../revision-spec.md) | **cerrado** — ejecutada contra `floci-gcp` (I-1…I-5, I-7); contra GCS real declinada con fundamento en [ADR-0015](../adr/ADR-0015-verificacion-real-declinada.md) |
+| H-10 | El doble de prueba expone un método de escritura | menor | [revisión v1.1](../revision-spec.md) | **cerrado** — resuelto de otro modo: VC-11 se verifica al nivel del cliente del SDK, donde `FakeGCS.put()` no aplica (ver la tabla de cobertura) |
 | H-11 | El runbook reclama I-6 para la Iteración 1; el plan lo asigna a la 2 | mayor | [H-11](./H-11-runbook-vs-plan.md) | resuelto (I-6 movido a Iteración 2) |
 | H-12 | El CLI no tiene frontera de excepciones, y NFR-3 no es falsable | crítico | [H-12](./H-12-sin-frontera-de-excepciones.md) | **resuelto** — VC-16 (b), FR-12/VC-18 y [ADR-0013](../adr/ADR-0013-frontera-de-excepciones.md) |
 | H-13 | La tabla de Actores declara modos de falla que ninguna tabla vigila | crítico | [H-13](./H-13-actores-sin-trazar.md) | resuelto (3ra tabla de trazabilidad + C-13) |
