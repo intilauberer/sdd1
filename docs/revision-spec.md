@@ -15,7 +15,7 @@
 | **Insumos** | `00-requirements-draft.md`, `01-base-context.md`, `03-plan.md`, `04-cobertura-vc.md`, código de la Iteración 1, `enunciado.md` |
 | **Fecha** | 2026-09-23 |
 | **Resultado** | **Habilitada con cambios** → la spec pasa a v1.1 |
-| **Bloqueante pendiente** | H-9 (verificación de integración nunca ejecutada) |
+| **Bloqueante pendiente** | ninguno — H-9 ejecutado contra `floci` y cerrado por [ADR-0015](./adr/ADR-0015-verificacion-real-declinada.md) el 2026-09-24 |
 
 ## Checklist aplicado
 
@@ -169,12 +169,17 @@ campo de pruebas), `scripts/testing-ground.sh` (crea, siembra y destruye el
 bucket) y un workflow de CI manual (`integration.yml`). **La corrida sigue
 pendiente**: el runbook la hace fácil y reproducible, no la reemplaza.
 
-**Actualización 2026-09-24 — deja de ser bloqueante de entrega.** El bloqueo real
-no era el runbook: era que crear un bucket en GCS exige una cuenta con billing. La
-cátedra habilitó emular, y [ADR-0014](./adr/ADR-0014-emulacion-local-floci.md)
-agrega el backend `floci` al campo de pruebas, que corre sin cuenta ni tarjeta. Lo
-que queda abierto es **ejecutarlo**, y por separado la verificación contra GCS real,
-que es una afirmación más fuerte y no se cierra con el emulador.
+**Actualización 2026-09-24 — ejecutado y cerrado.** El bloqueo real no era el
+runbook: era que crear un bucket en GCS exige una cuenta con billing. La cátedra
+habilitó emular, [ADR-0014](./adr/ADR-0014-emulacion-local-floci.md) agregó el
+backend `floci`, y la verificación **se ejecutó**: I-1…I-5 e I-7 pasan. La
+verificación contra GCS real se declinó con fundamento y quedó como obligación
+registrada en [ADR-0015](./adr/ADR-0015-verificacion-real-declinada.md), con la lista
+explícita de qué queda sin verificar.
+
+H-9 **se cierra**. Correr el runbook además produjo un hallazgo nuevo
+([H-14](./hallazgos/H-14-i6-no-verificable-en-emulador.md)) que leer los documentos no
+habría encontrado, que es el mejor argumento a favor de haberlo ejecutado.
 
 ### H-10 · El doble de prueba expone un método de escritura — **menor, para Iteración 2**
 
@@ -228,6 +233,13 @@ excepción explícita: **H-9 sigue abierto**. La Iteración 1 está verificada
 contra dobles de prueba y **no** contra GCS real, así que no cumple todavía el
 criterio de entrega del enunciado. Ejecutar el runbook de integración es el
 próximo paso obligatorio, antes de escribir código de la Iteración 2.
+
+> **Estado al 2026-09-24 (spec v1.3).** El veredicto de arriba es el de esta
+> revisión y no se edita. Lo que pasó después: H-9 se ejecutó y se cerró
+> (ADR-0014 + ADR-0015), H-12 y H-13 produjeron la spec v1.2, H-14 salió de correr
+> el runbook, y BR-1/BR-2 —las dos Restricciones del enunciado— se implementaron
+> adelantándolas de la Iteración 2. El estado vigente de cada VC está, como
+> siempre, en [`04-cobertura-vc.md`](../specs/gcsgrep/04-cobertura-vc.md).
 
 ## Cómo repetir esta revisión
 

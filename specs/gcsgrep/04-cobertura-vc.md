@@ -19,17 +19,23 @@
 > La tabla no dice "lo probé". Dice, para cada criterio de verificación, con qué
 > se lo ejercita y qué se observó.
 
-## Resumen (Iteración 1, spec v1.2)
+## Resumen (Iteración 1 + las dos restricciones del enunciado, spec v1.3)
 
 | | |
 |---|---|
-| VCs en el alcance de la Iteración 1 | 11 (VC-1, VC-2, VC-3, VC-4, VC-5, VC-7, VC-8, VC-14, VC-17, **VC-18**, VC-16 (a) parcial + **(b)**) |
-| VCs con cobertura ejecutable | 12 |
-| VCs pasando contra dobles de prueba | 12 |
+| VCs cubiertos | 14 — los 11 de la Iteración 1, más **VC-11** (BR-1 solo lectura) y **VC-12** (BR-2 guardrail de costo) |
+| VCs pasando contra dobles de prueba | 14 |
 | VCs **sin implementar** | **0** |
-| VCs verificados contra GCS real | **0 — ver la sección de integración** |
-| VCs de la Iteración 2 (pendientes) | VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, VC-16 (a) completo |
-| Tests que ejercitan todo esto | **35**, en 5 archivos |
+| VCs verificados contra el emulador `floci` | 6 chequeos de integración (I-1…I-5, I-7) |
+| VCs verificados contra GCS real | **0 — declinado con fundamento, [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md)** |
+| VCs que siguen pendientes (Iteración 2) | VC-6, VC-9, VC-10, VC-13, VC-15, VC-16 (a) completo |
+| Tests que ejercitan todo esto | **48**, en 5 archivos |
+
+**Por qué VC-11 y VC-12 están acá y no en la Iteración 2.** Las dos son las
+[Restricciones](../../enunciado.md) del enunciado —"solo lectura" y "no escanees un
+bucket enorme sin un guardrail de costo"— y las restricciones no están scopeadas por
+iteración: son condiciones sobre lo que se entrega. El resto de la Iteración 2
+(VC-6, VC-9, VC-10, VC-13, VC-15) sigue sin implementar.
 
 ## Cobertura, uno por uno
 
@@ -79,6 +85,22 @@ Es la segunda vez que el mismo modo de falla aparece en este repo: VC-14 lo tuvo
 (H-3), se arregló, y no se le volvió a preguntar al resto de los VCs. De ahí la
 regla que quedó en el checklist de revisión.
 
+### Sobre la resolución de VC-11, distinta de la que H-10 propuso
+
+[H-10](../../docs/revision-spec.md) había dejado como precondición de VC-11
+"separar la siembra del doble de la superficie que `core` puede tocar", porque
+`FakeGCS` expone `put()`.
+
+**Se resolvió en otro lugar, y por eso VC-11 pasa sin ese refactor.** BR-1 es una
+afirmación sobre las operaciones invocadas **en la API de GCS**, así que su
+ejercitador vive al nivel del *cliente del SDK* (`ClienteSoloLectura`), no al nivel
+del doble del módulo `gcs`. `FakeGCS.put()` no es una operación del SDK: es setup de
+un doble que no habla con GCS en absoluto, así que no puede violar BR-1 ni
+confundirse con una escritura del código bajo prueba.
+
+Queda dicho acá porque H-10 predijo otra resolución, y un hallazgo que se resuelve
+distinto de lo que anticipó tiene que dejar el rastro de por qué.
+
 ### Por qué VC-17 tiene una fila nueva
 
 La fila original sigue arriba y **no se editó**. El test de VC-17 esperaba que la
@@ -87,6 +109,13 @@ no había frontera; con ADR-0013 la corrida termina con exit `2`. Lo que el VC
 afirma —que los matches ya emitidos salieron *antes* del fallo— es idéntico, y el
 test sigue observando eso. Cambió el final de la corrida, así que va una fila
 nueva con fecha, no una edición encima de la vieja.
+
+**Y tiene un segundo cambio, en la spec v1.3.** VC-17 ya no afirma que el primer
+match se emite sin haber *listado* el resto del prefijo: BR-2 obliga a contar antes
+de leer, y contar exige materializar el listado. Ahora afirma que se emite sin
+haberlo *abierto*, que es lo que FR-11 promete. El plan lo había anticipado como
+nota de regresión, y la propiedad original sobrevive con `--max 0`, verificada en
+`test_vc12_max_0_no_materializa_el_listado`.
 
 El ticket que lo cierra está planificado y **no** se implementó en la misma sesión
 donde se descubrió, por [`docs/proceso-cambios.md`](../../docs/proceso-cambios.md).
@@ -102,7 +131,7 @@ es parte de la verificación de integración (paso 5 del runbook).
 ## Cómo se ejercita todo
 
 ```bash
-python -m pytest            # 35 tests, sin credenciales ni red
+python -m pytest            # 48 tests, sin credenciales ni red
 ```
 
 Los tests corren en dos niveles:
@@ -134,7 +163,7 @@ integración.
 
 ## Verificación de integración (contra un bucket real)
 
-> ### ✅ Estado: ejecutada contra el emulador `floci-gcp` el 2026-09-24
+> ### ✅ Estado: ejecutada contra el emulador `floci-gcp` el 2026-09-24 · H-9 cerrado
 >
 > **I-1, I-2, I-3, I-4, I-5 e I-7 pasaron**, por el script y por pytest. Es la
 > primera vez que los chequeos de integración se ejecutan: hasta ahora H-9 estaba
@@ -142,14 +171,16 @@ integración.
 > [ADR-0014](../../docs/adr/ADR-0014-emulacion-local-floci.md) lo desbloqueó con el
 > backend `floci`.
 >
-> **Qué queda abierto, y son dos cosas distintas:**
+> **La verificación contra GCS real se declinó para esta entrega**, con fundamento y
+> obligación registrada: [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md).
+> Sigue en **0** y eso no va a cambiar acá — es una afirmación más fuerte (ADC, IAM,
+> red, latencia) y el ADR enumera exactamente qué queda sin verificar. **No es un
+> pendiente: es una decisión.**
 >
-> - **La verificación contra GCS real.** Es una afirmación más fuerte —ADC, IAM,
->   red, latencia— y **no se cierra con el emulador**. Sigue en 0.
-> - **I-6 (ADC ausente).** No es verificable contra `floci`: con
->   `STORAGE_EMULATOR_HOST` seteada el SDK no mira las credenciales, así que taparlas
->   no tiene efecto ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).
->   Su observable se registró por otra vía, abajo.
+> **I-6 (ADC ausente)** no es verificable contra `floci`: con `STORAGE_EMULATOR_HOST`
+> seteada el SDK no mira las credenciales, así que taparlas no tiene efecto
+> ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)). Su observable
+> se registró por otra vía, abajo.
 >
 > Entorno de la corrida: `floci-gcp 0.9.0` (imagen `floci/floci-gcp:latest`,
 > digest `sha256:ea29a53b…1138ea`) en `localhost:4588`, bucket

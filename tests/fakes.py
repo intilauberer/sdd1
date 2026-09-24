@@ -111,3 +111,74 @@ class ExplodingStream:
         for line in self._lines:
             yield line
         raise self._error
+
+
+class ClienteSoloLectura:
+    """Doble del **cliente del SDK** que falla si se le pide algo que no sea leer.
+
+    Es el ejercitador de VC-11 (BR-1, solo lectura). Vive al nivel del cliente de
+    `google-cloud-storage` porque ahí es donde BR-1 tiene sentido: "no invocar
+    operaciones de escritura" es una afirmación sobre la API de GCS, no sobre el
+    doble del módulo `gcs`.
+
+    Cualquier atributo fuera de la lista blanca explota, así que el test falla si
+    `gcs.py` intenta subir, borrar, copiar o tocar IAM — incluso con un método que
+    hoy no existe en el SDK.
+    """
+
+    #: Lo único que `gcs.py` tiene permitido tocar del cliente.
+    PERMITIDO = frozenset({"list_blobs", "bucket"})
+
+    def __init__(self, nombres_de_objetos: List[str]) -> None:
+        self._nombres = list(nombres_de_objetos)
+        self.invocaciones: List[str] = []
+        self.invocaciones_prohibidas: List[str] = []
+
+    def __getattr__(self, nombre: str):
+        # Solo se llega acá con atributos que la clase no define.
+        self.invocaciones_prohibidas.append(nombre)
+        raise AssertionError(
+            f"BR-1 violado: `gcs` invocó '{nombre}' sobre el cliente de GCS, "
+            f"que no es una operación de lectura. Permitido: {sorted(self.PERMITIDO)}"
+        )
+
+    def list_blobs(self, bucket, prefix=None):
+        self.invocaciones.append("list_blobs")
+
+        class _Blob:
+            def __init__(self, name):
+                self.name = name
+
+        return [_Blob(n) for n in self._nombres if n.startswith(prefix or "")]
+
+    def bucket(self, name: str):
+        self.invocaciones.append("bucket")
+        cliente = self
+
+        class _BlobDeLectura:
+            def __init__(self, nombre):
+                self._nombre = nombre
+
+            def open(self, mode: str):
+                assert mode == "r", f"BR-1: se abrió un blob en modo '{mode}', no 'r'"
+                cliente.invocaciones.append("blob.open(r)")
+                return io.StringIO("contenido\n")
+
+            def __getattr__(self, attr):
+                cliente.invocaciones_prohibidas.append(f"blob.{attr}")
+                raise AssertionError(
+                    f"BR-1 violado: `gcs` invocó 'blob.{attr}', que no es lectura"
+                )
+
+        class _BucketDeLectura:
+            def blob(self, nombre):
+                cliente.invocaciones.append("bucket.blob")
+                return _BlobDeLectura(nombre)
+
+            def __getattr__(self, attr):
+                cliente.invocaciones_prohibidas.append(f"bucket.{attr}")
+                raise AssertionError(
+                    f"BR-1 violado: `gcs` invocó 'bucket.{attr}', que no es lectura"
+                )
+
+        return _BucketDeLectura()

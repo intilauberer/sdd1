@@ -1,11 +1,22 @@
 # gcsgrep — plan de iteraciones
 
-> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.2.
+> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.3.
 >
 > Cada iteración termina con código andando y sus VCs pasando antes de que
 > empiece la siguiente.
 >
-> **Enmienda 2026-09-23 (spec v1.2):** la **frontera de manejo de excepciones del
+> **Enmienda 2026-09-24 · las dos Restricciones del enunciado se adelantan.** BR-1
+(solo lectura, VC-11) y BR-2 (guardrail de costo, VC-12) salen de la Iteración 2 y se
+implementan ahora. Fundamento: son las **Restricciones** del enunciado, no features,
+y las restricciones no están scopeadas por iteración — son condiciones sobre lo que
+se entrega. Un `gcsgrep` sin `--max` escanea un bucket entero sin tope, que es
+literalmente lo que la restricción prohíbe. El resto de la Iteración 2 (FR-6, FR-9,
+FR-10, BR-3, NFR-2) **no** se adelanta.
+
+Consecuencia registrada: implementar BR-2 acotó VC-17 (spec v1.3), tal como la nota
+de regresión de la Iteración 2 lo había anticipado.
+
+**Enmienda 2026-09-23 (spec v1.2):** la **frontera de manejo de excepciones del
 > CLI** se incorpora a la **Iteración 1**, que ya estaba implementada — FR-12 /
 > VC-18 (bucket inexistente o inaccesible) y **VC-16 (b)** (una excepción
 > inesperada no puede terminar en traceback). El fundamento está más abajo, en la
@@ -37,7 +48,7 @@ porque esté comprometida para esta entrega.
 | Iteración | Entrega | Cubre |
 |---|---|---|
 | 1 | Búsqueda literal de punta a punta, con `-i`/`-n`, salida incremental y frontera de excepciones | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, **FR-12**, NFR-1, NFR-3 (parcial, con la parte universal verificable) |
-| 2 | Resiliencia, guardrail de costo y contenido no-texto | FR-6, FR-9, FR-10, BR-1, BR-2, BR-3, NFR-2, NFR-3 (completo) |
+| 2 | Resiliencia y contenido no-texto | FR-6, FR-9, FR-10, BR-3, NFR-2, NFR-3 (completo) |
 | 3 | Concurrencia y el NFR de rendimiento que la justifica | NFR de rendimiento (a definir), revisión de ADR-0009 y ADR-0011 |
 
 Las Iteraciones 1 y 2 son la entrega mínima pedida por el enunciado (≥ 2
@@ -164,14 +175,12 @@ nadie curó para la demo: objetos rotos, binarios, `.gz`, y prefijos enormes.
   se informan y no abortan la corrida.
 - Salteo de objetos binarios (heurística de byte nulo).
 - Salteo de objetos `.gz` (por extensión).
-- Guardrail de costo: listar antes de leer, tope por defecto de 1000 objetos,
-  `--max N` para ajustarlo.
 - Precedencia de exit codes: `2` si hubo algún error de lectura, sin importar
   si hubo matches.
 - Manejo de fallo de red en el listado inicial: exit `2`, sin traceback.
 - Auditoría completa de NFR-3: todo lo que no es un match va a stderr.
 
-**VCs en alcance:** VC-6, VC-9, VC-10, VC-11, VC-12, VC-13, VC-15, y **VC-16 (a)
+**VCs en alcance:** VC-6, VC-9, VC-10, VC-13, VC-15, y **VC-16 (a)
 completo** — la lista enumerada, ahora con todos los casos de error implementados.
 VC-16 (b) ya se cierra en la Iteración 1. Los VCs de la Iteración 1 (VC-1 a VC-5,
 VC-7, VC-8, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir pasando.
@@ -184,7 +193,11 @@ credenciales —es probable, porque suben por el mismo camino— I-6 se reclama 
 la Iteración 1 con una fila nueva en la tabla de cobertura, no editando la
 resolución de H-11.
 
-**Precondición de VC-11 (hallazgo H-10 de la revisión).** VC-11 promete un test
+**VC-11 y VC-12 ya no están acá:** se implementaron el 2026-09-24 por la enmienda de
+arriba. La nota de regresión del guardrail se cumplió —VC-17 quedó acotado— y la
+precondición de VC-11 se resolvió distinto de lo previsto; ver la tabla de cobertura.
+
+**Precondición de VC-11 (hallazgo H-10 de la revisión) — resuelta de otro modo.** VC-11 promete un test
 que falla si el doble de prueba recibe una llamada que no sea de lectura, pero
 `tests/fakes.py::FakeGCS` expone `put()`. Antes de escribir VC-11 hay que separar
 la siembra del doble (setup del test) de la superficie que `core` puede tocar;

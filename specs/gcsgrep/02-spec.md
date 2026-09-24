@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Versión** | 1.2 |
+| **Versión** | 1.3 |
 | **Estado** | habilitada, con la excepción registrada en la revisión (ver más abajo) |
 | **Fecha** | 2026-09-23 |
 | **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-13, 12 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) |
-| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (14 ADRs) |
+| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (15 ADRs) |
 | **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
 > **Cómo cambia este documento.** No es inmutable, pero tampoco se edita en el
@@ -229,11 +229,17 @@ progreso **es** la salida apareciendo: no hay barra ni contador.
 terminar. Aceptado en el ADR.
 
 > **VC-17** — Con tres objetos que matchean bajo el mismo prefijo, obtener el
-> primer match no requiere haber listado ni abierto los otros dos (se observa
-> sobre el doble de prueba, que registra qué objetos se consumieron y cuándo).
-> De punta a punta: si el primer objeto emite dos matches y después falla al
-> leerse, esos dos matches ya salieron por stdout antes de que la corrida
-> termine.
+> primer match no requiere haber **abierto** los otros dos (se observa sobre el
+> doble de prueba, que registra qué objetos se consumieron y cuándo). De punta a
+> punta: si el primer objeto emite dos matches y después falla al leerse, esos dos
+> matches ya salieron por stdout antes de que la corrida termine.
+
+*Por qué VC-17 ya no habla del listado (v1.3):* BR-2 obliga a **contar** los objetos
+antes de leer, y contar exige materializar el listado. Con el tope activo, emitir el
+primer match sí requiere haber listado los tres. Lo que FR-11 promete —que el
+contenido se lee y se emite de a uno— no cambió, y es lo que VC-17 observa ahora.
+La propiedad de listado perezoso sobrevive con `--max 0`, donde no hay nada que
+contar, y se verifica ahí.
 
 ### FR-12 · Bucket inexistente o inaccesible
 
@@ -495,6 +501,13 @@ revisión, como ADR-0011 y ADR-0012.
 | 1.0 | 2026-09-23 | Primera spec a partir del base context. 16 FR/BR/NFR, 16 VCs. | paso Especificar |
 | 1.1 | 2026-09-23 | **+FR-11/VC-17** (salida incremental, resuelve FR-g). **NFR-a declinado** con fundamento en vez de quedar pendiente. **VC-14 reforzado** con el caso donde todo matchea. Fundamento movido a ADRs; la spec los referencia. Nueva tabla borrador → spec. Encabezado versionado. | [`docs/revision-spec.md`](../../docs/revision-spec.md), hallazgos H-1, H-2, H-3, H-5, H-7, H-8 |
 | 1.2 | 2026-09-23 | **VC-16 partido en (a) y (b)**: la parte universal de NFR-3 pasa a ser falsable con una excepción inesperada, porque `cli` no atrapaba ninguna y VC-16 solo miraba una lista cerrada. **+FR-12/VC-18** (bucket inexistente o inaccesible → exit `2`, mensaje que distingue "no existe" de "sin permiso"). **Tercera regla estructural** y su **tabla de trazabilidad actores → requerimiento**. Modos de falla de la tabla de Actores marcados como obligaciones. | [H-12](../../docs/hallazgos/H-12-sin-frontera-de-excepciones.md), [H-13](../../docs/hallazgos/H-13-actores-sin-trazar.md) |
+| 1.3 | 2026-09-24 | **VC-17 acotado**: afirma que el primer match se emite sin haber *abierto* el resto, no sin haberlo *listado*. Consecuencia de implementar BR-2 (contar obliga a materializar el listado), anticipada por el plan. FR-11 no cambió. | [ADR-0006](../../docs/adr/ADR-0006-guardrail-de-costo.md), nota de regresión del plan |
+
+**Qué cambió del contrato en v1.3.** VC-17 deja de afirmar que el primer match se
+emite sin haber *listado* el resto del prefijo, y afirma que se emite sin haberlo
+*abierto*. Es una consecuencia de implementar BR-2, que el plan había anticipado
+como nota de regresión: contar objetos obliga a materializar el listado. FR-11 no
+cambió. Ningún otro VC se toca.
 
 **Qué cambió del contrato en v1.2.** Nada de lo que la Iteración 1 producía
 *correctamente*. Los casos que FR-12 y VC-16 (b) cubren hoy terminan en traceback
@@ -503,9 +516,9 @@ ya prometía lo opuesto. Pasan a exit `2` con mensaje legible. No es una regresi
 ni rompe ningún VC existente: son huecos del contrato y de su verificación que se
 cierran.
 
-**Cambio de contrato todavía pendiente, anunciado para v1.3:** BR-3 hace que un
-error de lectura parcial fuerce exit `2` aunque haya matches. Eso sí cambia el
-resultado observable de corridas que la Iteración 1 ya puede producir. Cuando se
-implemente la Iteración 2, va en una fila nueva de este historial, no en una
-edición muda. (Este anuncio decía "v1.2" hasta que v1.2 se usó para FR-12; el
-compromiso es el mismo, corre una versión.)
+**Cambio de contrato todavía pendiente:** BR-3 hace que un error de lectura parcial
+fuerce exit `2` aunque haya matches. Eso sí cambia el resultado observable de
+corridas que la Iteración 1 ya puede producir. Cuando se implemente, va en una fila
+nueva de este historial, no en una edición muda. *No se le asigna número de versión
+por adelantado:* este anuncio ya se renumeró dos veces (v1.2 → v1.3) porque otras
+enmiendas llegaron primero, y el compromiso no depende del número.
