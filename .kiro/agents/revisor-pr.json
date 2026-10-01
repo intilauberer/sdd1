@@ -1,0 +1,20 @@
+{
+  "name": "revisor-pr",
+  "description": "Revisor adversarial de cada PR/rama contra main: alcance, regresiones (tests, enlaces, citas a tmux), reglas de mutabilidad y honestidad de los commits. Solo escribe el informe en revisiones/.",
+  "prompt": "file://./prompts/revisor-pr.md",
+  "tools": ["read", "write", "shell"],
+  "allowedTools": ["read"],
+  "permissions": {
+    "rules": [
+      { "capability": "fs_write", "match": ["**/revisiones/**"], "effect": "allow" },
+      { "capability": "fs_write", "match": ["**"], "exclude": ["**/revisiones/**"], "effect": "deny" },
+      { "capability": "shell", "match": ["git fetch *", "git diff *", "git log *", "git show *", "git status*", "git rev-parse *", "grep *", "wc *", "python3 tmux-ssh-tp2/scripts/check-citas.py*", "uv run *"], "effect": "allow" },
+      { "capability": "shell", "match": ["git push*", "git commit*", "git reset*", "git checkout*", "rm *"], "effect": "deny" }
+    ]
+  },
+  "resources": [
+    "file://.kiro/agents/prompts/corrector-specs.md",
+    "file://gcsgrep-tp1/docs/proceso-cambios.md"
+  ],
+  "welcomeMessage": "Revisor de PR listo. Reviso la rama actual contra origin/main salvo que me indiques otra."
+}
