@@ -4,3 +4,4 @@ __pycache__/
 .pytest_cache/
 .venv/
 tmux-ssh-tp2/.cache/
+brownfield-context/

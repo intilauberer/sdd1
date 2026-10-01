@@ -2,14 +2,76 @@
   "name": "revisor-pr",
   "description": "Revisor adversarial de cada PR/rama contra main: alcance, regresiones (tests, enlaces, citas a tmux), reglas de mutabilidad y honestidad de los commits. Solo escribe el informe en revisiones/.",
   "prompt": "file://./prompts/revisor-pr.md",
-  "tools": ["read", "write", "shell"],
-  "allowedTools": ["read"],
+  "tools": [
+    "read",
+    "write",
+    "shell"
+  ],
+  "allowedTools": [
+    "read"
+  ],
   "permissions": {
     "rules": [
-      { "capability": "fs_write", "match": ["**/revisiones/**"], "effect": "allow" },
-      { "capability": "fs_write", "match": ["**"], "exclude": ["**/revisiones/**"], "effect": "deny" },
-      { "capability": "shell", "match": ["git fetch *", "git diff *", "git log *", "git show *", "git status*", "git rev-parse *", "grep *", "wc *", "python3 tmux-ssh-tp2/scripts/check-citas.py*", "uv run *"], "effect": "allow" },
-      { "capability": "shell", "match": ["git push*", "git commit*", "git reset*", "git checkout*", "rm *"], "effect": "deny" }
+      {
+        "capability": "fs_write",
+        "match": [
+          "**/revisiones/**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "**"
+        ],
+        "exclude": [
+          "**/revisiones/**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "git fetch *",
+          "git diff *",
+          "git log *",
+          "git show *",
+          "git status*",
+          "git rev-parse *",
+          "grep *",
+          "wc *",
+          "python3 tmux-ssh-tp2/scripts/check-citas.py*"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "git branch -D*",
+          "git checkout*",
+          "git clean*",
+          "git commit*",
+          "git mv*",
+          "git push*",
+          "git rebase*",
+          "git reset*",
+          "git restore*",
+          "git rm*",
+          "git stash*",
+          "git tag*",
+          "mv *",
+          "rm *",
+          "sudo *"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "uv run *"
+        ],
+        "effect": "ask"
+      }
     ]
   },
   "resources": [

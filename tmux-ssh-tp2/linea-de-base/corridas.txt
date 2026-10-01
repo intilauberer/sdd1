@@ -1,0 +1,51 @@
+# Salidas crudas de las sondas de la línea de base (tmux@5a820e6, 2026-10-01)
+
+## Linux (ubuntu:24.04 aarch64, Docker)
+### ./configure --enable-utf8proc --enable-ssh
+configure: WARNING: unrecognized options: --enable-ssh
+### tmux ssh-pane host
+unknown command: ssh-pane
+exit=1
+### tmux list-commands -F '#{command_list_name}' split
+split-window
+exit=0
+### tmux list-commands -F '#{command_list_name}' s
+ambiguous command: s, could be: save-buffer, select-layout, select-pane, select-window, send-keys, send-prefix, server-access, set-buffer, set-environment, set-hook, set-option, set-window-option, show-buffer, show-environment, show-hooks, show-messages, show-options, show-prompt-history, show-window-options, source-file, split-window, start-server, suspend-client, swap-pane, swap-window, switch-client, switch-mode
+exit=1
+### Re-corridas solas, con python3 instalado (5 vueltas)
+1 input-requests.sh PASS
+1 prompt-words-history.sh FAIL
+2 input-requests.sh PASS
+2 prompt-words-history.sh FAIL
+3 input-requests.sh PASS
+3 prompt-words-history.sh FAIL
+4 input-requests.sh PASS
+4 prompt-words-history.sh FAIL
+5 input-requests.sh PASS
+5 prompt-words-history.sh FAIL
+
+## macOS arm64
+### ./configure --enable-ssh
+configure: WARNING: unrecognized options: --enable-ssh
+### tmux ssh-pane h
+unknown command: ssh-pane
+exit=1
+### Re-corridas solas (2 vueltas), por exit code del test
+1 check-names.sh FAIL: got '..x-mac/regress', expected 'escape#:.ok'
+1 cmd-template-replace.sh PASS
+1 hooks-notify.sh PASS
+1 prompt-keys.sh FAIL: [FAIL] invalid UTF-8 append did not keep prompt usable (got '>')
+1 prompt-words-history.sh FAIL: prompt result is 'show-r', expected 'history-command'
+1 screen-redraw-indicators.sh PASS
+1 screen-redraw-menus.sh FAIL: scene menu-over-split differs from screen-redraw-results/menu-over-split.result
+2 check-names.sh FAIL: got '..x-mac/regress', expected 'escape#:.ok'
+2 cmd-template-replace.sh PASS
+2 hooks-notify.sh PASS
+2 prompt-keys.sh FAIL: [FAIL] invalid UTF-8 append did not keep prompt usable (got '>')
+2 prompt-words-history.sh PASS
+2 screen-redraw-indicators.sh PASS
+2 screen-redraw-menus.sh FAIL: scene menu-over-split differs from screen-redraw-results/menu-over-split.result
+
+## sha256 de snapshot-comandos (Linux y macOS)
+97f7734e0e5d8e6801465173ac85a338d041f7469905f8bf0d5c5383c771d6df  snapshot-comandos.txt
+97f7734e0e5d8e6801465173ac85a338d041f7469905f8bf0d5c5383c771d6df  snapshot-comandos-macos.txt

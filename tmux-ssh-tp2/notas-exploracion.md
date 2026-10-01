@@ -106,7 +106,10 @@ definido es `SPAWN_FLOATOVERZOOM 0x1000` (`tmux.h:2531`).
 
 1. Resuelve el cwd y crea o reasigna el pane y su celda de layout.
 2. Si `argc == 0`, usa la opción `default-command` como comando
-   (`spawn.c:380`). Por eso un pane siempre termina con algo en `wp->argv`.
+   (`spawn.c:380`). Pero `default-command` vale `""` por defecto
+   (`options-table.c:790`), y en ese caso `argc` queda en 0 (`spawn.c:385-386`) y el
+   hijo arranca una shell de login (`spawn.c:574`). Un pane creado sin comando,
+   con la configuración por defecto, no guarda nada en `wp->argv`.
 3. Arma el entorno del hijo (`TMUX_PANE`, `PATH`, `SHELL`) y calcula el tamaño de
    la ventana.
 4. Bloquea **todas** las señales (`spawn.c:456`). Si el pane es `SPAWN_EMPTY`, no
@@ -156,8 +159,10 @@ cambian en nada.** Leer, escribir, cambiar el tamaño y la muerte del pane ya
 funcionan por el PTY, igual que con una shell. La alternativa —correr libssh
 dentro del servidor, con su descriptor registrado en libevent— obliga a tener un
 pane sin PTY. Eso cambia el significado de `wp->fd` y `wp->pid`, y el resize por
-`ioctl` deja de aplicar. Además, el handshake y la autenticación de libssh son
-llamadas bloqueantes que congelarían el servidor para todos los clientes. Viola el
+`ioctl` deja de aplicar. Además, libssh tiene modo no bloqueante, pero `ssh_connect` resuelve
+el nombre con `getaddrinfo`, que bloquea siempre (hallazgo 7). El resto del
+handshake habría que reescribirlo como máquina de estados. Un error ahí congela
+el servidor para todos los clientes. Viola el
 invariante de "el modelo de PTY/panes no cambia".
 
 ### 4 · Cómo aísla tmux lo específico de una plataforma
@@ -293,7 +298,7 @@ El hijo del spawn también hace `log_close()` (`spawn.c:543`) antes del
 | `configure.ac` | `--enable-ssh`, que se rechaza si `$host_os` no es Linux y busca `libssh >= 0.9.0` por pkg-config |
 | `Makefile.am` | `if ENABLE_SSH` suma los dos `.c` nuevos, igual que sixel |
 | `cmd.c` | Declaración `extern` y entrada en `cmd_table`, bajo `#ifdef ENABLE_SSH` |
-| `cmd-ssh-pane.c` (nuevo) | El `cmd_entry` y su `exec`. Arma el `spawn_context` igual que `split-window` |
+| `cmd-ssh-pane.c` (nuevo) | El `cmd_entry` y su `exec`. Arma el `spawn_context` como `split-window`, salvo el `argv`: no guarda el destino como comando (spec, D-11) |
 | `ssh-pane.c` (nuevo) | El cliente libssh que corre en el hijo |
 | `spawn.c` | Un bloque `#ifdef ENABLE_SSH` en el hijo, después de `environ_push`, que entra al cliente y nunca vuelve |
 | `tmux.h` | Un flag `SPAWN_SSH` y un puntero opcional en `spawn_context`, más los prototipos |

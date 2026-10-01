@@ -17,8 +17,20 @@ En [`.kiro/agents/`](./.kiro/agents/) hay dos agentes de Kiro que hacen de
 | `corrector-specs` | Una spec, con la rúbrica *correccion-de-specs v1.1* reconstruida de la devolución real del TP1, más la extensión brownfield de la Lección 2 | `kiro-cli --agent corrector-specs` y le pasás el path de la spec |
 | `revisor-pr` | Una rama contra `main`: alcance, regresiones, citas, reglas de mutabilidad y honestidad de los commits | `kiro-cli --agent revisor-pr` desde la rama, **antes** de abrir el PR |
 
-Los dos son de solo lectura sobre lo que revisan. Escriben su informe en
-`<tp>/revisiones/` y terminan con una línea `VEREDICTO: …`.
+Los dos escriben su informe en `<tp>/revisiones/` y terminan con una línea
+`VEREDICTO: …`. Qué garantiza la configuración y qué no:
+
+- **La escritura de archivos** con las herramientas de edición está limitada a
+  `**/revisiones/**`. Esto sí se aplica.
+- **La shell no está encerrada.** Las reglas son listas de comandos permitidos,
+  a confirmar y prohibidos. Un comando permitido puede redirigir su salida a
+  cualquier archivo (`grep … > x`). Y `check-citas.py`, si no le pasás
+  `TMUX_SRC`, clona tmux en `tmux-ssh-tp2/.cache/` (ignorado por git).
+- `uv run` (ejecuta código del repo) pide confirmación. Los comandos destructivos
+  de git y `rm`/`mv` están prohibidos.
+
+Que sean "de solo lectura" es una **instrucción** del prompt, reforzada en parte
+por los permisos. No es un sandbox.
 
 ## CI
 

@@ -42,16 +42,25 @@ Cada falla del run paralelo se volvió a correr **sola**, varias veces.
 | Test | Linux | macOS | Clase |
 |---|---|---|---|
 | `input-requests.sh` | FAIL sin `python3`; 5/5 PASS con `python3` | PASS | Dependencia de entorno |
-| `prompt-words-history.sh` | 5/5 FAIL (`got 'show-r', expected 'history-command'`) | 2/2 FAIL, mismo mensaje | **Determinística** |
-| `check-names.sh` | PASS | 2/2 FAIL, con distinto mensaje cada vez | Determinística en macOS |
-| `prompt-keys.sh` | PASS | 2/2 FAIL (`invalid UTF-8 append…`) | Determinística en macOS |
-| `screen-redraw-menus.sh` | PASS | 2/2 FAIL (`menu-over-split differs`) | Determinística en macOS |
-| `cmd-template-replace.sh`, `hooks-notify.sh`, `screen-redraw-indicators.sh` | PASS | FAIL en paralelo, 2/2 PASS solos | Flaky bajo `-j8` |
+| `prompt-words-history.sh` | 5/5 FAIL (`got 'show-r', expected 'history-command'`) | 3/4 FAIL, mismo mensaje | Determinística en Linux; **flaky** en macOS |
+| `check-names.sh` | PASS | 4/4 FAIL; el mensaje cambia entre corridas | Determinística en macOS |
+| `prompt-keys.sh` | PASS | 4/4 FAIL (`invalid UTF-8 append…`) | Determinística en macOS |
+| `screen-redraw-menus.sh` | PASS | 4/4 FAIL (`menu-over-split differs`) | Determinística en macOS |
+| `cmd-template-replace.sh`, `hooks-notify.sh`, `screen-redraw-indicators.sh` | PASS | FAIL en paralelo, 4/4 PASS solos | Flaky bajo `-j8` |
 
-**Regla para comparar:** al cerrar una iteración, el conjunto de tests que
-fallan **solos** tiene que ser el mismo de esta tabla. Que aparezca un test
-nuevo en esa lista es una regresión. Que desaparezca uno no es mérito del
-cambio: también hay que explicarlo.
+Las salidas crudas de estas re-corridas, y de las sondas de la tabla de
+arriba, están en [`linea-de-base/corridas.txt`](./linea-de-base/corridas.txt).
+
+**Regla para comparar (INV-6):** al cerrar una iteración, cada test que falla
+en la corrida paralela se vuelve a correr **solo, 3 veces**:
+
+- Si falla 3/3, tiene que estar en esta tabla como determinístico, en esa
+  plataforma.
+- Si pasa alguna vez, tiene que estar en esta tabla como flaky.
+- Un test que no está en la tabla y falla solo es una regresión.
+
+Que un test de la tabla deje de fallar no es mérito del cambio: también hay que
+explicarlo.
 
 ## Trampas del entorno encontradas al medir
 

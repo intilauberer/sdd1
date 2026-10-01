@@ -81,3 +81,9 @@ configure.ac:551-552	AM_CONDITIONAL(ENABLE_SIXEL
 arguments.c:333	too few arguments (need at least %u)
 arguments.c:340	too many arguments (need at most %u)
 cmd.c:206-207	&cmd_start_server_entry,
+format.c:975	parse_window_name(cmd)
+names.c:167	if (*name == '/')
+spawn.c:223	options_set_number(w->options, "automatic-rename", 0);
+options-table.c:790	.default_str = "",
+spawn.c:385-386	argc = 0;
+spawn.c:574	execl(new_wp->shell, argv0, (char *)NULL);

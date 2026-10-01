@@ -23,8 +23,10 @@ Para cada archivo del diff, preguntate en este orden:
    la consigna prohíbe implementar.
 2. **¿Rompe algo que ya funcionaba?** Corré lo que corresponda y pegá la salida:
    - TP1: `cd gcsgrep-tp1 && uv run --extra dev pytest -q && uv run python scripts/check-doc-links.py`
-   - TP2: `python3 tmux-ssh-tp2/scripts/check-citas.py` (verifica cada
-     `archivo:línea` y cada función citada contra tmux en el commit fijado)
+   - TP2: `python3 tmux-ssh-tp2/scripts/check-citas.py`. Verifica que cada
+     `archivo:línea` exista en tmux, en el commit fijado, y contenga el fragmento
+     anotado en `citas.tsv`. **No** verifica nombres de función citados sin
+     línea: esos se abren a mano.
    - CI: que `.github/workflows/*.yml` siga apuntando a carpetas que existen.
 3. **¿Cada afirmación nueva es verificable?** Una línea de las notas/spec que cita
    el repo de tmux sin `archivo:línea`, o con una línea que no dice lo que la nota
