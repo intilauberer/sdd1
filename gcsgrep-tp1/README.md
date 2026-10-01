@@ -100,7 +100,7 @@ uv run gcsgrep "timeout" gs://mi-bucket/logs/
 
 `pyproject.toml` es la única fuente de verdad de las dependencias, de modo que
 `pip` es un camino equivalente y es el que utiliza la
-[integración continua](./.github/workflows/tests.yml):
+[integración continua](../.github/workflows/tests.yml):
 
 ```bash
 python -m pip install -e '.[dev]'
@@ -222,7 +222,7 @@ enlace entre el contrato y el código. La tabla de
 [`04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md) nombra el ejercitador
 de cada VC; si un test se renombra, esa tabla se actualiza.
 
-[CI](./.github/workflows/tests.yml) corre la suite en Python 3.9 y 3.12, más el
+[CI](../.github/workflows/tests.yml) corre la suite en Python 3.9 y 3.12, más el
 chequeo de enlaces, en cada push y cada PR.
 
 ### Verificación de integración

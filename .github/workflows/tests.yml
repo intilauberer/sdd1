@@ -1,12 +1,17 @@
 name: tests
 
-# Convierte los ✅ de specs/gcsgrep/04-cobertura-vc.md en una afirmación
+# TP1 (gcsgrep-tp1/). Convierte los ✅ de specs/gcsgrep/04-cobertura-vc.md en una afirmación
 # chequeada por una máquina, y no en una línea de markdown que alguien se
 # acordó de actualizar.
 on:
   push:
     branches: ["**"]
   pull_request:
+
+# Todo el TP1 vive en gcsgrep-tp1/: los pasos corren desde ahí.
+defaults:
+  run:
+    working-directory: gcsgrep-tp1
 
 jobs:
   unit:
