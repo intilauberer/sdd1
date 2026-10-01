@@ -1,9 +1,31 @@
 # gcsgrep — plan de iteraciones
 
-> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.3.
+> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.4.
 >
 > Cada iteración termina con código andando y sus VCs pasando antes de que
 > empiece la siguiente.
+>
+> **Enmienda 2026-10-01 (spec v1.4) · corrección de la cátedra.** La spec pasó
+> de 18 a 27 requerimientos sin cambiar lo que la Iteración 1 entrega. Se
+> clasificaron así (detalle en la sección de la Iteración 2):
+>
+> - **Comportamiento que la Iteración 1 ya tiene, ahora escrito:** FR-3/FR-4
+>   (formatos), FR-14 (antes la mitad de FR-12), FR-16 (orden), FR-18 (prefijo sin
+>   `/`), FR-19 (0 bytes), FR-20 (última línea sin `\n`), el patrón literal de
+>   FR-1, el `gs://` en el mensaje de FR-8 y la excepción `GCSGREP_DEBUG` de NFR-3.
+>   No se reabre la Iteración 1: sus VCs nuevos (VC-19, VC-22, VC-24, VC-26, VC-27,
+>   VC-28, VC-16 (c)) y los más concretos (VC-1, VC-3, VC-4, VC-8) se ejercitan como
+>   **primer paso de la Iteración 2**, antes de escribir código nuevo.
+> - **Comportamiento nuevo, a la Iteración 2:** FR-13, FR-15, FR-17 y la ventana de
+>   8192 bytes de FR-9, que se suman a lo que ya estaba (FR-6, FR-9, FR-10, BR-3,
+>   NFR-2).
+> - **NFR-4 (rendimiento)** deja la Iteración 3: es un umbral sobre el costo propio
+>   de la herramienta y se mide en la Iteración 2
+>   ([ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md)). La
+>   Iteración 3 conserva la obligación del número **comparativo** para la
+>   concurrencia.
+> - **VC-31** (punta a punta contra GCS real) queda especificado y sujeto a
+>   [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md).
 >
 > **Enmienda 2026-09-24 · las dos Restricciones del enunciado se adelantan.** BR-1
 (solo lectura, VC-11) y BR-2 (guardrail de costo, VC-12) salen de la Iteración 2 y se
@@ -47,14 +69,15 @@ porque esté comprometida para esta entrega.
 
 | Iteración | Entrega | Cubre |
 |---|---|---|
-| 1 | Búsqueda literal de punta a punta, con `-i`/`-n`, salida incremental y frontera de excepciones | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, **FR-12**, NFR-1, NFR-3 (parcial, con la parte universal verificable) |
-| 2 | Resiliencia y contenido no-texto | FR-6, FR-9, FR-10, BR-3, NFR-2, NFR-3 (completo) |
-| 3 | Concurrencia y el NFR de rendimiento que la justifica | NFR de rendimiento (a definir), revisión de ADR-0009 y ADR-0011 |
+| 1 | Búsqueda literal de punta a punta, con `-i`/`-n`, salida incremental y frontera de excepciones | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, **FR-12**, **FR-14**, FR-16, FR-18, FR-19, FR-20, BR-1, BR-2, NFR-1, NFR-3 (parcial, con la parte universal verificable). Los FR-14…FR-20 de esta fila son comportamiento existente escrito en la spec v1.4 |
+| 2 | Regularización de los VCs de la v1.4, resiliencia, contenido no-texto y rendimiento | FR-6, FR-9, FR-10, **FR-13**, **FR-15**, **FR-17**, BR-3, NFR-2, NFR-3 (completo), **NFR-4** |
+| 3 | Concurrencia y el NFR comparativo que la justifica | NFR comparativo contra NFR-4 (a definir), revisión de ADR-0009 y ADR-0011 |
 
 Las Iteraciones 1 y 2 son la entrega mínima pedida por el enunciado (≥ 2
 iteraciones). La Iteración 3 **no** está comprometida para esta entrega: está en
-el plan para que la obligación de
-[ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md) no se pierda.
+el plan para que la obligación del NFR comparativo
+([ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md), que heredó
+la de [ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md)) no se pierda.
 Todo lo demás está en "Lo que quedó afuera" al final.
 
 ---
@@ -164,26 +187,81 @@ entrega).
 
 ---
 
-## Iteración 2 — Resiliencia, guardrail de costo y contenido no-texto
+## Iteración 2 — Resiliencia, contenido no-texto y rendimiento
 
 **Objetivo:** que la herramienta sea segura de correr sobre un bucket real que
-nadie curó para la demo: objetos rotos, binarios, `.gz`, y prefijos enormes.
+nadie curó para la demo: objetos rotos, binarios, `.gz`, texto en otra
+codificación, redes que se cortan y entornos sin credenciales; y que su costo
+propio quede acotado por un número.
 
-**Alcance**
+### Paso 0 · Regularizar los VCs de la spec v1.4 (antes de cualquier código nuevo)
 
-- Manejo de objetos que fallan al leerse (permiso denegado, error simulado):
-  se informan y no abortan la corrida.
-- Salteo de objetos binarios (heurística de byte nulo).
-- Salteo de objetos `.gz` (por extensión).
-- Precedencia de exit codes: `2` si hubo algún error de lectura, sin importar
-  si hubo matches.
-- Manejo de fallo de red en el listado inicial: exit `2`, sin traceback.
+La corrección de la cátedra hizo que la spec **diga** cosas que el código de la
+Iteración 1 ya hace. Antes de tocar `core` o `cli`, cada una de esas promesas
+necesita un test que la ejercite, nombrado por su VC:
+
+| VC | Requerimiento | Qué se espera hoy |
+|---|---|---|
+| VC-1, VC-3, VC-4 | FR-1, FR-3, FR-4 | stdout **exacto** (antes: "contiene", "separa correctamente") y stderr vacío en VC-1 |
+| VC-8 | FR-8 | además, 0 llamadas de listado |
+| VC-19 | FR-1 (literal) | `a.b` no matchea `axb` |
+| VC-22 | FR-14 | ya ejercitado por `test_vc18_sin_permiso_*`; se renombra o se suma un test con el nombre de VC-22 |
+| VC-24 | FR-16 | orden exacto de 6 líneas |
+| VC-26 | FR-18 | `gs://b/logs` incluye `logs-other/` |
+| VC-27 | FR-19 | objeto de 0 bytes, exit y stderr |
+| VC-28 | FR-20 | última línea sin `\n` con `-n` |
+| VC-16 (c) | NFR-3 | `GCSGREP_DEBUG=1` re-expone lo inesperado y **no** afecta lo previsto |
+| VC-30 | NFR-4 | medir; si no cumple, es el primer defecto de la iteración |
+
+**También en el Paso 0:** un chequeo en CI que falle si la tabla de
+[`04-cobertura-vc.md`](./04-cobertura-vc.md) marca ⬜ un VC que tiene tests
+`test_vcN_*`, o ✅ uno que no tiene ninguno
+([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)).
+
+Si alguno de estos falla, **no** es alcance de la Iteración 2: es la Iteración 1
+violando una promesa ahora escrita, y va por la fila 1 de
+[`proceso-cambios.md`](../../docs/proceso-cambios.md) (ticket + test de regresión +
+fila nueva en la cobertura).
+
+### Paso 1 · Alcance nuevo
+
+- **FR-6:** un objeto con permiso denegado al abrirse se informa
+  (`sin permiso para leer` + URI) y no aborta la corrida.
+- **FR-13:** un objeto cuya lectura se corta por la red se informa
+  (`error de red al leer` + URI), sus matches ya emitidos quedan, y no aborta la
+  corrida.
+- **NFR-2:** 0 reintentos ([ADR-0016](../../docs/adr/ADR-0016-sin-reintentos.md)):
+  cada operación se intenta una vez; fallo de red al listar → exit `2` con
+  `error de red`.
+- **BR-3:** precedencia de exit codes: `2` si hubo algún error de lectura, sin
+  importar si hubo matches.
+- **FR-9:** salteo de binarios con `\x00` en los primeros 8192 bytes
+  ([ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md)), con la
+  línea `gcsgrep: salteado (binario): <URI>` por stderr.
+- **FR-10:** salteo de `.gz` por extensión, sin abrirlos, con
+  `gcsgrep: salteado (.gz): <URI>`.
+- **FR-17:** decodificación UTF-8 con reemplazo: un objeto en Latin-1 deja de
+  abortar la corrida.
+- **FR-15:** mensaje específico sin credenciales (`no se encontraron
+  credenciales` + `gcloud auth application-default login`). Hoy sale con `2` por
+  el caso genérico de ADR-0013; cambia el mensaje, no el exit code.
 - Auditoría completa de NFR-3: todo lo que no es un match va a stderr.
 
-**VCs en alcance:** VC-6, VC-9, VC-10, VC-13, VC-15, y **VC-16 (a)
-completo** — la lista enumerada, ahora con todos los casos de error implementados.
-VC-16 (b) ya se cierra en la Iteración 1. Los VCs de la Iteración 1 (VC-1 a VC-5,
-VC-7, VC-8, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir pasando.
+FR-9 y FR-17 tocan el camino caliente (hay que mirar bytes antes de decodificar).
+Después de implementarlos, **VC-14 y VC-30 tienen que seguir pasando**: son los dos
+VCs que detectan si el cambio rompió la memoria acotada o el rendimiento.
+
+**VCs en alcance:** los del Paso 0, más VC-6, VC-9, VC-10, VC-13, VC-15, VC-20,
+VC-21, VC-23, VC-25, VC-29, y **VC-16 (a) completo** — la lista enumerada, ahora
+con todos los casos de error implementados. Los VCs de la Iteración 1 (VC-1 a
+VC-5, VC-7, VC-8, VC-11, VC-12, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir
+pasando.
+
+**VC-31** (punta a punta contra GCS real) **no** entra en el criterio de salida de
+esta iteración mientras [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md)
+esté vigente: está especificado, y su ejecución es la obligación registrada de ese
+ADR. Si el equipo consigue una cuenta con billing, se ejecuta con el backend `gcs`
+del runbook y se supersede ADR-0015.
 
 **Chequeo de integración I-6** (ADC ausente → exit `2` sin traceback) pertenece a
 esta iteración, no a la 1: verifica NFR-2
@@ -221,25 +299,29 @@ otros objetos.
 **Cambio de contrato:** BR-3 (precedencia de exit code `2`) cambia el resultado
 de correr con objetos rotos respecto a lo que se hubiera asumido en la Iteración
 1 (donde no existían objetos rotos). No es una regresión: es alcance nuevo de
-esta iteración. Va con una fila nueva en el historial de revisiones de la spec
-(v1.2), no con una edición muda.
+esta iteración. Va con una fila nueva en el historial de revisiones de la spec,
+no con una edición muda.
 
 ---
 
 ## Iteración 3 — Concurrencia y rendimiento *(no comprometida para esta entrega)*
 
 **Por qué está en el plan:**
-[ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md) declina el NFR de
-rendimiento en v1 con fundamento, y deja una obligación registrada. Esta
-iteración es esa obligación, para que no se pierda como se perdió NFR-a la
-primera vez.
+[ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md) declinó el NFR de
+rendimiento en v1 y dejó una obligación registrada. Desde la spec v1.4,
+[ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md) lo supersede:
+el NFR de rendimiento secuencial existe (NFR-4), y lo que queda para esta
+iteración es el número **comparativo** de la concurrencia. Sigue en el plan para
+que no se pierda como se perdió NFR-a la primera vez.
 
 **Obligaciones registradas, en orden**
 
-1. **Definir el NFR de rendimiento antes de escribir código concurrente:**
+1. **Definir el NFR comparativo antes de escribir código concurrente:**
    métrica, umbral, condición de carga, y **cómo se mide sin que el test sea
-   flaky**. Medido contra la línea de base secuencial de v1, que es lo que hace
-   al número significativo.
+   flaky**. La línea de base secuencial ya no es una promesa: es NFR-4, medido en
+   la Iteración 2 ([ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md)).
+   El número nuevo tiene que medir lo que la concurrencia mejora —la latencia de
+   red solapada—, que NFR-4 deja afuera a propósito.
 2. **Revisar [ADR-0009](../../docs/adr/ADR-0009-lectura-secuencial.md)** (lectura
    secuencial) con un ADR nuevo que lo supersede. No editarlo.
 3. **Resolver la tensión con
@@ -265,10 +347,10 @@ el ADR que la decidió:
 | Salida JSON, colores | Descartado en v1 | [ADR-0007](../../docs/adr/ADR-0007-formato-de-salida.md) |
 | Barra de progreso / contador por stderr | Descartado — el progreso es la salida incremental | [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md) |
 | Lectura concurrente | Diferido a Iteración 3, no descartado | [ADR-0009](../../docs/adr/ADR-0009-lectura-secuencial.md) |
-| Umbral de rendimiento | Declinado en v1, diferido a Iteración 3 | [ADR-0012](../../docs/adr/ADR-0012-nfr-rendimiento-diferido.md) |
-| Reintentos automáticos ante fallos de red | Descartado en v1 | NFR-2 de la spec |
+| Umbral de rendimiento comparativo (concurrente vs. secuencial) | Diferido a Iteración 3; el secuencial es NFR-4 desde la spec v1.4 | [ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md) |
+| Reintentos automáticos ante fallos de red | Descartado en v1 — 0 reintentos (NFR-2) | [ADR-0016](../../docs/adr/ADR-0016-sin-reintentos.md) |
 | Consistencia ante objeto modificado durante la lectura | Riesgo conocido, aceptado | [ADR-0010](../../docs/adr/ADR-0010-objeto-modificado.md) |
-| S3 / Azure Blob | Descartado — el diseño no lo bloquea a futuro | — |
+| S3 / Azure Blob | Descartado — el diseño no lo bloquea a futuro | [ADR-0003](../../docs/adr/ADR-0003-sintaxis-ubicacion.md) |
 
 ## Qué sigue
 

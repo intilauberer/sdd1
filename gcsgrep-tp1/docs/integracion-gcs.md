@@ -14,6 +14,12 @@
 
 ## Qué cubre
 
+> **Desde la spec v1.4** existe **VC-31**, el VC de punta a punta contra GCS real,
+> escrito en la propia spec. Sus tres comandos son I-1/I-2, I-3 e I-7 de este
+> runbook corridos con el backend `gcs` (no `floci`) y una identidad con exactamente
+> `roles/storage.objectViewer` sobre el bucket. Correr este runbook con el backend
+> `gcs` **es** ejecutar VC-31.
+
 ### Iteración 1
 
 | Chequeo | VC / decisión | Qué observa | Dónde corre |

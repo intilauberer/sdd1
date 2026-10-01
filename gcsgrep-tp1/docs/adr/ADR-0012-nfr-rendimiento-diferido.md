@@ -1,6 +1,6 @@
 # ADR-0012 · NFR de rendimiento declinado en v1, diferido a la Iteración 3
 
-- **Estado:** aceptado
+- **Estado:** superseded por [ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md)
 - **Fecha:** 2026-09-23
 - **Origen:** [revisión de la spec](../revision-spec.md), hallazgo R-2
 - **Requerimiento del borrador que resuelve:** NFR-a (rendimiento)

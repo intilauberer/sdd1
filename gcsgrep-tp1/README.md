@@ -37,9 +37,10 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 0 | [`enunciado.md`](./enunciado.md) | La consigna, tal como se recibió | externa |
 | 1 | [`specs/gcsgrep/00-requirements-draft.md`](./specs/gcsgrep/00-requirements-draft.md) | El borrador vago del que se partió | **congelado**, nunca se edita |
 | 2 | [`specs/gcsgrep/01-base-context.md`](./specs/gcsgrep/01-base-context.md) | Índice de decisiones + notas de diseño | se actualiza |
-| 3 | [`docs/adr/`](./docs/adr/) | 15 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
-| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 18 requerimientos, 18 VCs | **versionada** (v1.3), con historial |
+| 3 | [`docs/adr/`](./docs/adr/) | 18 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
+| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 27 requerimientos, 31 VCs | **versionada** (v1.4), con historial |
 | 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y los primeros 10 hallazgos | por revisión |
+| 5b | [`docs/correccion-catedra-iteracion-1.md`](./docs/correccion-catedra-iteracion-1.md) y [`docs/respuesta-correccion-catedra.md`](./docs/respuesta-correccion-catedra.md) | La corrección de la cátedra (NEEDS WORK) y qué se cambió por cada acción | la corrección es externa; la respuesta, por corrección |
 | 6 | [`docs/hallazgos/`](./docs/hallazgos/) | Lo que se descubrió *después*: un archivo por hallazgo | **inmutables**, como los ADRs |
 | 7 | [`docs/proceso-cambios.md`](./docs/proceso-cambios.md) | Qué artefacto cambia según lo que aparezca. El carril de entrada del harness | se actualiza |
 | 8 | [`specs/gcsgrep/03-plan.md`](./specs/gcsgrep/03-plan.md) | 3 iteraciones; el alcance diferido vive acá, no en la spec | se actualiza |
@@ -167,9 +168,11 @@ en el ADR correspondiente:
 - Lectura concurrente ([ADR-0009](./docs/adr/ADR-0009-lectura-secuencial.md))
 - S3 o Azure Blob
 
-Además, el manejo de objetos ilegibles es alcance de la **Iteración 2**: un objeto
-que falla al leerse **aborta** la corrida con exit `2` en vez de saltearse (FR-6), y
-no hay mensajes específicos para fallos de red (NFR-2).
+Además, son alcance de la **Iteración 2**: un objeto que falla al leerse
+**aborta** la corrida con exit `2` en vez de saltearse (FR-6, FR-13); no hay
+mensajes específicos para fallos de red (NFR-2) ni para la falta de credenciales
+(FR-15); y un objeto con bytes que no son UTF-8 también aborta la corrida, en vez
+de leerse con reemplazo (FR-17).
 
 ## Arquitectura
 
@@ -250,8 +253,9 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | Restricciones del enunciado: solo lectura (BR-1) y guardrail de costo (BR-2) | ✅ implementadas y verificadas — VC-11, VC-12 |
 | Verificación de integración (backend `floci`) | ✅ **ejecutada 2026-09-24** — I-1…I-5 e I-7 pasan, por script y por pytest |
 | Verificación contra GCS real | ⬜ **declinada con fundamento** — [ADR-0015](./docs/adr/ADR-0015-verificacion-real-declinada.md) enumera qué queda sin verificar |
-| Iteración 2 (resiliencia y contenido no-texto) | ⬜ planificada, sin implementar |
-| Iteración 3 (concurrencia y su NFR de rendimiento) | ⬜ no comprometida; obligación registrada |
+| Spec v1.4 (respuesta a la corrección de la cátedra) | ✅ escrita — 27 requerimientos, 31 VCs; [qué cambió por cada acción](./docs/respuesta-correccion-catedra.md) |
+| Iteración 2 (regularización de VCs v1.4, resiliencia, contenido no-texto, rendimiento) | ⬜ planificada, sin implementar |
+| Iteración 3 (concurrencia y su NFR comparativo) | ⬜ no comprometida; obligación registrada |
 
 **14/14 VCs pasando**, 48 tests offline más 5 de integración.
 
