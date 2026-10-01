@@ -30,7 +30,23 @@ configure: WARNING: unrecognized options: --enable-ssh
 ### tmux ssh-pane h
 unknown command: ssh-pane
 exit=1
-### Re-corridas solas (2 vueltas), por exit code del test
+### Primera tanda de re-corridas solas (2 vueltas), por exit code del test
+1 check-names.sh FAIL: got 'zsh', expected 'title#[fg=red]ok'
+1 cmd-template-replace.sh PASS
+1 hooks-notify.sh PASS
+1 prompt-keys.sh FAIL: [FAIL] invalid UTF-8 append did not keep prompt usable (got '>')
+1 prompt-words-history.sh FAIL: prompt result is 'show-r', expected 'history-command'
+1 screen-redraw-indicators.sh PASS
+1 screen-redraw-menus.sh FAIL: scene menu-over-split differs from screen-redraw-results/menu-over-split.result
+2 check-names.sh FAIL: got '..x-mac/regress', expected 'escape#:.ok'
+2 cmd-template-replace.sh PASS
+2 hooks-notify.sh PASS
+2 prompt-keys.sh FAIL: [FAIL] invalid UTF-8 append did not keep prompt usable (got '>')
+2 prompt-words-history.sh FAIL: prompt result is 'show-r', expected 'history-command'
+2 screen-redraw-indicators.sh PASS
+2 screen-redraw-menus.sh FAIL: scene menu-over-split differs from screen-redraw-results/menu-over-split.result
+
+### Segunda tanda de re-corridas solas (2 vueltas), por exit code del test
 1 check-names.sh FAIL: got '..x-mac/regress', expected 'escape#:.ok'
 1 cmd-template-replace.sh PASS
 1 hooks-notify.sh PASS

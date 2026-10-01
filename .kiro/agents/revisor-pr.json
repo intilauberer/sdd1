@@ -58,6 +58,7 @@
           "git restore*",
           "git rm*",
           "git stash*",
+          "git switch*",
           "git tag*",
           "mv *",
           "rm *",

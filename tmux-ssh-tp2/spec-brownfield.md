@@ -9,8 +9,8 @@
 | | |
 |---|---|
 | **Repo** | [`tmux/tmux`](https://github.com/tmux/tmux) · commit base `5a820e63b72f05c121441149c72327aeeb16dfa4` (`next-3.9`) |
-| **Versión** | v1.2 · 2026-10-01 · Grupo 4 |
-| **Estado** | En revisión. Dos vueltas del agente corrector, las dos con NEEDS WORK; v1.2 responde a la segunda ([`revisiones/`](./revisiones/)). Sin implementación, por consigna |
+| **Versión** | v1.3 · 2026-10-01 · Grupo 4 |
+| **Estado** | En revisión. Tres vueltas del agente corrector, todas con NEEDS WORK; la tercera dejó 3 Issues de redacción, y v1.3 los resuelve ([`revisiones/`](./revisiones/)). Falta una vuelta que lo confirme. Sin implementación, por consigna |
 | **Conteo** | FR: 58 · BR: 5 · NFR: 3 · INV: 7 · VC: 69 |
 
 ## 1 · Propósito
@@ -84,7 +84,7 @@ implementa ninguno de estos cambios.**
 
 | Excluido | Por qué (decisión en §8) |
 |---|---|
-| Plataformas no-Linux | Es el límite de la consigna. Se materializa en FR-2 y FR-5 |
+| Plataformas no-Linux | Es el límite de la consigna. Se materializa en FR-2 e INV-1 |
 | Builds estáticos con `--enable-ssh` | D-15. Se materializa en FR-4 |
 | Prompts interactivos: passphrase, password, keyboard-interactive, aceptar una host key nueva | D-5 y BR-1. En v1, el hijo no lee el PTY antes de tener el canal (FR-49, FR-50) |
 | Leer `~/.ssh/config` o `/etc/ssh/ssh_config` | D-7 y BR-3 |
@@ -103,7 +103,7 @@ observable y un VC:
 | | sin `--enable-ssh` | con `--enable-ssh` |
 |---|---|---|
 | **Linux** | El `tmux` de hoy: no enlaza libssh y no tiene `ssh-pane` (FR-5, INV-2) | `ssh-pane` disponible (FR-1). Sin libssh ≥ 0.9.0 (FR-3) o con `--enable-static` (FR-4), `configure` falla |
-| **No-Linux** | El `tmux` de hoy: compila y la `regress/` da lo mismo (FR-5, INV-1) | **`configure` falla** con un mensaje explícito (FR-2) |
+| **No-Linux** | El `tmux` de hoy: compila, no conoce el comando y la `regress/` da lo mismo (INV-1) | **`configure` falla** con un mensaje explícito (FR-2) |
 
 La guarda es triple. Cada capa cubre una cosa:
 
@@ -118,8 +118,9 @@ La guarda es triple. Cada capa cubre una cosa:
 
 Qué está verificado y qué no:
 
-- VC-5 corre en macOS y en Linux.
-- VC-2 y VC-67 corren en macOS.
+- VC-5 corre en Linux.
+- VC-2 y VC-67 corren en macOS. VC-67 incluye `tmux ssh-pane host` →
+  `unknown command: ssh-pane`, con exit 1.
 - En los BSD, Solaris, AIX, Haiku y Cygwin, el límite vale **por construcción**,
   gracias a las tres capas de arriba, pero ningún VC corre ahí.
 
@@ -132,7 +133,7 @@ Qué está verificado y qué no:
 
 | # | Invariante | Cómo se comprueba |
 |---|---|---|
-| **INV-1** | Los builds no-Linux siguen compilando y no tienen el feature | En macOS, `./configure --disable-jemalloc && make` sale 0. Además: `nm tmux \| grep -c ' _ssh_'` da `0`, `otool -L tmux \| grep -c libssh` da `0`, y `cd regress && gmake` deja exactamente las fallas de base de macOS |
+| **INV-1** | Los builds no-Linux siguen compilando y no tienen el feature | En macOS, `./configure --disable-jemalloc && make` sale 0. Además: `nm tmux \| grep -c ' _ssh_'` da `0`, `otool -L tmux \| grep -c libssh` da `0`, `./tmux ssh-pane host` imprime `unknown command: ssh-pane` y sale con 1, y `cd regress && gmake` cumple la regla de INV-6 |
 | **INV-2** | Un Linux sin `--enable-ssh` es el de hoy | Con `./configure --enable-utf8proc && make`: `ldd tmux \| grep -c libssh` da `0`, y la salida de `tmux list-commands` es byte a byte igual a [`linea-de-base/list-commands-linux.txt`](./linea-de-base/list-commands-linux.txt) |
 | **INV-3** | Ningún prefijo de un comando existente cambia el comando al que resuelve | En el build Linux con `--enable-ssh`: `TEST_TMUX=./tmux sh <este TP>/scripts/snapshot-comandos.sh \| grep -v '^ssh-pane'` es igual a [`linea-de-base/snapshot-comandos-linux.txt`](./linea-de-base/snapshot-comandos-linux.txt). Pasa porque el nombre empieza con `ss`, que hoy no es prefijo de ningún comando (N-1), y porque no tiene alias |
 | **INV-4** | Los comandos existentes no cambian (nombre, alias, flags y `usage`) | Con `--enable-ssh`, `tmux list-commands \| grep -v '^ssh-pane '` es igual a `list-commands-linux.txt` |
@@ -206,14 +207,15 @@ Qué está verificado y qué no:
 
 > **VC-4** — En el contenedor `cliente`: exit 1 y la línea literal.
 
-**FR-5 · Un binario sin el feature no conoce el comando.**
-**Dado** un `tmux` compilado sin `--enable-ssh`, en macOS o en Linux,
+**FR-5 · Un Linux sin el feature no conoce el comando.**
+**Dado** un `tmux` compilado en Linux sin `--enable-ssh`,
 **cuando** se corre `tmux ssh-pane host`,
 **entonces** el cliente imprime `unknown command: ssh-pane` por stderr y sale
 con 1, igual que hoy (`cmd.c:489`).
 
-> **VC-5** — En macOS y en Linux sin el flag: el stderr exacto y exit 1, igual
-> que en [`linea-de-base.md`](./linea-de-base.md).
+> **VC-5** — En el contenedor `cliente` sin el flag: el stderr exacto y exit 1,
+> igual que en [`linea-de-base.md`](./linea-de-base.md). El mismo
+> comportamiento en macOS es parte de INV-1 (VC-67).
 
 ### 6.2 · El comando: camino feliz
 
@@ -362,14 +364,14 @@ byte que viaja por el canal, no una señal para el hijo.
 > remoto da `V=130`.
 
 **FR-19 · Nombre del proceso.**
-**Dado** una sesión abierta, y un servidor `tmux` arrancado como `tmux` (por
-`PATH`) o con un path absoluto,
+**Dado** una sesión abierta, con el servidor `tmux` arrancado como `tmux`, por
+`PATH` (que es como lo arranca §9),
 **cuando** se consulta `#{pane_current_command}` del pane,
 **entonces** vale `tmux`. Es el `argv[0]` del servidor, porque el hijo no hace
 `exec` (N-6, D-12). El formato lo pasa por `parse_window_name()` (`format.c:975`),
-que solo recorta un path que empieza con `/` (`names.c:167`). Si el servidor se
-arrancó como `./tmux`, el valor es otro, igual que pasa hoy con cualquier
-programa.
+que solo recorta un path que empieza con `/` (`names.c:167`). Arrancado de otra
+forma (`./tmux`), el valor es el que da esa misma función, como pasa hoy con
+cualquier programa. v1 no lo fija.
 
 > **VC-19** — `T display -p -t <nuevo> '#{pane_current_command}'` da `tmux`.
 
@@ -556,6 +558,9 @@ Que el usuario vea esa línea o no lo decide `remain-on-exit`, como en cualquier
 pane (D-13). Todos los casos parten del entorno base y cambian solo lo que dice
 el **Dado**.
 
+Hay tres excepciones, que **abren** la sesión: FR-51, FR-56 y FR-58. Se
+observan como FR-6.
+
 **Cota de tiempo común:** salvo que el FR diga otra cosa, el estado `1 255` y la
 línea aparecen **dentro de los 12 s** desde el comando. Es el presupuesto de 10 s
 de D-10 más 2 s de margen. Para FR-53 y FR-54, los 12 s se cuentan desde el
@@ -630,7 +635,9 @@ existir**.
 **FR-45 · `known_hosts` ilegible.**
 **Dado** un `~/.ssh/known_hosts` en modo `000`,
 **cuando** se corre `T ssh-pane alice@servidor`,
-**entonces** la línea es `ssh-pane: could not read known_hosts`.
+**entonces** la línea es `ssh-pane: could not read known_hosts`. libssh trata un
+archivo que no puede abrir como si no existiera (N-7), así que el chequeo de
+legibilidad es del cliente, y va antes de la verificación.
 
 > **VC-45** — Estado `1 255` y la línea literal.
 
@@ -646,8 +653,8 @@ que la que presenta el servidor, pero distinta,
 **FR-47 · Host key de otro tipo.**
 **Dado** que `known_hosts` solo tiene, para `servidor`, una clave de **otro
 tipo** (`ssh-rsa`), y que el servidor solo tiene host key `ssh-ed25519` (§9).
-libssh pone primero los tipos de `known_hosts`, pero agrega los demás
-(`ssh_client_select_hostkeys`, N-7), así que se negocia `ssh-ed25519`,
+libssh pone primero los tipos que encuentra en `known_hosts`, pero agrega los
+demás (N-7), así que se negocia `ssh-ed25519`,
 **cuando** se corre `T ssh-pane alice@servidor`,
 **entonces** la línea es
 `ssh-pane: host key for servidor has a different type than the known one; refusing to connect`.
@@ -715,8 +722,11 @@ el canal sin mandar `exit-status`,
 > **VC-54** — Estado `1 255` y la línea literal.
 
 **FR-56 · Una línea mal formada en `known_hosts`.**
-**Dado** un `~/.ssh/known_hosts` cuya primera línea es basura (`esto no es una
-entrada`) y cuya segunda línea es la entrada correcta de `servidor`,
+**Dado** un `~/.ssh/known_hosts` cuya primera línea es una entrada **para
+`servidor`** que no se puede parsear (`servidor ssh-ed25519 esto-no-es-base64`) y
+cuya segunda línea es la entrada correcta de `servidor`. Tiene que ser para
+`servidor`: libssh no parsea las líneas de otros hosts, así que una basura
+cualquiera no probaría nada,
 **cuando** se corre `T ssh-pane alice@servidor`,
 **entonces** la línea mal formada se ignora y la sesión se abre como en FR-6.
 Es lo que hace OpenSSH con una línea que no puede parsear.
@@ -724,14 +734,14 @@ Es lo que hace OpenSSH con una línea que no puede parsear.
 > **VC-56** — Mismo observable que VC-6.
 
 **FR-57 · `-i` apunta a algo que no es una clave.**
-**Dado** que `/tmp/notakey` se puede leer pero no es una clave privada (es una
-copia de `/etc/hostname`),
+**Dado** que no hay agente (`SSH_AUTH_SOCK` sin definir), y que `/tmp/notakey`
+se puede leer pero no es una clave privada (es una copia de `/etc/hostname`),
 **cuando** se corre `T ssh-pane -i /tmp/notakey alice@servidor`,
 **entonces** la línea es
 `ssh-pane: identity file /tmp/notakey is not a valid private key`. FR-34 solo
 mira si el archivo se puede abrir; el contenido se lee en el hijo.
 
-> **VC-57** — Estado `1 255` y la línea literal, sin agente en el entorno.
+> **VC-57** — Estado `1 255` y la línea literal.
 
 **FR-58 · El agente responde, pero está bloqueado.**
 **Dado** un `ssh-agent` bloqueado con `ssh-add -x`, que no ofrece identidades,
@@ -758,9 +768,15 @@ este orden:
 
 Una línea mal formada se ignora y no cuenta como entrada (FR-56).
 
-> **VC-59** — En corridas de VC-6, VC-43, VC-44, VC-46 y VC-47, el sha256 de
-> `~/.ssh/known_hosts` y el de `/etc/ssh/ssh_known_hosts` (o el hecho de que no
-> existan) es el mismo antes y después.
+> **VC-59** — Dos partes:
+>
+> - **Nunca escribe.** En corridas de VC-6, VC-43, VC-44, VC-46 y VC-47, el
+>   sha256 de `~/.ssh/known_hosts` y el de `/etc/ssh/ssh_known_hosts` (o el hecho
+>   de que no existan) es el mismo antes y después.
+> - **El orden.** Con `~/.ssh/known_hosts` que tiene, para `servidor`, una
+>   ed25519 **distinta** y `/etc/ssh/ssh_known_hosts` que tiene la **correcta**, la
+>   sesión se abre (paso 2 antes que 3). Con un `~/.ssh/known_hosts` en modo
+>   `000` y el global correcto, se da FR-45 (el paso 1 va primero).
 
 **BR-2 · El hijo no ejecuta ningún programa.**
 Desde el `fork` hasta su `_exit`, el proceso del pane no llama a `execve`. Es lo
@@ -907,7 +923,7 @@ hay otro documento de decisiones que abrir.
 | D-8 | ¿Con qué letra va el puerto? | **`-P`** | `-p`, como `ssh(1)`: `layout_get_tiled_cell()` lo lee como porcentaje (N-8). Por eso FR-27 lo rechaza en forma explícita |
 | D-9 | ¿Sintaxis del destino? | **`[user@]host`**, con a lo sumo un `@` y sin `:` | `host:puerto`: choca con los IPv6 literales, y `[::1]:22` pide un parser para un caso fuera de alcance. Partir en el último `@`, como OpenSSH: un usuario con `@` no es un caso de v1, y rechazar es más simple de verificar |
 | D-10 | ¿Reintentos y timeouts? | **Un solo intento.** Un presupuesto de **10 s** desde el comando hasta tener el canal con PTY y shell, que cubre TCP, banner, key exchange y autenticación (FR-40, FR-41). Sin keepalive | Reintentar esconde errores de configuración y le suma a cada pane una espera que no se ve. Sin tope, en Linux una conexión a un host que descarta paquetes dura lo que dan los reintentos de SYN del kernel: con el `net.ipv4.tcp_syn_retries = 6` por defecto, unos 127 s. ¿Por qué 10 s? El RTO inicial de SYN en Linux es 1 s y se duplica en cada reintento, así que en 10 s el kernel manda el SYN a los 0, 1, 3 y 7 s: se toleran tres SYN perdidos. Con 5 s se toleraban dos, y con 30 s el usuario mira un pane en negro medio minuto. Keepalive: sin él, un remoto que desaparece sin `RST` deja el pane colgado. Se acepta en v1, igual que `ssh(1)` con `ServerAliveInterval` en 0 (su default). Para reconectar, se abre otro `ssh-pane` |
-| D-11 | ¿Qué comando guarda el pane? | **Ninguno.** `cmd-ssh-pane.c` arma el contexto con cero argumentos de comando, a diferencia de `split-window`, que mete los posicionales en `argv` (`cmd-split-window.c:195`). Así, `respawn-pane` corre `default-command` o una shell de login local (`spawn.c:380`, FR-21) | Copiar `args_to_vector` de `split-window`: el destino quedaría como comando, y un `respawn-pane` correría `$SHELL -c alice@servidor`. Guardar el destino en el pane: es un campo nuevo en `struct window_pane` y viola INV-5 |
+| D-11 | ¿Qué comando guarda el pane? | **Ninguno.** `cmd-ssh-pane.c` arma el contexto con cero argumentos de comando, a diferencia de `split-window`, que mete los posicionales en `argv` (`cmd-split-window.c:195`). Así, el pane queda como cualquier pane creado sin comando. Si `default-command` está vacío (el valor por defecto), no guarda nada, y `respawn-pane` arranca una shell de login local (FR-21). Si no está vacío, `spawn_pane` guarda ese comando en el pane (`spawn.c:380`) y `respawn-pane` lo corre, igual que hoy con cualquier pane | Copiar `args_to_vector` de `split-window`: el destino quedaría como comando, y un `respawn-pane` correría `$SHELL -c alice@servidor`. Guardar el destino en el pane: es un campo nuevo en `struct window_pane` y viola INV-5 |
 | D-12 | ¿Qué muestra `#{pane_current_command}`? | **`tmux`** (FR-19), y por eso la ventana se renombra a `tmux` (FR-20) | `prctl(PR_SET_NAME)`: no cambia `/proc/<pid>/cmdline`, que es lo que lee `osdep_get_name` (N-6). Reescribir el `argv` del servidor desde el hijo: es frágil y depende de la plataforma |
 | D-13 | ¿Cómo ve el usuario un error asíncrono? | **Una línea en el pane y status 255.** `remain-on-exit` (que acepta `failed-key`, `options-table.c:95`) decide si queda visible | Que `ssh-pane` cambie `remain-on-exit` del pane: es una opción del usuario. Avisarle al cliente por IPC: el hijo no conserva ningún descriptor del servidor (`spawn.c:541`) |
 | D-14 | ¿Qué archivos de host keys se consultan? | **`~/.ssh/known_hosts` y `/etc/ssh/ssh_known_hosts`**, solo para leer. Es el comportamiento por defecto de libssh y el de OpenSSH (N-7) | Solo el del usuario: un host que el administrador registró en el archivo global fallaría con `ssh-pane` y andaría con `ssh` |
@@ -942,7 +958,9 @@ doble. El entorno es parte del contrato.
   - una en el 22 y el 2222, con la configuración por defecto;
   - una en el 2200, con `KexAlgorithms diffie-hellman-group1-sha1`;
   - una en el 2201, con `PermitTTY no`;
-- todas con `LogLevel VERBOSE` y `-E /var/log/sshd-<puerto>.log`;
+- todas con `LogLevel VERBOSE` y `-E /var/log/sshd-<puerto>.log`, donde
+  `<puerto>` es el **primero** de la instancia: `sshd-22.log`, `sshd-2200.log`
+  y `sshd-2201.log`. La del 2222 escribe en `sshd-22.log`;
 - se levanta con `--cap-add NET_ADMIN`, que VC-40 (`iptables`) y VC-53
   (`ss -K`) necesitan.
 
@@ -950,8 +968,10 @@ doble. El entorno es parte del contrato.
 
 - las entradas de `known_hosts` de cada VC;
 - `/tmp/fixture.bin`, en `servidor`;
-- las claves de FR-10, FR-11 y FR-48 a FR-50, generadas en cada corrida con
-  `ssh-keygen` del contenedor `cliente`. Generarlas no es parte del SUT.
+- las claves de FR-10, FR-11, FR-48 a FR-50 y FR-58, generadas en cada corrida
+  con el `ssh-keygen` del contenedor `cliente` (generarlas no es parte del SUT);
+- el `known_hosts` con la línea mal formada de FR-56, `/tmp/notakey` de FR-57,
+  y el agente bloqueado con `ssh-add -x` de FR-58.
 
 **El recorrido E2E es VC-6:** argumentos → `cmd_find` → `spawn_pane` →
 `fdforkpty` → hijo libssh → TCP → `sshd` → shell remota → PTY → `bufferevent`
@@ -962,9 +982,9 @@ Se corre en jobs de CI **del repo de este TP**, no de upstream:
 | Job | Dónde | Qué VCs |
 |---|---|---|
 | `linux-ssh` | `docker compose`, `cliente` con `libssh-dev` y `--enable-ssh` | VC-1, VC-4, VC-6 a VC-66, VC-68 (variante con el flag) |
-| `linux-sin-ssh` | `cliente` con `libssh-dev`, **sin** el flag | VC-5 (Linux), VC-68 (variante sin el flag) |
+| `linux-sin-ssh` | `cliente` con `libssh-dev`, **sin** el flag | VC-5, VC-68 (variante sin el flag) |
 | `linux-sin-libssh` | `cliente` **sin** `libssh-dev`, con el flag | VC-3 |
-| `macos` | runner `macos-26`, Homebrew sin `libssh` | VC-2, VC-5 (macOS), VC-67 |
+| `macos` | runner `macos-26`, Homebrew sin `libssh` | VC-2, VC-67 |
 | `estatico` | cualquiera, con `git` y `unifdef` | VC-69 |
 
 **Saltear no es pasar.** Fuera de este entorno, los `regress/ssh-pane-*.sh` se
@@ -1013,3 +1033,4 @@ solo-Linux sin escribir una línea de SSH.
 | v1.0 | 2026-10-01 | Primer borrador |
 | v1.1 | 2026-10-01 | Corrección adversarial ([`revisiones/spec-brownfield-2026-10-01.md`](./revisiones/spec-brownfield-2026-10-01.md)). `AM_CONDITIONAL` va fuera del `if`. `-l` y `-v` salen de la sinopsis (D-16). D-11 pasa a usar cero argumentos de comando, con su FR. Se parten los FRs de destino inválido. Se agregan 17 caminos de falla y bordes (FR-4, FR-11, FR-20, FR-21, FR-23, FR-24, FR-26, FR-27, FR-31, FR-37, FR-41, FR-42, FR-45, FR-49 a FR-52) y BR-5. Se fija la ventana en 200×50 y el texto se lee con `capture-pane -J`. Se rehace el descarte de libssh2. Se decide qué cubre el timeout y qué archivos `known_hosts` se leen. Se corrigen los chequeos de INV-3, INV-5 e INV-7 |
 | v1.2 | 2026-10-01 | Segunda corrección ([`revisiones/spec-brownfield-2026-10-01-r2.md`](./revisiones/spec-brownfield-2026-10-01-r2.md)) y revisión de PR ([`revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md`](./revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md)). FR-20 deja de usar `-n`. NFR-2 usa un marcador que el eco del comando no contiene. §9 fija los hostnames, el tipo de host key, los logs de `sshd` y los cinco jobs. Se agregan FR-55 a FR-58 (IPv6 literal, `known_hosts` mal formado, `-i` que no es una clave, agente bloqueado). BR-1 fija el orden de decisión. Hay una cota común de 12 s para §6.4. Los VCs de BR, NFR e INV pasan a VC-59…69 |
+| v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban |

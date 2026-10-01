@@ -271,6 +271,14 @@ Dos cosas de libssh que cambian el diseño (verificadas en su repo y en su
   que no es el 22, busca el host como `[host]:puerto`, igual que OpenSSH.
 - `ssh_connect()` resuelve el nombre con `getaddrinfo`, que es bloqueante aunque
   la sesión esté en modo no bloqueante.
+- Al negociar, libssh pone primero los tipos de host key que encuentra en
+  `known_hosts` para ese host, y **después agrega los demás que soporta**
+  (`ssh_client_select_hostkeys`, `src/kex.c` de libssh). Si el servidor solo
+  ofrece un tipo que no está en `known_hosts`, se negocia ese tipo igual, y la
+  verificación da "de otro tipo".
+- Un `known_hosts` que no se puede abrir **no es un error** para libssh: lo
+  trata como si no existiera (`src/knownhosts.c`, "The missing file is not an
+  error here"). Las líneas de **otros** hosts se saltean sin parsearlas.
 
 ### 8 · ⚠ Los helpers de layout leen letras de flag ajenas
 
