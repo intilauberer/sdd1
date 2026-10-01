@@ -19,7 +19,24 @@
 > La tabla no dice "lo probé". Dice, para cada criterio de verificación, con qué
 > se lo ejercita y qué se observó.
 
-## Resumen (Iteración 1 + las dos restricciones del enunciado, spec v1.3)
+## Resumen al 2026-10-01 (spec v1.4)
+
+| | |
+|---|---|
+| VCs en la spec | 31 (VC-1…VC-31), sobre 27 requerimientos |
+| VCs pasando contra dobles de prueba | **14** — los mismos de la entrega; ninguno cambió de estado |
+| VCs re-redactados en v1.4 cuyo ejercitador cubre la redacción anterior | 4 (VC-1, VC-3, VC-4, VC-8) — ✅ sobre la v1.3, ⬜ sobre la v1.4 hasta el Paso 0 |
+| VCs nuevos de v1.4 sobre comportamiento existente, sin ejercitador | 8 (VC-19, VC-22, VC-24, VC-26, VC-27, VC-28, VC-30, VC-16 (c)) — Paso 0 de la Iteración 2 |
+| VCs de la Iteración 2, sin implementar | 11 (VC-6, VC-9, VC-10, VC-13, VC-15, VC-20, VC-21, VC-23, VC-25, VC-29, VC-16 (a) completo) |
+| VCs contra GCS real | **VC-31**, especificado; ejecución sujeta a [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md) |
+| Tests que ejercitan todo esto | **48**, en 5 archivos |
+
+La tabla de abajo, *Cobertura, uno por uno*, se corrigió en esta fecha: tenía
+filas que contradecían este resumen desde la entrega
+([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)). Las filas
+superadas están en el *Histórico*.
+
+## Resumen de la entrega (Iteración 1 + las dos restricciones del enunciado, spec v1.3)
 
 | | |
 |---|---|
@@ -50,10 +67,44 @@ iteración: son condiciones sobre lo que se entrega. El resto de la Iteración 2
 | VC-8 | FR-8 ubicación inválida | `test_core.py::test_vc8_*` (3 casos), `test_cli.py::test_vc8_*` (2 casos) | `ValueError`/exit `2` para `logs/` (sin esquema) y `s3://b/` (esquema no soportado); mensaje menciona `gs://` | ✅ |
 | VC-14 (a) | NFR-1 memoria, patrón ausente | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_sin_matches` | pico adicional con `tracemalloc` sobre un objeto simulado de 200 MB: **< 20 MB** | ✅ |
 | VC-14 (b) | NFR-1 memoria, **todas** las líneas matchean | `test_memory.py::test_vc14_memoria_acotada_con_objeto_de_200mb_donde_todo_matchea` | 1.043.359 matches emitidos y descartados; pico adicional **< 20 MB** (medido: ~0 MB). Contraste: acumulando los matches en una lista el pico es de **371 MB** | ✅ |
-| VC-17 | FR-11 salida incremental | `test_core.py::test_vc17_primer_match_se_emite_sin_recorrer_todo_el_prefijo`, `test_cli.py::test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida` | con 3 objetos que matchean, obtener el 1er match listó y abrió **solo** el 1ero (`listed == opened == ["logs/a.txt"]`); de punta a punta, 2 matches ya están en stdout cuando la lectura del objeto falla | ✅ |
+| VC-17 | FR-11 salida incremental | `test_core.py::test_vc17_primer_match_se_emite_sin_abrir_el_resto_del_prefijo`, `test_cli.py::test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida` | con 3 objetos que matchean, obtener el 1er match abrió **solo** el 1ero (el listado se materializa por BR-2, spec v1.3); de punta a punta, 2 matches ya están en stdout cuando la lectura del objeto falla, y la corrida termina con exit `2` (ADR-0013) | ✅ (fila de 2026-09-24, registrada el 2026-10-01 por H-15) |
 | VC-16 (a) parcial | NFR-3, lista enumerada | `test_cli.py::test_vc5_sin_resultados_exit_1_stdout_vacio`, `test_cli.py::test_vc8_ubicacion_sin_esquema_exit_2` | stdout vacío y stderr sin `Traceback` para los dos casos de error/borde ya implementados (VC-5, VC-8) | ✅ (parcial — el resto depende de código de la Iteración 2) |
-| **VC-16 (b)** | **NFR-3, excepción inesperada** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, mensaje legible sin `Traceback`. **Observado hoy: cualquier excepción del SDK escapa de `cli.main()` como traceback con exit `1`** | ⬜ **no implementado** |
-| **VC-18** | **FR-12 bucket inexistente o inaccesible** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, stderr nombra el bucket, distingue "no existe" de "sin permiso", sin `Traceback`. **Observado hoy: traceback de `google.api_core.exceptions.NotFound` y exit `1`** | ⬜ **no implementado** |
+| VC-16 (b) | NFR-3, excepción inesperada | `test_cli.py::test_vc16b_excepcion_inesperada_al_listar_no_deja_traceback`, `test_cli.py::test_vc16b_excepcion_inesperada_al_abrir_un_objeto_no_deja_traceback`, `test_cli.py::test_vc16b_los_matches_ya_emitidos_sobreviven_al_fallo` | excepción de una clase desconocida al listar y al abrir: exit `2`, stdout vacío, stderr con el nombre de la clase y la sugerencia de `GCSGREP_DEBUG`, sin `Traceback` | ✅ (implementado el 2026-09-24, ADR-0013; registrado el 2026-10-01 por H-15) |
+| VC-18 | FR-12 bucket inexistente (y, hasta la v1.3, sin permiso de listado) | `test_cli.py::test_vc18_bucket_inexistente_exit_2_mensaje_sin_traceback`, `test_cli.py::test_vc18_sin_permiso_da_un_mensaje_distinto_al_de_inexistente`, `test_cli.py::test_vc18_no_abre_ningun_objeto_cuando_falla_el_listado`, `test_gcs.py::test_vc18_*` (5 casos, con `NotFound`/`Forbidden` reales del SDK) | exit `2`, stdout vacío, stderr nombra el bucket y dice `no existe` (o `sin permiso`, mensaje distinto), sin `Traceback`, 0 objetos abiertos | ✅ (implementado el 2026-09-24; registrado el 2026-10-01 por H-15) |
+| VC-11 | BR-1 solo lectura | `test_gcs.py::test_vc11_el_modulo_gcs_no_nombra_ninguna_operacion_de_escritura`, `test_gcs.py::test_vc11_un_doble_que_solo_permite_leer_no_registra_llamadas_prohibidas`, `test_gcs.py::test_vc11_el_doble_efectivamente_detecta_una_escritura` | inspección del fuente de `gcs` sin métodos de escritura; el cliente `ClienteSoloLectura` registra 0 llamadas prohibidas, y el control negativo demuestra que sí detecta una | ✅ (2026-09-24; registrado el 2026-10-01 por H-15) |
+| VC-12 | BR-2 guardrail de costo | `test_core.py::test_vc12_*` (6 casos), `test_cli.py::test_vc12_*` (4 casos) | 1001 objetos sin `--max`: exit `1`, 0 aperturas, stderr con cantidad y tope; exactamente en el tope no dispara; `--max 0` lee y no materializa el listado; `--max` negativo → exit `2` | ✅ (2026-09-24; registrado el 2026-10-01 por H-15) |
+
+## Spec v1.4 · VCs nuevos y re-redactados
+
+Agregados el 2026-10-01 por la corrección de la cátedra. Ninguno se ejercita
+todavía con su redacción v1.4: el Paso 0 de la Iteración 2
+([`03-plan.md`](./03-plan.md)) los ejercita **antes** de escribir código nuevo, y
+cada fila de acá se reemplaza entonces por una fila con su ejercitador.
+
+| VC | Requerimiento | Ejercitador hoy | Esperado | Estado |
+|---|---|---|---|---|
+| VC-1 (v1.4) | FR-1 | `test_vc1_*` cubre "contiene" | stdout **exacto** y stderr vacío | ⬜ Paso 0 |
+| VC-3 (v1.4) | FR-3 | `test_vc3_*` cubre `line_number == 3` | stdout exacto `gs://b/p/a.txt:3:error: timeout` | ⬜ Paso 0 |
+| VC-4 (v1.4) | FR-4 | `test_vc4_*` cubre el parseo por `:` | stdout exacto sin número de línea | ⬜ Paso 0 |
+| VC-8 (v1.4) | FR-8 | `test_vc8_*` cubre exit y `gs://` | además, 0 llamadas de listado | ⬜ Paso 0 |
+| VC-16 (c) | NFR-3, excepción `GCSGREP_DEBUG` | `test_vc16b_debug_reexpone_la_excepcion_para_diagnosticar` cubre la mitad | además: con `GCSGREP_DEBUG=1`, VC-18 sigue sin traceback | ⬜ Paso 0 |
+| VC-19 | FR-1, patrón literal | — | `a.b` no matchea `axb` | ⬜ Paso 0 |
+| VC-22 | FR-14, sin permiso de listado | `test_vc18_sin_permiso_*` (bajo el VC viejo) | `sin permiso`, sin `no existe`, 0 aperturas | ⬜ Paso 0 |
+| VC-24 | FR-16, orden | — | 6 líneas en orden exacto | ⬜ Paso 0 |
+| VC-26 | FR-18, prefijo sin `/` | — | `logs` incluye `logs-other/` | ⬜ Paso 0 |
+| VC-27 | FR-19, 0 bytes | — | sin error, sin salteo, stderr vacío | ⬜ Paso 0 |
+| VC-28 | FR-20, última línea sin `\n` | — | `gs://b/p/a.txt:2:dos` | ⬜ Paso 0 |
+| VC-30 | NFR-4, rendimiento | — (medición exploratoria del 2026-10-01 en [ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md): ~396 MiB/s y ~355 000 matches/s) | (a) ≥ 50 MiB/s, (b) ≥ 50 000 matches/s | ⬜ Paso 0 |
+| VC-20 | FR-9, ventana de 8192 bytes | — | offset 8191 binario, 8192 texto | ⬜ Iteración 2 |
+| VC-21 | FR-13, red a mitad de lectura | — | matches previos quedan, `error de red al leer`, exit `2` | ⬜ Iteración 2 |
+| VC-23 | FR-15, sin credenciales | — | `no se encontraron credenciales`, exit `2` | ⬜ Iteración 2 (hoy: exit `2` por el caso genérico, con otro mensaje) |
+| VC-25 | FR-17, UTF-8 con reemplazo | — | `caf� timeout`, exit `0` | ⬜ Iteración 2 (hoy: el `UnicodeDecodeError` aborta la corrida con exit `2`) |
+| VC-29 | NFR-2 (b), 0 reintentos al leer | — | 1 apertura por objeto | ⬜ Iteración 2 |
+| VC-31 | punta a punta contra GCS real | — | ver la spec | ⬜ especificado; ejecución sujeta a [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md) |
+
+**Lo que dicen las dos marcas "hoy" de VC-23 y VC-25** es una predicción a partir
+del código (ADR-0013, ADR-0018), no una observación: se confirma o se corrige cuando
+se escriba el test.
 
 ### Por qué VC-14 tiene dos filas
 
@@ -194,7 +245,13 @@ fixtures, los cinco chequeos, y destrucción— está en
 (`.github/workflows/integration.yml`) para quien tenga el proyecto de GCP
 configurado.
 
-Cuando se ejecute, los resultados se registran acá, con fecha y bucket usado:
+Los resultados se registran acá, con fecha y bucket usado. Las seis primeras filas
+son las originales, con _pendiente_; las seis de abajo son el resultado de la
+corrida del 2026-09-24, que no se había volcado a la tabla
+([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)). El detalle por
+chequeo de esa corrida (salida exacta) no quedó registrado: lo único que consta es
+el encabezado de arriba. La próxima corrida tiene que anotar lo observado, no solo
+el ✅.
 
 | Chequeo | VCs que toca | Comando | Esperado | Observado | Fecha |
 |---|---|---|---|---|---|
@@ -204,6 +261,12 @@ Cuando se ejecute, los resultados se registran acá, con fecha y bucket usado:
 | I-4 ubicación inválida | VC-8 | `gcsgrep "x" no-es-gs` | exit `2`, sin llamada a GCS | _pendiente_ | — |
 | I-5 salida incremental en un pipe | VC-17 | `gcsgrep "linea" gs://$BUCKET/grande/ \| head -3` | 3 líneas y corta, sin leer el objeto completo | _pendiente_ | — |
 | **I-7 bucket inexistente** | **VC-18** | `gcsgrep "x" gs://gcsgrep-test-no-existe-jamas/` | exit `2`, stderr nombra el bucket y dice que no existe, sin `Traceback` | _pendiente — requiere FR-12 implementado_ | — |
+| I-1 | VC-1, VC-4 | ídem | ídem | ✅ pasó — backend **`floci`**, bucket `gcsgrep-test-floci` (registrado el 2026-10-01 a partir del encabezado de esta sección, H-15) | 2026-09-24 |
+| I-2 | VC-2, VC-3 | ídem | ídem | ✅ pasó — **`floci`** (ídem) | 2026-09-24 |
+| I-3 | VC-5 | ídem | ídem | ✅ pasó — **`floci`** (ídem) | 2026-09-24 |
+| I-4 | VC-8 | ídem | ídem | ✅ pasó — **`floci`** (ídem) | 2026-09-24 |
+| I-5 | VC-17 | ídem | ídem | ✅ pasó — **`floci`** (ídem) | 2026-09-24 |
+| I-7 | VC-18 | ídem | ídem | ✅ pasó — **`floci`** (ídem) | 2026-09-24 |
 
 **I-6 no está en esta tabla**, y hasta la enmienda de la spec v1.2 decía
 _pendiente_ acá. Verifica que sin ADC la corrida salga con `2` sin traceback, que
@@ -228,7 +291,18 @@ en la tabla de integración de la Iteración 2, cuando exista.
 Las filas que fueron reemplazadas viven acá, con su fecha, para que la tabla de
 arriba pueda seguir respondiendo una sola pregunta: *qué pasa hoy*.
 
-Al cierre de la Iteración 1 no hay ninguna todavía: ningún VC cambió de estado ni
+### Filas superadas el 2026-10-01 ([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md))
+
+Estas tres filas estaban en la tabla vigente al entregar, y ya no eran ciertas:
+los tests existían y pasaban desde el 2026-09-24. Se conservan tal como estaban.
+
+| VC-17 (hasta la spec v1.3, nombre de test viejo) | FR-11 salida incremental | `test_core.py::test_vc17_primer_match_se_emite_sin_recorrer_todo_el_prefijo`, `test_cli.py::test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida` | con 3 objetos que matchean, obtener el 1er match listó y abrió **solo** el 1ero (`listed == opened == ["logs/a.txt"]`); de punta a punta, 2 matches ya están en stdout cuando la lectura del objeto falla | ✅ |
+| **VC-16 (b)** | **NFR-3, excepción inesperada** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, mensaje legible sin `Traceback`. **Observado hoy: cualquier excepción del SDK escapa de `cli.main()` como traceback con exit `1`** | ⬜ **no implementado** |
+| **VC-18** | **FR-12 bucket inexistente o inaccesible** | _sin ejercitador — pendiente de implementar_ | esperado: exit `2`, stdout vacío, stderr nombra el bucket, distingue "no existe" de "sin permiso", sin `Traceback`. **Observado hoy: traceback de `google.api_core.exceptions.NotFound` y exit `1`** | ⬜ **no implementado** |
+
+### Nota del cierre de la Iteración 1
+
+Al cierre de la Iteración 1 no había ninguna todavía: ningún VC cambió de estado ni
 de forma de medirse después de haber sido registrado. Los dos casos que se le
 parecen están narrados arriba y no son filas superadas:
 

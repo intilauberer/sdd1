@@ -41,10 +41,13 @@ el "por qué" se escribe una sola vez, en un solo lugar.
 | [ADR-0009](./ADR-0009-lectura-secuencial.md) | Lectura secuencial, sin concurrencia, en v1 | aceptado |
 | [ADR-0010](./ADR-0010-objeto-modificado.md) | Objeto modificado durante la lectura: riesgo aceptado | aceptado |
 | [ADR-0011](./ADR-0011-salida-incremental.md) | Salida incremental por streaming (resuelve FR-g del borrador) | aceptado |
-| [ADR-0012](./ADR-0012-nfr-rendimiento-diferido.md) | NFR de rendimiento declinado en v1, diferido a la Iteración 3 | aceptado |
+| [ADR-0012](./ADR-0012-nfr-rendimiento-diferido.md) | NFR de rendimiento declinado en v1, diferido a la Iteración 3 | superseded por ADR-0017 |
 | [ADR-0013](./ADR-0013-frontera-de-excepciones.md) | Frontera de excepciones en `cli`, errores de dominio traducidos en `gcs` | aceptado |
 | [ADR-0014](./ADR-0014-emulacion-local-floci.md) | Emulación local con `floci-gcp` para la verificación de integración | aceptado |
 | [ADR-0015](./ADR-0015-verificacion-real-declinada.md) | La verificación contra GCS real se declina para esta entrega, con obligación registrada | aceptado |
+| [ADR-0016](./ADR-0016-sin-reintentos.md) | Sin reintentos automáticos ante fallos de red en v1 | aceptado |
+| [ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md) | NFR de rendimiento sobre el costo propio de `gcsgrep`, medido sin red | aceptado |
+| [ADR-0018](./ADR-0018-ventana-binaria-y-codificacion.md) | Ventana de 8192 bytes para detectar binarios, y UTF-8 con reemplazo | aceptado |
 
 ## Trazabilidad hacia atrás
 
@@ -60,3 +63,9 @@ posteriores a esa revisión: el primero de
 excepciones), y los otros dos de H-9 — ADR-0014 hizo posible verificar sin una
 cuenta con billing, y ADR-0015 declina la verificación contra GCS real con
 fundamento, cerrando el hallazgo en vez de dejarlo abierto para siempre.
+
+ADR-0016, ADR-0017 y ADR-0018 salieron de la
+[corrección de la cátedra](../correccion-catedra-iteracion-1.md) (spec v1.4): el
+primero fundamenta una decisión que la spec tomaba sin decir por qué (0
+reintentos), el segundo supersede a ADR-0012 y define el NFR de rendimiento, y el
+tercero precisa ADR-0005 con un número y una codificación.

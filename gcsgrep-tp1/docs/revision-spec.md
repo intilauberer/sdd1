@@ -37,6 +37,20 @@ no contra la intención de quien lo escribió.
 | C-11 | ¿El código implementado no contradice la spec? | ❌ → **H-3**, **H-6** |
 | C-12 | ¿Los criterios de entrega del enunciado están todos cumplidos? | ❌ → **H-9** |
 | C-13 | **¿Cada modo de falla nombrado en la tabla de Actores tiene un requerimiento que lo cubre?** | agregado después de esta revisión → ver **H-13** |
+| C-14 | ¿Cada FR tiene **una** situación en el Dado y un Entonces observable entero en **una** ejecución? (sin "A o B", sin "si -n…, si no…", sin "distingue X de Y") | agregado tras la corrección de la cátedra (2.3) |
+| C-15 | ¿Toda decisión de un ADR o del base context que cambia stdout, stderr o el exit code está escrita en un FR/BR/NFR? | agregado tras la corrección de la cátedra (2.8, 5.6) |
+| C-16 | ¿Hay NFR de rendimiento, cada NFR tiene métrica, número y condición de carga **en su enunciado**, y cada condición enumerada tiene su propio VC? | agregado tras la corrección de la cátedra (4.1, 4.3) |
+| C-17 | ¿Están definidos **con VC** los bordes estándar: entrada vacía (0 bytes / 0 objetos), último elemento sin terminador, prefijo ambiguo, codificación, límites exactos de cada umbral? | agregado tras la corrección de la cátedra (3.4) |
+| C-18 | ¿Hay al menos un VC de punta a punta declarado contra el sistema real, y la spec nombra los permisos mínimos que necesita quien invoca? | agregado tras la corrección de la cátedra (3.6, 5.1) |
+
+**C-14 … C-18 tampoco existían.** Salieron de la
+[corrección de la cátedra](./correccion-catedra-iteracion-1.md) (NEEDS WORK): son
+los chequeos de su rúbrica que este checklist no tenía, y explican todos sus
+Issues y la mayoría de sus Warnings. Aplicados a la spec v1.4, pasan los cinco; el
+detalle, acción por acción, está en
+[`respuesta-correccion-catedra.md`](./respuesta-correccion-catedra.md). El mismo
+conjunto de chequeos está automatizado como agente adversarial en
+`.kiro/agents/corrector-specs` (en la raíz del repo).
 
 **C-13 no existía cuando se aplicó este checklist**, y es la razón por la que H-13
 se descubrió recién al intentar la primera corrida real. Se agrega acá para que la
@@ -207,6 +221,8 @@ cada vez que se busca uno solo.
 | [H-11](./hallazgos/H-11-runbook-vs-plan.md) | El runbook reclama I-6 para la Iteración 1; el plan lo asigna a la 2 | primer intento de montar el campo de pruebas |
 | [H-12](./hallazgos/H-12-sin-frontera-de-excepciones.md) | El CLI no atrapa ninguna excepción y NFR-3 no era falsable → VC-16 (a)/(b), FR-12, spec v1.2 | primera corrida real, `NotFound: 404` |
 | [H-13](./hallazgos/H-13-actores-sin-trazar.md) | La tabla de Actores declara modos de falla que ninguna tabla vigila → C-13, tercera tabla de trazabilidad | análisis de H-12 |
+| [H-14](./hallazgos/H-14-i6-no-verificable-en-emulador.md) | I-6 no es verificable contra el emulador, y el script lo corría igual | primera corrida del campo de pruebas |
+| [H-15](./hallazgos/H-15-cobertura-desincronizada.md) | La tabla de cobertura contradice su propio resumen desde la entrega | respuesta a la corrección de la cátedra |
 
 Qué artefacto cambia según lo que se descubra está en
 [`proceso-cambios.md`](./proceso-cambios.md).
