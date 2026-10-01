@@ -10,7 +10,7 @@
 |---|---|
 | **Repo** | [`tmux/tmux`](https://github.com/tmux/tmux) · commit base `5a820e63b72f05c121441149c72327aeeb16dfa4` (`next-3.9`) |
 | **Versión** | v1.3 · 2026-10-01 · Grupo 4 |
-| **Estado** | En revisión. Tres vueltas del agente corrector, todas con NEEDS WORK; la tercera dejó 3 Issues de redacción, y v1.3 los resuelve ([`revisiones/`](./revisiones/)). Falta una vuelta que lo confirme. Sin implementación, por consigna |
+| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). Sin implementación, por consigna |
 | **Conteo** | FR: 58 · BR: 5 · NFR: 3 · INV: 7 · VC: 69 |
 
 ## 1 · Propósito
@@ -729,7 +729,9 @@ cuya segunda línea es la entrada correcta de `servidor`. Tiene que ser para
 cualquiera no probaría nada,
 **cuando** se corre `T ssh-pane alice@servidor`,
 **entonces** la línea mal formada se ignora y la sesión se abre como en FR-6.
-Es lo que hace OpenSSH con una línea que no puede parsear.
+Es lo que hace OpenSSH con una línea que no puede parsear. libssh, en cambio,
+deja de leer el archivo entero ante una línea mal formada del host (N-7), así que
+ese filtrado lo hace el cliente antes de verificar.
 
 > **VC-56** — Mismo observable que VC-6.
 
@@ -1033,4 +1035,4 @@ solo-Linux sin escribir una línea de SSH.
 | v1.0 | 2026-10-01 | Primer borrador |
 | v1.1 | 2026-10-01 | Corrección adversarial ([`revisiones/spec-brownfield-2026-10-01.md`](./revisiones/spec-brownfield-2026-10-01.md)). `AM_CONDITIONAL` va fuera del `if`. `-l` y `-v` salen de la sinopsis (D-16). D-11 pasa a usar cero argumentos de comando, con su FR. Se parten los FRs de destino inválido. Se agregan 17 caminos de falla y bordes (FR-4, FR-11, FR-20, FR-21, FR-23, FR-24, FR-26, FR-27, FR-31, FR-37, FR-41, FR-42, FR-45, FR-49 a FR-52) y BR-5. Se fija la ventana en 200×50 y el texto se lee con `capture-pane -J`. Se rehace el descarte de libssh2. Se decide qué cubre el timeout y qué archivos `known_hosts` se leen. Se corrigen los chequeos de INV-3, INV-5 e INV-7 |
 | v1.2 | 2026-10-01 | Segunda corrección ([`revisiones/spec-brownfield-2026-10-01-r2.md`](./revisiones/spec-brownfield-2026-10-01-r2.md)) y revisión de PR ([`revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md`](./revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md)). FR-20 deja de usar `-n`. NFR-2 usa un marcador que el eco del comando no contiene. §9 fija los hostnames, el tipo de host key, los logs de `sshd` y los cinco jobs. Se agregan FR-55 a FR-58 (IPv6 literal, `known_hosts` mal formado, `-i` que no es una clave, agente bloqueado). BR-1 fija el orden de decisión. Hay una cota común de 12 s para §6.4. Los VCs de BR, NFR e INV pasan a VC-59…69 |
-| v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban |
+| v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban. Después de la cuarta vuelta (READY, [`r4`](./revisiones/spec-brownfield-2026-10-01-r4.md)), FR-56 aclara que el filtrado de líneas mal formadas lo hace el cliente |

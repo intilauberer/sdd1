@@ -278,7 +278,9 @@ Dos cosas de libssh que cambian el diseño (verificadas en su repo y en su
   verificación da "de otro tipo".
 - Un `known_hosts` que no se puede abrir **no es un error** para libssh: lo
   trata como si no existiera (`src/knownhosts.c`, "The missing file is not an
-  error here"). Las líneas de **otros** hosts se saltean sin parsearlas.
+  error here"). Las líneas de **otros** hosts se saltean sin parsearlas. Pero una
+línea **del host** que no se puede parsear corta la lectura del archivo entero
+(`goto error`).
 
 ### 8 · ⚠ Los helpers de layout leen letras de flag ajenas
 
