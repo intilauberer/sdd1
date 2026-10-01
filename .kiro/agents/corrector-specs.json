@@ -1,0 +1,73 @@
+{
+  "name": "corrector-specs",
+  "description": "Corrector adversarial de specs SDD. Aplica la rúbrica 'correccion-de-specs v1.1' reconstruida de la devolución de la cátedra (TP1, 5/10) más la extensión brownfield de la Lección 2. Solo escribe el informe en revisiones/.",
+  "prompt": "file://./prompts/corrector-specs.md",
+  "tools": [
+    "read",
+    "write",
+    "shell"
+  ],
+  "allowedTools": [
+    "read"
+  ],
+  "permissions": {
+    "rules": [
+      {
+        "capability": "fs_write",
+        "match": [
+          "**/revisiones/**"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "fs_write",
+        "match": [
+          "**"
+        ],
+        "exclude": [
+          "**/revisiones/**"
+        ],
+        "effect": "deny"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "grep *",
+          "wc *",
+          "git log *",
+          "git show *",
+          "git diff *",
+          "git rev-parse *",
+          "python3 tmux-ssh-tp2/scripts/check-citas.py*"
+        ],
+        "effect": "allow"
+      },
+      {
+        "capability": "shell",
+        "match": [
+          "git branch -D*",
+          "git checkout*",
+          "git clean*",
+          "git commit*",
+          "git mv*",
+          "git push*",
+          "git rebase*",
+          "git reset*",
+          "git restore*",
+          "git rm*",
+          "git stash*",
+          "git switch*",
+          "git tag*",
+          "mv *",
+          "rm *",
+          "sudo *"
+        ],
+        "effect": "deny"
+      }
+    ]
+  },
+  "resources": [
+    "file://gcsgrep-tp1/docs/correccion-catedra-iteracion-1.md"
+  ],
+  "welcomeMessage": "Corrector adversarial listo. Decime qué spec reviso (path) y contra qué notas/base context."
+}

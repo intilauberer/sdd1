@@ -172,7 +172,7 @@ que tiene esta verificación.
 
 ## En CI
 
-[`.github/workflows/integration.yml`](../.github/workflows/integration.yml) corre
+[`.github/workflows/integration.yml`](../../.github/workflows/integration.yml) corre
 este mismo procedimiento, pero **solo a pedido** (`workflow_dispatch`), nunca en
 cada push:
 

@@ -1,7 +1,7 @@
-name: integración (GCS real)
+name: integración TP1 (GCS real)
 
 # Solo a pedido. Cuesta plata y necesita credenciales de GCP.
-# Procedimiento y configuración: docs/integracion-gcs.md
+# Procedimiento y configuración: gcsgrep-tp1/docs/integracion-gcs.md
 on:
   workflow_dispatch:
     inputs:
@@ -13,6 +13,10 @@ on:
 permissions:
   contents: read
   id-token: write # necesario para Workload Identity Federation
+
+defaults:
+  run:
+    working-directory: gcsgrep-tp1
 
 jobs:
   integracion:

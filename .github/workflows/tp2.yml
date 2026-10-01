@@ -1,0 +1,42 @@
+name: tp2 (tmux-ssh-tp2)
+
+# Chequeos mecánicos del TP2. No compila tmux: el TP2 es análisis y spec, sin
+# implementación. Lo que sí se puede verificar en cada push es que las notas y
+# la spec citan el tmux real, y que no se coló código.
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  citas:
+    name: Citas archivo:línea contra tmux@5a820e6
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Verificar citas
+        run: python3 tmux-ssh-tp2/scripts/check-citas.py
+      - name: Enlaces relativos
+        run: python3 gcsgrep-tp1/scripts/check-doc-links.py tmux-ssh-tp2
+      - name: Los scripts de shell parsean
+        run: sh -n tmux-ssh-tp2/scripts/snapshot-comandos.sh
+
+  sin-implementacion:
+    name: El TP2 no contiene código de tmux
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Ningún .c / .h / .y / configure.ac / Makefile.am en tmux-ssh-tp2/
+        # La consigna lo corrige explícitamente: "Si empezaron a escribir C, se
+        # perdieron el ejercicio".
+        run: |
+          encontrados=$(find tmux-ssh-tp2 \( -name '*.c' -o -name '*.h' -o -name '*.y' -o -name 'configure.ac' -o -name 'Makefile.am' \) -not -path '*/.cache/*')
+          if [ -n "$encontrados" ]; then
+            echo "Archivos de implementación en el TP2:"; echo "$encontrados"; exit 1
+          fi

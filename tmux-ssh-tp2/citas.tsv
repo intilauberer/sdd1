@@ -1,0 +1,89 @@
+# cita<TAB>fragmento que la línea (o alguna del rango) tiene que contener
+# Verificado contra tmux@5a820e63b72f05c121441149c72327aeeb16dfa4 por scripts/check-citas.py
+cmd.c:123	const struct cmd_entry *cmd_table[] = {
+cmd.c:462	cmd_find(const char *name, char **cause)
+cmd.c:489	unknown command: %s
+cmd.c:506	ambiguous command: %s, could be: %s
+cmd-split-window.c:39	const struct cmd_entry cmd_new_pane_entry = {
+cmd-split-window.c:58	const struct cmd_entry cmd_split_window_entry = {
+cmd-split-window.c:195	args_to_vector(args, &sc.argc, &sc.argv);
+cmd-split-window.c:208	if ((new_wp = spawn_pane(&sc, &cause)) == NULL) {
+cmd-respawn-pane.c:83	if (spawn_pane(&sc, &cause) == NULL) {
+cmd-list-commands.c:94	entry = cmd_find(command, &cause);
+prompt.c:1568	for (cmdent = cmd_table; *cmdent != NULL; cmdent++) {
+tmux.h:1306	struct window_pane {
+tmux.h:2500	struct spawn_context {
+tmux.h:2531	#define SPAWN_FLOATOVERZOOM 0x1000
+tmux.h:4196	struct window_pane *spawn_pane(struct spawn_context *, char **);
+spawn.c:243	spawn_pane(struct spawn_context *sc, char **cause)
+spawn.c:380	cmd = options_get_string(s->options, "default-command");
+spawn.c:456	sigprocmask(SIG_BLOCK, &set, &oldset);
+spawn.c:459	if (sc->flags & SPAWN_EMPTY) {
+spawn.c:478	new_wp->pid = fdforkpty(ptm_fd, &new_wp->fd, new_wp->tty, NULL, &ws);
+spawn.c:504	#if defined(HAVE_SYSTEMD) && defined(ENABLE_CGROUPS)
+spawn.c:540	proc_clear_signals(server_proc, 1);
+spawn.c:541	closefrom(STDERR_FILENO + 1);
+spawn.c:544	environ_push(child);
+spawn.c:552	execvp(argvp[0], argvp);
+spawn.c:567	execl(new_wp->shell, argv0, "-c", tmp, (char *)NULL);
+spawn.c:590	window_pane_set_event(new_wp);
+job.c:116	pid = fdforkpty(ptm_fd, &master, tty, NULL, &ws);
+window.c:597	window_pane_send_resize(struct window_pane *wp, u_int sx, u_int sy)
+window.c:612	if (ioctl(wp->fd, TIOCSWINSZ, &ws) == -1)
+window.c:1632	window_pane_read_callback(__unused struct bufferevent *bufev, void *data)
+window.c:1660	window_pane_error_callback(__unused struct bufferevent *bufev,
+window.c:1673	window_pane_set_event(struct window_pane *wp)
+window.c:1677	wp->event = bufferevent_new(wp->fd, window_pane_read_callback,
+input.c:1028	input_parse_pane(
+server.c:468	server_child_signal(void)
+server.c:491	server_child_exited(pid_t pid, int status)
+server.c:498	if (wp->pid == pid) {
+osdep-linux.c:30	osdep_get_name(int fd, __unused char *tty)
+osdep-linux.c:41	/proc/%lld/cmdline
+compat/fdforkpty.c:30	fdforkpty(
+compat.h:444	#ifdef HAVE_SYSTEMD
+compat.h:448	systemd_move_to_new_cgroup(char **);
+configure.ac:10	AC_CANONICAL_HOST
+configure.ac:91	static linking is not supported on macOS
+configure.ac:501	# Check for systemd support.
+configure.ac:527	AM_CONDITIONAL(HAVE_SYSTEMD
+configure.ac:544	# Enable sixel support.
+configure.ac:550	AC_DEFINE(ENABLE_SIXEL)
+configure.ac:552	AM_CONDITIONAL(ENABLE_SIXEL
+configure.ac:544-552	AM_CONDITIONAL(ENABLE_SIXEL
+configure.ac:1006	# Figure out the platform.
+configure.ac:1064	PLATFORM=linux
+configure.ac:1122	AM_CONDITIONAL(IS_LINUX
+configure.ac:1055	must give --enable-jemalloc or --disable-jemalloc
+Makefile.am:235	nodist_tmux_SOURCES = osdep-@PLATFORM@.c
+Makefile.am:243	if HAVE_SYSTEMD
+Makefile.am:253	if ENABLE_SIXEL
+Makefile.am:254	dist_tmux_SOURCES += image.c image-sixel.c
+Makefile.am:253-254	dist_tmux_SOURCES += image.c image-sixel.c
+options-table.c:95	"off", "on", "failed", "key", "failed-key", NULL
+options-table.c:1211	SSH_AUTH_SOCK
+options-table.c:1304	{ .name = "automatic-rename",
+options-table.c:1669	{ .name = "remain-on-exit",
+regress/Makefile:1	TESTS!= echo *.sh
+
+layout.c:1640	layout_get_tiled_cell(struct cmdq_item *item, struct args *args,
+layout.c:1657	if (args_has(args, 'l') || args_has(args, 'p')) {
+layout.c:1674	} else if (args_has(args, 'p')) {
+layout.c:1681	invalid tiled geometry %s
+layout.c:1692	no space for a new pane
+layout.c:1698	layout_get_floating_cell(struct cmdq_item *item, struct args *args,
+cmd-find.c:1272	can't find pane: %s
+spawn.c:543	log_close();
+cmd-split-window.c:195-208	spawn_pane(&sc, &cause)
+spawn.c:550	if (new_wp->argc != 0 && new_wp->argc != 1) {
+spawn.c:480	fork failed: %s
+configure.ac:551-552	AM_CONDITIONAL(ENABLE_SIXEL
+arguments.c:333	too few arguments (need at least %u)
+arguments.c:340	too many arguments (need at most %u)
+cmd.c:206-207	&cmd_start_server_entry,
+format.c:975	parse_window_name(cmd)
+names.c:167	if (*name == '/')
+spawn.c:223	options_set_number(w->options, "automatic-rename", 0);
+options-table.c:790	.default_str = "",
+spawn.c:385-386	argc = 0;
+spawn.c:574	execl(new_wp->shell, argv0, (char *)NULL);

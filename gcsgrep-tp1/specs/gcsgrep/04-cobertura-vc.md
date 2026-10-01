@@ -149,7 +149,7 @@ Los tests corren en dos niveles:
   errores de dominio de `errors.py` (VC-18). Sin esa última parte, FR-12 podría
   estar verificado de punta a punta contra un error que el SDK nunca produce.
 
-En CI, [`.github/workflows/tests.yml`](../../.github/workflows/tests.yml) corre
+En CI, [`.github/workflows/tests.yml`](../../../.github/workflows/tests.yml) corre
 esta misma suite en Python 3.9 y 3.12 en cada push y cada PR. Eso es lo que
 convierte los ✅ de esta tabla en una afirmación chequeada por una máquina y no
 en una línea de markdown que alguien se acordó de actualizar.

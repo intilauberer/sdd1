@@ -12,7 +12,8 @@ Qué ignora: URLs absolutas (http, https, mailto), anclas puras (`#seccion`), y 
 rutas declaradas en ENLACES_EXTERNOS_CONOCIDOS — el enunciado de la tarea vive
 originalmente en el monorepo del curso y sus enlaces apuntan afuera a propósito.
 
-    python scripts/check-doc-links.py
+    python scripts/check-doc-links.py            # este TP (gcsgrep-tp1/)
+    python scripts/check-doc-links.py ../otra/   # otra carpeta del repo
 """
 
 import re
@@ -36,11 +37,12 @@ def es_externo(destino: str) -> bool:
 
 
 def main() -> int:
+    raiz = Path(sys.argv[1]).resolve() if len(sys.argv) > 1 else RAIZ
     roto = []
     revisados = 0
 
-    for md in sorted(RAIZ.rglob("*.md")):
-        if ".venv" in md.parts or ".git" in md.parts:
+    for md in sorted(raiz.rglob("*.md")):
+        if ".venv" in md.parts or ".git" in md.parts or ".cache" in md.parts:
             continue
         texto = md.read_text(encoding="utf-8")
         for destino in PATRON_ENLACE.findall(texto):
@@ -52,7 +54,7 @@ def main() -> int:
                 continue
             revisados += 1
             if not (md.parent / ruta).exists():
-                roto.append((md.relative_to(RAIZ), destino))
+                roto.append((md.relative_to(raiz), destino))
 
     if roto:
         print(f"enlaces relativos rotos: {len(roto)}\n", file=sys.stderr)
