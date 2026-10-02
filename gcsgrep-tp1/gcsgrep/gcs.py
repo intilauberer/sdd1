@@ -40,6 +40,15 @@ _ERRORES_DE_RED = (
     gcs_exceptions.ServerError,
 )
 
+#: Timeout de cada pedido HTTP, en segundos (NFR-2, ADR-0028). Es el default de
+#: la librería; pasarlo explícito lo saca de la dependencia y lo pone en el contrato.
+TIMEOUT = 60
+
+#: Respuestas `4xx` que NFR-2 cuenta como error de red desde la spec v1.7: el
+#: servicio diciendo "ahora no" (ADR-0025). El SDK entrega el `408` como un
+#: `GoogleAPICallError` genérico, sin clase propia: se mira el código.
+_CODIGOS_DE_RED = (408, 429)
+
 #: Tamaño de bloque del lector de la librería cliente (NFR-1, spec v1.6). El
 #: default de `BlobReader` es ~40 MiB y leyendo a través de él el pico medido fue
 #: de ≈120 MiB; con 1 MiB queda bajo el umbral de 20 MiB (VC-14 (c)). Costo: más
@@ -56,38 +65,69 @@ def _get_client() -> storage.Client:
     return _client
 
 
+def _hay_fuente_de_credenciales_configurada() -> bool:
+    """¿Hay una fuente de ADC configurada que se pueda mirar sin hacer red?
+
+    La variable `GOOGLE_APPLICATION_CREDENTIALS`, o el archivo que deja
+    `gcloud auth application-default login` (en `$CLOUDSDK_CONFIG`, o en
+    `~/.config/gcloud` en POSIX). ADR-0025.
+    """
+    if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        return True
+    config = os.environ.get("CLOUDSDK_CONFIG") or os.path.join(
+        os.path.expanduser("~"), ".config", "gcloud"
+    )
+    return os.path.isfile(os.path.join(config, "application_default_credentials.json"))
+
+
 def _crear_cliente() -> storage.Client:
     """Crea el cliente traduciendo la falla de ADC (FR-15 / FR-26).
 
     `DefaultCredentialsError` cubre los dos casos: no hay ninguna fuente, o la
-    fuente que `GOOGLE_APPLICATION_CREDENTIALS` nombra no sirve (archivo
-    inexistente o mal formado). Si la variable está definida, ADC encontró una
-    fuente y lo que falla es esa fuente: credenciales inválidas, no ausentes.
+    fuente configurada no sirve (archivo inexistente o mal formado). Si hay una
+    fuente configurada, lo que falla es esa fuente: credenciales inválidas, no
+    ausentes.
     """
     try:
         return _get_client()
     except auth_exceptions.DefaultCredentialsError:
-        if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+        if _hay_fuente_de_credenciales_configurada():
             raise errors.CredencialesInvalidas() from None
         raise errors.SinCredenciales() from None
+
+
+def _es_error_de_red(exc: BaseException) -> bool:
+    """La definición de "error de red" de NFR-2 (spec v1.7)."""
+    if isinstance(exc, _ERRORES_DE_RED):
+        return True
+    return isinstance(exc, gcs_exceptions.GoogleAPICallError) and exc.code in _CODIGOS_DE_RED
+
+
+def _es_otro_4xx(exc: BaseException) -> bool:
+    code = getattr(exc, "code", None) if isinstance(exc, gcs_exceptions.GoogleAPICallError) else None
+    return isinstance(code, int) and 400 <= code < 500
 
 
 def list_objects(bucket: str, prefix: str) -> Iterator[str]:
     client = _crear_cliente()
     try:
-        # `retry=None`: 0 reintentos también dentro del SDK (NFR-2, ADR-0016).
-        for blob in client.list_blobs(bucket, prefix=prefix, retry=None):
+        # 0 reintentos también dentro de la librería, y timeout explícito (NFR-2,
+        # ADR-0028).
+        for blob in client.list_blobs(bucket, prefix=prefix, retry=None, timeout=TIMEOUT):
             yield blob.name
-    except gcs_exceptions.NotFound:
-        raise errors.BucketNoEncontrado(bucket) from None
-    except gcs_exceptions.Forbidden:
-        raise errors.AccesoDenegado(bucket) from None
-    except (gcs_exceptions.Unauthorized, auth_exceptions.RefreshError):
-        # `401` al listar (FR-28) o un refresh rechazado (FR-26). Va antes que la
-        # red: `RefreshError` no es `TransportError`, pero conviene no depender de eso.
-        raise errors.CredencialesInvalidas() from None
-    except _ERRORES_DE_RED:
-        raise errors.ErrorDeRedAlListar(bucket) from None
+    except Exception as exc:  # noqa: BLE001 — se clasifica; lo que no, se re-levanta
+        # La red primero: un `429` también es un `ClientError` (ADR-0025).
+        if _es_error_de_red(exc):
+            raise errors.ErrorDeRedAlListar(bucket) from None
+        if isinstance(exc, gcs_exceptions.NotFound):
+            raise errors.BucketNoEncontrado(bucket) from None
+        if isinstance(exc, gcs_exceptions.Forbidden):
+            raise errors.AccesoDenegado(bucket) from None
+        if isinstance(exc, (gcs_exceptions.Unauthorized, auth_exceptions.RefreshError)):
+            # `401` al listar (FR-28) o un refresh rechazado (FR-26).
+            raise errors.CredencialesInvalidas() from None
+        # Otro `4xx` al listar: el genérico de ADR-0013 (ADR-0025).
+        raise
 
 
 @contextmanager
@@ -101,13 +141,22 @@ def _traducir_errores_de_objeto(bucket: str, object_name: str):
     """
     try:
         yield
-    except gcs_exceptions.NotFound:
-        raise errors.ObjetoNoEncontrado(bucket, object_name) from None
-    except (gcs_exceptions.Forbidden, gcs_exceptions.Unauthorized):
-        # Un `401` sobre un objeto, con el listado ya aceptado, es FR-6 (v1.6).
-        raise errors.ObjetoSinPermiso(bucket, object_name) from None
-    except _ERRORES_DE_RED:
-        raise errors.ErrorDeRedAlLeer(bucket, object_name) from None
+    except Exception as exc:  # noqa: BLE001 — se clasifica; lo que no, se re-levanta
+        # La tabla de ADR-0025. La red primero: un `429` también es un `ClientError`.
+        if _es_error_de_red(exc):
+            raise errors.ErrorDeRedAlLeer(bucket, object_name) from None
+        if isinstance(exc, gcs_exceptions.NotFound):
+            raise errors.ObjetoNoEncontrado(bucket, object_name) from None
+        if isinstance(
+            exc,
+            (gcs_exceptions.Forbidden, gcs_exceptions.Unauthorized, auth_exceptions.RefreshError),
+        ):
+            # Un `401` o un refresh rechazado sobre un objeto, con el listado ya
+            # aceptado, es FR-6 (v1.6 y v1.7).
+            raise errors.ObjetoSinPermiso(bucket, object_name) from None
+        if _es_otro_4xx(exc):
+            raise errors.ObjetoIlegible(bucket, object_name) from None
+        raise
 
 
 class _LectorTraducido:
@@ -147,5 +196,5 @@ def open_stream(bucket: str, object_name: str):
     client = _get_client()
     blob = client.bucket(bucket).blob(object_name)
     with _traducir_errores_de_objeto(bucket, object_name):
-        lector = blob.open("rb", chunk_size=CHUNK_SIZE, retry=None)
+        lector = blob.open("rb", chunk_size=CHUNK_SIZE, retry=None, timeout=TIMEOUT)
     return _LectorTraducido(lector, bucket, object_name)

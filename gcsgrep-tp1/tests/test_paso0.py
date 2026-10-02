@@ -334,7 +334,7 @@ def test_vc5_prefijo_sin_objetos(fake, capsys):
 # --- *Dentro* · `--help` (excepción registrada, acción 11) -----------------------------
 
 
-def test_help_imprime_la_ayuda_por_stdout_y_no_toca_gcs(fake, capsys):
+def test_vc48_help_imprime_la_ayuda_por_stdout_y_no_toca_gcs(fake, capsys):
     exit_code, out, _ = _rechazo(capsys, ["--help"])
 
     assert exit_code == 0
@@ -397,11 +397,13 @@ def test_vc30_a_patron_ausente_al_menos_50_mib_por_segundo(monkeypatch):
     assert tasa >= 50, f"NFR-4 (a): {tasa:.0f} MiB/s < 50 MiB/s"
 
 
-def test_vc30_b_todo_matchea_al_menos_50000_matches_por_segundo(monkeypatch):
+def test_vc30_b_todo_matchea_al_menos_150000_matches_por_segundo(monkeypatch):
     def medir():
         exit_code, segundos = _corrida_en_proceso(monkeypatch, "x")
         assert exit_code == 0
         return _REPETICIONES / segundos
 
-    tasa = _mejor_de_3(medir, 50_000)
-    assert tasa >= 50_000, f"NFR-4 (b): {tasa:.0f} matches/s < 50 000"
+    # Umbral de la spec v1.7 (ADR-0026): hasta la v1.6 era 50 000, que no
+    # discriminaba en el runner de CI.
+    tasa = _mejor_de_3(medir, 150_000)
+    assert tasa >= 150_000, f"NFR-4 (b): {tasa:.0f} matches/s < 150 000"

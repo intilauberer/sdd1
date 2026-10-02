@@ -1,6 +1,6 @@
 # ADR-0005 · Binarios y `.gz` se saltean, no se descomprimen
 
-- **Estado:** aceptado
+- **Estado:** superseded por [ADR-0021](./ADR-0021-avisos-de-salteo-por-objeto.md)
 - **Fecha:** 2026-09-23
 - **Pregunta del borrador:** 5 — ¿Qué se hace con los binarios y con los `.gz`?
 

@@ -78,8 +78,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 2
 
     if args.max_objetos < 0:
+        # El mismo prefijo que argparse usa para todo rechazo (FR-25, spec v1.7).
         print(
-            f"--max tiene que ser 0 o mayor, se recibió {args.max_objetos}",
+            f"gcsgrep: error: --max tiene que ser 0 o mayor, se recibió {args.max_objetos}",
             file=sys.stderr,
         )
         return 2

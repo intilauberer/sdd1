@@ -2,11 +2,11 @@
 
 | | |
 |---|---|
-| **Versión** | 1.6.1 |
-| **Estado** | habilitada con excepciones registradas para planificar la Iteración 2, tras la revisión de la v1.5 (ver *Excepciones registradas (revisión v1.5)*) |
-| **Fecha** | 2026-10-01 |
+| **Versión** | 1.7 |
+| **Estado** | habilitada; cierra las excepciones registradas de la revisión de la v1.5 (Iteración 2b, ver el *Historial*) |
+| **Fecha** | 2026-10-02 |
 | **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-19, 16 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) · [corrección de la cátedra](../../docs/correccion-catedra-iteracion-1.md), respondida acción por acción en [`docs/respuesta-correccion-catedra.md`](../../docs/respuesta-correccion-catedra.md) · [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md) (NEEDS WORK, 21 acciones) · [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) (NEEDS WORK, 2 MUST resueltos en v1.6, el resto registrado como excepción) |
-| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (19 ADRs) |
+| **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (28 ADRs) |
 | **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
 > **Cómo cambia este documento.** No es inmutable, pero tampoco se edita en el
@@ -50,10 +50,14 @@ Cloud Storage sin descargarlos primero, con la misma experiencia mental que
 ### Dentro
 
 - Un único comando: `gcsgrep [-i] [-n] [--max N] <patrón> gs://bucket/prefijo`.
-  `--ignore-case` y `--line-number` son formas largas equivalentes de `-i` y `-n`.
-  `-h`/`--help` imprime la ayuda por stdout y sale con código `0` sin tocar GCS:
-  es la única invocación cuyo stdout no son líneas de match (NFR-3). Cualquier
-  otra invocación que no respete esta forma se rechaza (FR-25).
+  Se aceptan exactamente: `-i`, `-n`, `--ignore-case`, `--line-number` (formas
+  largas equivalentes de `-i` y `-n`), `--max N` y `--max=N`, `-h` y `--help`, flags
+  cortos agrupados (`-in`) y `--` para terminar las opciones. Las abreviaturas de
+  opciones largas (`--ig`) **se rechazan**. Un patrón que empieza con `-` se pasa
+  después de `--` (`gcsgrep -- -x gs://b/p/`). `-h`/`--help` imprime la ayuda por
+  stdout y sale con código `0` sin tocar GCS (FR-30): es la única invocación cuyo
+  stdout no son líneas de match (NFR-3). Cualquier otra invocación que no respete
+  esta forma se rechaza (FR-25).
 - Búsqueda literal (substring) sobre el contenido de objetos de texto (FR-1).
 - Autenticación por Application Default Credentials (BR-1, FR-15, FR-26, FR-28).
 - Guardrail de costo por cantidad de objetos (BR-2).
@@ -99,7 +103,7 @@ el ADR que se cita:
 |---|---|
 | **Persona usuaria** | Ejecuta `gcsgrep` en una shell y lee la salida en pantalla |
 | **Script** | Ejecuta `gcsgrep` y decide en base al exit code, no al texto de salida; puede cortar la salida antes del final (`\| head`) |
-| **GCS** | Fuente de los objetos; puede fallar por **permisos**, **red**, o **no existir** |
+| **GCS** | Fuente de los objetos; puede fallar por **permisos**, **red**, **no existir**, u **otra respuesta de error** |
 | **Entorno de credenciales (ADC)** | Resuelve la identidad de quien invoca; puede **no tener credenciales** o tener **credenciales inutilizables** |
 
 Los modos de falla en negrita son obligaciones: cada uno tiene que aterrizar en
@@ -118,6 +122,15 @@ requerimiento en la v1.4, al partir FR-6
 | Google Cloud Storage | Listar los objetos de un prefijo | `storage.objects.list` sobre el bucket |
 | Google Cloud Storage | Leer el contenido de un objeto | `storage.objects.get` sobre el objeto |
 | Application Default Credentials | Resolver la identidad de quien invoca | — (no otorga permisos; solo identifica) |
+
+**Runtime y librería (v1.7, [ADR-0027](../../docs/adr/ADR-0027-piso-de-python-y-plataforma.md)):**
+Python **3.10 o más nuevo**, sobre una plataforma **POSIX** (Linux, macOS);
+`google-cloud-storage` **2.14 o más nuevo**. Cada objeto se lee a través del lector
+de la librería (`blob.open`) con bloques de **1 MiB**
+([ADR-0020](../../docs/adr/ADR-0020-tamano-de-bloque-del-lector.md), NFR-1), sin
+reintentos de la librería y con un timeout de **60 s** por pedido HTTP
+([ADR-0028](../../docs/adr/ADR-0028-sin-reintentos-tampoco-en-la-libreria.md),
+NFR-2).
 
 El rol predefinido más chico que incluye los dos permisos es
 `roles/storage.objectViewer`. **`gcsgrep` no necesita ningún otro permiso** y no
@@ -155,15 +168,12 @@ que contiene el patrón, identificando el objeto de origen, y sale con código `
 (por ejemplo `"Timeout"` para el patrón `"timeout"`),
 **Cuando** la persona ejecuta `gcsgrep -i "<patrón>" gs://bucket/prefijo`,
 **Entonces** el sistema reporta esa línea como match. La comparación se hace
-después de pasar a minúsculas el patrón y la línea **carácter por carácter**,
-con la tabla de minúsculas de Unicode (`Á` → `á`, `Ñ` → `ñ`), sin plegado
-completo: un carácter nunca se convierte en dos (`ß` no equivale a `ss`). La
-línea se imprime con sus mayúsculas originales.
-
-*Por qué este plegado (v1.5):* es lo que hace `str.lower()` de Python, que es lo
-que el código de la Iteración 1 ya usa. Un plegado solo ASCII haría que `-i "á"`
-no encuentre `Árbol` en un log en castellano; el plegado completo (`casefold`)
-cambia la longitud de las cadenas y no agrega nada para el caso de uso declarado.
+después de pasar el patrón y la línea a minúsculas con la conversión completa de
+Unicode, **incluidas sus reglas contextuales** —la de `str.lower()` de Python—:
+`Á` → `á`, `Ñ` → `ñ`, `İ` → `i̇`, y la `Σ` al final de una palabra → `ς`. No es un
+plegado (`casefold`): `ß` no equivale a `ss`. La línea se imprime con sus
+mayúsculas originales. Fundamento:
+[ADR-0023](../../docs/adr/ADR-0023-plegado-de-mayusculas.md).
 
 > **VC-2** — Con un objeto que contiene únicamente la línea `"Timeout error"`,
 > `gcsgrep "timeout" ...` (sin `-i`) sale con código `1` (sin matches) y
@@ -173,7 +183,10 @@ cambia la longitud de las cadenas y no agrega nada para el caso de uso declarado
 > **VC-43** — Con `gs://b/p/a.txt` cuya única línea es `Árbol caído`,
 > `gcsgrep -i "árbol" gs://b/p/` sale con código `0`, stdout es exactamente
 > `gs://b/p/a.txt:Árbol caído` y stderr queda vacío; `gcsgrep "árbol" gs://b/p/`
-> (sin `-i`) sale con código `1` y stdout vacío.
+> (sin `-i`) sale con código `1` y stdout vacío. Regla contextual (v1.7): con
+> `gs://b/p/g.txt` cuya única línea es `ΟΔΟΣ`, `gcsgrep -i "σ" gs://b/p/g.txt` sale
+> con código `1` (la `Σ` final pasa a `ς`), y `gcsgrep -i "ς" gs://b/p/g.txt` sale
+> con código `0`.
 
 ### FR-3 · Formato de salida con número de línea (`-n`)
 
@@ -208,20 +221,28 @@ objeto sin su terminador de línea (FR-22), y no contiene el número de línea.
 **Entonces** stdout queda vacío y el sistema sale con código `1`.
 
 > **VC-5** — Sobre un prefijo con un único objeto de texto que no contiene el
-> patrón buscado, `gcsgrep` sale con código `1` y no imprime nada por stdout.
+> patrón buscado, `gcsgrep` sale con código `1` y no imprime nada por stdout. Con
+> un prefijo sin ningún objeto (listado vacío), la misma corrida sale con código
+> `1`, stdout vacío y stderr vacío (v1.7).
 
 ### FR-6 · Un objeto sin permiso de lectura no aborta la corrida
 
 **Dado** un prefijo con varios objetos, donde GCS responde **permiso denegado**
-al abrir uno de ellos (`403`, o `401` sobre un objeto: ver abajo),
+sobre uno de ellos (`403`, o `401` sobre un objeto: ver abajo) al abrirlo o durante
+la lectura,
 **Cuando** la persona ejecuta `gcsgrep`,
-**Entonces** el sistema escribe por stderr una línea que contiene
-`sin permiso para leer` y el URI `gs://<bucket>/<objeto>` de ese objeto, sigue
-procesando el resto de los objetos, y el fallo se refleja en el exit code según
-BR-3.
+**Entonces** los matches de ese objeto que ya se emitieron quedan en stdout, el
+sistema escribe por stderr una línea que contiene `sin permiso para leer` y el URI
+`gs://<bucket>/<objeto>` de ese objeto, sigue procesando el resto de los objetos, y
+el fallo se refleja en el exit code según BR-3.
+
+**Al abrir** un objeto (definición única, v1.7; FR-13, FR-21 y FR-29 la usan) es
+antes de que entregue su primer byte. Con la librería cliente, la apertura es
+perezosa y el `403`/`404` llega en la primera lectura: eso **es** "al abrir".
 
 > **VC-6** — Con `gs://b/p/a.txt` (sin match), `gs://b/p/b.txt` (GCS responde
-> permiso denegado al abrirlo) y `gs://b/p/c.txt` (contiene `x hit`),
+> permiso denegado al abrirlo, sea en la apertura o en su primera lectura) y
+> `gs://b/p/c.txt` (contiene `x hit`),
 > `gcsgrep "hit" gs://b/p/` imprime por stdout exactamente `gs://b/p/c.txt:x hit`,
 > stderr contiene una línea con `sin permiso para leer` y `gs://b/p/b.txt`, stderr
 > no contiene `Traceback`, y el exit code es `2`.
@@ -230,12 +251,17 @@ BR-3.
 abrir o leer un objeto, después de haber leído otros, se trata como este FR (línea
 con `sin permiso para leer` + URI, sigue, BR-3), no como FR-28: la corrida ya
 demostró que las credenciales sirven, y abortar tiraría los objetos que faltan.
+**Desde la v1.7, lo mismo vale para un *refresh* de token rechazado sobre un
+objeto**, que es la forma en que llega ese `401` cuando el token vence entre dos
+objetos ([ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md)).
 
-*Los tres caminos de un objeto que no se puede leer (v1.5):* GCS responde
-**permiso denegado** al abrirlo (FR-6), **no encontrado** al abrirlo (FR-21), o la
-apertura o la lectura fallan por un **error de red** (FR-13, con la definición de
-NFR-2). Cada uno tiene su Dado y su mensaje; ninguno aborta la corrida, y los tres
-fuerzan exit `2` por BR-3. Hasta la v1.3 los tres eran "ilegible" en un solo FR-6;
+*Los cuatro caminos de un objeto que no se puede leer (v1.5; el cuarto, v1.7):* GCS
+responde **permiso denegado** (FR-6), **no encontrado** (FR-21), la apertura o la
+lectura fallan por un **error de red** (FR-13, con la definición de NFR-2), o GCS
+responde **otro `4xx`** (FR-29). Los cuatro valen al abrir o durante la lectura;
+cada uno tiene su Dado y su mensaje; ninguno aborta la corrida, y los cuatro fuerzan
+exit `2` por BR-3. La tabla completa está en
+[ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md). Hasta la v1.3 los tres eran "ilegible" en un solo FR-6;
 al partirlo en la v1.4 el segundo y la mitad "al abrir" del tercero quedaron sin
 requerimiento ([H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md)).
 
@@ -253,15 +279,26 @@ prefijo como cadena vacía.
 
 ### FR-8 · Rechazo de ubicaciones inválidas
 
-**Dado** un argumento de ubicación que no empieza con `gs://`,
+**Dado** un argumento de ubicación que no es una ubicación
+`gs://<bucket>[/<prefijo>]` válida —no empieza con `gs://` (`logs/`, `s3://b/`), o
+empieza con `gs://` pero no tiene nombre de bucket (`gs://`, `gs:///p`)—,
 **Cuando** la persona ejecuta `gcsgrep`,
 **Entonces** el sistema rechaza la invocación con un mensaje por stderr que
-contiene el esquema esperado, `gs://`, y sale con código `2`, sin intentar
+contiene la forma esperada, `gs://`, y sale con código `2`, sin intentar
 ninguna llamada a GCS.
+
+*Por qué `gs://` sin bucket está acá y no en FR-25 (v1.7):* hasta la v1.6 los dos FRs
+se repartían ese caso, con dos mensajes posibles. Es una ubicación inválida, igual
+que `logs/`, y lleva el mismo mensaje.
 
 > **VC-8** — `gcsgrep "patrón" logs/` (sin esquema) y `gcsgrep "patrón" s3://b/`
 > (esquema no soportado) salen ambos con código `2`, stdout vacío, un mensaje por
 > stderr que contiene `gs://`, y 0 llamadas de listado.
+>
+> **VC-39** (reubicado desde FR-25 en la v1.7) — `gs://` sin bucket:
+> `gcsgrep "x" gs://` y `gcsgrep "x" gs:///p` salen ambos con código `2`, stdout
+> vacío, stderr contiene `gs://` y no contiene `Traceback`, y 0 llamadas de
+> listado.
 
 ### FR-9 · Salteo de objetos binarios
 
@@ -282,15 +319,16 @@ byte `0x00` incluido. Es la única forma en que un `\x00` llega a stdout, y no
 contradice NFR-3: es una línea de match
 ([ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md)).
 
-*Por qué una línea por objeto y no un resumen (v1.5):*
-[ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md) dice que los salteados "se
-reportan en un resumen final por stderr". Esta spec se **aparta** de ese detalle a
-propósito: la línea en el momento del salteo es visible mientras la corrida avanza
-(coherente con FR-11), un script la puede filtrar con `grep` sin esperar al final,
-y un resumen después de un corte de stdout (FR-23) nunca se escribiría. La decisión
-de ADR-0005 —saltear, no descomprimir, no es error— no cambia; el formato del aviso
-es el de esta spec. El desvío queda registrado en
-[`docs/adr/README.md`](../../docs/adr/README.md) sin editar el ADR.
+*Por qué una línea por objeto y no un resumen:* decidido en
+[ADR-0021](../../docs/adr/ADR-0021-avisos-de-salteo-por-objeto.md), que desde la
+v1.7 supersede a [ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md) (hasta la
+v1.6 era un desvío anotado en `docs/adr/README.md`).
+
+*Lectura cortada dentro de la ventana (v1.7):* si leer el objeto falla antes de
+completar los 8192 bytes y no se vio ningún `\x00`, las líneas completas ya leídas
+se buscan como texto y después se informa el fallo (FR-6, FR-13, FR-21 o FR-29); si
+ya se vio un `\x00`, el objeto se informa como salteado (binario) y no como error
+([ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md)).
 
 > **VC-9** — Con `gs://b/p/blob.bin` (bytes arbitrarios con un `\x00` en el offset
 > `10`, y la secuencia `timeout` después) y `gs://b/p/a.txt` (contiene
@@ -387,8 +425,8 @@ permiso" manda a revisar IAM.
 
 ### FR-13 · Un objeto que no se puede leer entero por un error de red no aborta la corrida
 
-**Dado** un prefijo con varios objetos, donde uno de ellos falla por un **error de
-red** (definido en NFR-2) al abrirlo o durante la lectura,
+**Dado** un prefijo con varios objetos, donde uno de ellos no se puede leer entero
+por un **error de red** (definido en NFR-2),
 **Cuando** la persona ejecuta `gcsgrep`,
 **Entonces** los matches de ese objeto que ya se emitieron (ninguno, si falló al
 abrirlo) quedan en stdout, el sistema escribe por stderr una línea que contiene
@@ -411,6 +449,9 @@ al abrir, que no tenía requerimiento, se cubre con VC-33
 > contiene una línea con `error de red al leer` y `gs://b/p/a.txt`, no contiene
 > `Traceback`, y el exit code es `2`.
 >
+*Los dos momentos (v1.7):* al abrirlo (definición en FR-6) lo ejercita VC-33, y
+durante la lectura VC-21.
+
 > **VC-33** — Red caída **al abrir**: con `gs://b/p/a.txt` (abrirlo levanta un
 > error de red antes de entregar ningún byte) y `gs://b/p/b.txt` (contiene
 > `hit dos`), `gcsgrep "hit" gs://b/p/` imprime por stdout exactamente
@@ -468,9 +509,12 @@ a él la falla de ADC, es alcance de la Iteración 2.
 ### FR-26 · Credenciales que no producen un token
 
 **Dado** un entorno donde Application Default Credentials encuentra una fuente de
-credenciales pero **no puede obtener de ella un token** (por ejemplo,
-`GOOGLE_APPLICATION_CREDENTIALS` apuntando a un archivo inexistente o mal formado, o
-un *refresh* rechazado por un token vencido o revocado),
+credenciales configurada —la variable `GOOGLE_APPLICATION_CREDENTIALS` está
+definida, o existe el archivo de `gcloud auth application-default login`— pero **no
+puede obtener de ella un token** (por ejemplo, la variable apunta a un archivo
+inexistente o mal formado, el archivo de `gcloud` está mal formado, o un *refresh*
+al listar es rechazado por un token vencido o revocado)
+([ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md)),
 **Cuando** la persona ejecuta `gcsgrep` con una ubicación válida,
 **Entonces** el sistema escribe por stderr un mensaje que contiene
 `credenciales inválidas o vencidas` y el comando para renovarlas,
@@ -562,7 +606,9 @@ encontrar la primera línea. Es lo mismo que hace la decodificación `utf-8-sig`
 > **VC-44** — Con `gs://b/p/a.txt` cuyos bytes son `EF BB BF` seguidos de
 > `timeout\n`, `gcsgrep -n "timeout" gs://b/p/` sale con código `0`, stdout es
 > exactamente `gs://b/p/a.txt:1:timeout` (sin ningún byte antes de `timeout`), y
-> stderr queda vacío.
+> stderr queda vacío. Con bytes `uno\n` + `EF BB BF` + `timeout\n` (v1.7), la misma
+> corrida imprime exactamente `gs://b/p/a.txt:2:` + `U+FEFF` + `timeout`: fuera del
+> principio, la secuencia es un carácter más.
 
 ### FR-18 · Prefijo sin `/` final
 
@@ -606,11 +652,12 @@ número de línea correcto si se pidió `-n`.
 ### FR-21 · Un objeto que desapareció entre el listado y la lectura no aborta la corrida
 
 **Dado** un prefijo con varios objetos, donde uno de ellos aparece en el listado y
-GCS responde **no encontrado** (`404`) al abrirlo,
+GCS responde **no encontrado** (`404`) al abrirlo o durante la lectura,
 **Cuando** la persona ejecuta `gcsgrep`,
-**Entonces** el sistema escribe por stderr una línea que contiene `ya no existe` y
-el URI `gs://<bucket>/<objeto>` de ese objeto, sigue procesando el resto de los
-objetos, y el fallo se refleja en el exit code según BR-3.
+**Entonces** los matches de ese objeto que ya se emitieron quedan en stdout, el
+sistema escribe por stderr una línea que contiene `ya no existe` y el URI
+`gs://<bucket>/<objeto>` de ese objeto, sigue procesando el resto de los objetos, y
+el fallo se refleja en el exit code según BR-3.
 
 *Origen (v1.5):* es la ventana de
 [ADR-0010](../../docs/adr/ADR-0010-objeto-modificado.md) manifestándose como un
@@ -622,11 +669,35 @@ de los dos ADRs queda anotada en [`docs/adr/README.md`](../../docs/adr/README.md
 Un `404` no es un error de red (NFR-2): la red funcionó y la respuesta fue explícita.
 
 > **VC-32** — Con `gs://b/p/a.txt` (contiene `hit a`), `gs://b/p/b.txt` (aparece
-> en el listado y GCS responde no encontrado al abrirlo) y `gs://b/p/c.txt`
+> en el listado y GCS responde no encontrado al abrirlo, sea en la apertura o en su
+> primera lectura) y `gs://b/p/c.txt`
 > (contiene `hit c`), `gcsgrep "hit" gs://b/p/` imprime por stdout exactamente
 > `gs://b/p/a.txt:hit a` seguido de `gs://b/p/c.txt:hit c`; stderr contiene una
 > línea con `ya no existe` y `gs://b/p/b.txt`, no contiene `Traceback`; y el exit
 > code es `2`.
+
+### FR-29 · Otra respuesta de error al leer un objeto
+
+**Dado** un prefijo con varios objetos, donde GCS responde a uno de ellos, al
+abrirlo o durante la lectura, con un `4xx` que no es `401`, `403`, `404`, `408` ni
+`429` (los que ya clasifican FR-6, FR-21 y NFR-2),
+**Cuando** la persona ejecuta `gcsgrep`,
+**Entonces** los matches de ese objeto que ya se emitieron quedan en stdout, el
+sistema escribe por stderr una línea que contiene `no se pudo leer` y el URI
+`gs://<bucket>/<objeto>`, sigue procesando el resto de los objetos, y el fallo se
+refleja en el exit code según BR-3.
+
+*Origen (v1.7):* hasta la v1.6, un `4xx` que no era permiso ni no encontrado caía en
+el caso genérico de NFR-3 y abortaba la corrida
+([ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md); revisión de la
+v1.5, Warning 3.3 y acción 3).
+
+> **VC-50** — Con `gs://b/p/a.txt` (contiene `hit a`), `gs://b/p/b.txt` (GCS
+> responde `400` en su primera lectura) y `gs://b/p/c.txt` (contiene `hit c`),
+> `gcsgrep "hit" gs://b/p/` imprime por stdout exactamente `gs://b/p/a.txt:hit a`
+> seguido de `gs://b/p/c.txt:hit c`; stderr contiene una línea con
+> `no se pudo leer` y `gs://b/p/b.txt`, no contiene `Traceback`; y el exit code es
+> `2`.
 
 ### FR-22 · Terminador de línea
 
@@ -638,13 +709,16 @@ terminador `\r\n` cuenta entero como terminador). Un `\r` en cualquier otra
 posición es parte de la línea: no la corta, no avanza el número de línea de `-n`, y
 sale tal cual en `<texto>`.
 
-*Por qué (v1.5):* hasta la v1.4 "terminador de línea" no estaba definido, y el
+**Qué es una línea (v1.7):** el contenido se parte en líneas en cada `\n`. Si el
+objeto termina en `\n`, no hay una línea vacía después; dos `\n` seguidos
+delimitan una línea vacía, que cuenta para `-n`; un objeto cuyo único byte es `\n`
+tiene una línea, vacía. Fundamento de esta definición, del terminador y del BOM
+(FR-27): [ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md).
+
+*Origen (v1.5):* hasta la v1.4 "terminador de línea" no estaba definido, y el
 código de la Iteración 1 heredaba los *universal newlines* del modo texto de Python
-contra GCS (un `\r` suelto cortaba la línea y corría los números de `-n`), pero no
-contra el doble de prueba (el `\r` de `\r\n` quedaba en `<texto>`). Nadie había
-tomado esa decisión. La de acá es la de `grep`, con una excepción deliberada: quitar
-el `\r` de `\r\n` hace que un log escrito en Windows dé la misma salida que el mismo
-log escrito en Linux.
+contra GCS, pero no contra el doble de prueba. Nadie había tomado esa decisión; desde
+la v1.7 está en [ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md).
 
 > **VC-34** — Con `gs://b/p/a.txt` cuyos bytes son `uno\r\ndos\rtres\n`:
 > `gcsgrep -n "tres" gs://b/p/` sale con código `0` y stdout es exactamente los
@@ -658,10 +732,14 @@ log escrito en Linux.
 que la corrida termine (por ejemplo, `gcsgrep … | head -1`),
 **Cuando** `gcsgrep` intenta escribir el siguiente match,
 **Entonces** el proceso termina por la señal `SIGPIPE`, como `grep`: no escribe
-**nada** por stderr, no lee más objetos, y su estado de terminación es el de la
+por stderr **nada a causa del corte** (lo que FR-6, FR-9, FR-10, FR-13, FR-21 o
+FR-29 ya hayan escrito antes queda), no lee más objetos, y su estado de terminación es el de la
 señal (en una shell, `141` = 128 + 13), no uno de los exit codes de
 [ADR-0008](../../docs/adr/ADR-0008-exit-codes.md). Vale aunque antes haya habido
 errores de lectura: quien necesita el exit code de BR-3 no corta la salida.
+
+*Plataforma (v1.7):* FR-23 se promete sobre POSIX, donde existe `SIGPIPE`
+([ADR-0027](../../docs/adr/ADR-0027-piso-de-python-y-plataforma.md)).
 
 *Origen (v1.5):* [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md) dice que
 `gcsgrep … | head -5` "puede cortar temprano", como `grep`, pero ningún requerimiento
@@ -670,11 +748,13 @@ un mensaje que culpa a GCS (`error inesperado al acceder a gs://b: BrokenPipeErr
 La decisión y sus alternativas están en
 [ADR-0019](../../docs/adr/ADR-0019-corte-de-stdout-sigpipe.md).
 
-> **VC-35** — Con un objeto `gs://b/p/a.txt` de 200 000 líneas, todas iguales a
-> `hit` (200 000 matches), la pipeline `gcsgrep "hit" gs://b/p/ | head -1` imprime
-> exactamente `gs://b/p/a.txt:hit` (una sola línea); el stderr de `gcsgrep` queda
-> **vacío**; y el estado de `gcsgrep` en la pipeline (`${PIPESTATUS[0]}` en bash) es
-> `141`.
+> **VC-35** — Corriendo el proceso `gcsgrep` real (un intérprete nuevo, en una
+> pipeline de bash) con el doble de prueba inyectado en lugar de `gcs`: con
+> `gs://b/p/a.txt` de 200 000 líneas, todas iguales a `hit` (200 000 matches), y
+> `gs://b/p/b.txt` (contiene `hit`), la pipeline `gcsgrep "hit" gs://b/p/ | head -1`
+> imprime exactamente `gs://b/p/a.txt:hit` (una sola línea); el stderr de `gcsgrep`
+> queda **vacío**; `b.txt` se abre **0** veces; y el estado de `gcsgrep` en la
+> pipeline (`${PIPESTATUS[0]}` en bash) es `141`.
 
 ### FR-24 · Patrón vacío
 
@@ -685,26 +765,28 @@ cadena vacía es substring de cualquier línea, incluida una línea vacía), igu
 `grep ""`: se imprimen todas con el formato de FR-3/FR-4, y el exit code sale de
 BR-3. No es un error de uso.
 
-*Por qué no es un error (v1.5):* es lo que hace `grep`, que es la experiencia que el
-Propósito promete, y es la forma más corta de volcar un prefijo por stdout con el
-nombre de cada objeto. El guardrail de BR-2 sigue aplicando igual.
+*Por qué no es un error:* [ADR-0024](../../docs/adr/ADR-0024-patron-vacio.md). El
+guardrail de BR-2 sigue aplicando igual.
 
-> **VC-36** — Con `gs://b/p/a.txt` (líneas `uno` y `dos`) y `gs://b/p/vacio.txt`
+> **VC-36** — Con `gs://b/p/a.txt` (bytes `uno\ndos\n`) y `gs://b/p/vacio.txt`
 > (0 bytes), `gcsgrep "" gs://b/p/` sale con código `0`, stdout es exactamente
-> `gs://b/p/a.txt:uno` seguido de `gs://b/p/a.txt:dos`, y stderr queda vacío.
+> `gs://b/p/a.txt:uno` seguido de `gs://b/p/a.txt:dos`, y stderr queda vacío. Con
+> `gs://b/p/a.txt` de bytes `uno\n\ndos\n` (v1.7), `gcsgrep -n "" gs://b/p/a.txt`
+> imprime exactamente tres líneas: `gs://b/p/a.txt:1:uno`, `gs://b/p/a.txt:2:` y
+> `gs://b/p/a.txt:3:dos`.
 
 ### FR-25 · Invocación mal formada
 
-Una invocación es **mal formada** si tiene al menos uno de estos defectos: una
-opción que no está en *Dentro* (por ejemplo `-l`, `-v`, `-r`); `--max` con un valor
-que no es un entero mayor o igual a `0`; una ubicación que empieza con `gs://` pero
-no tiene nombre de bucket (`gs://`, `gs:///p`); falta el patrón o la ubicación, o
-sobra un argumento.
-
-**Dado** una invocación mal formada,
+**Dado** una invocación que no respeta la forma de *Dentro* —por ejemplo: una
+opción que no está en *Dentro* (`-l`, `-v`, `-r`) o una abreviatura de una opción
+larga (`--ig`); `--max` con un valor que no es un entero mayor o igual a `0`; falta
+el patrón o la ubicación, o sobra un argumento—,
 **Cuando** la persona ejecuta `gcsgrep`,
 **Entonces** el sistema la rechaza antes de cualquier llamada a GCS: stdout queda
-vacío, stderr trae un mensaje (sin traceback, NFR-3), y sale con código `2`.
+vacío, stderr trae un mensaje que contiene `gcsgrep: error:` (sin traceback,
+NFR-3), y sale con código `2`.
+
+Una ubicación inválida, incluida `gs://` sin bucket, es FR-8 (v1.7).
 
 *Origen (v1.5):* [ADR-0004](../../docs/adr/ADR-0004-flags-v1.md) descartó "aceptar
 flags no soportados e ignorarlos" porque falla en silencio, o sea que decidió
@@ -712,20 +794,57 @@ rechazarlos, pero ningún requerimiento lo decía. Los cuatro casos ya salen con
 en el código de la Iteración 1; esto los escribe como contrato. Una ubicación sin
 `gs://` es FR-8, que además fija el texto del mensaje.
 
+*Dado como predicado único y texto fijo (v1.7):* hasta la v1.6 el Dado enumeraba
+cuatro defectos como si fueran la definición; ahora la definición es *Dentro*, y los
+defectos son ejemplos que los VCs cubren uno por uno. El texto `gcsgrep: error:` es
+el prefijo que `argparse` usa para todo rechazo, y el de `--max` negativo se alineó
+con él.
+
 > **VC-37** — Flag no soportado: `gcsgrep -l "x" gs://b/p/` sale con código `2`,
-> stdout vacío, stderr no vacío y sin `Traceback`, y 0 llamadas de listado.
+> stdout vacío, stderr contiene `gcsgrep: error:` y no contiene `Traceback`, y 0
+> llamadas de listado.
 >
 > **VC-38** — `--max` inválido: `gcsgrep --max -1 "x" gs://b/p/` y
 > `gcsgrep --max abc "x" gs://b/p/` salen ambos con código `2`, stdout vacío,
-> stderr no vacío y sin `Traceback`, y 0 llamadas de listado.
->
-> **VC-39** — `gs://` sin bucket: `gcsgrep "x" gs://` y `gcsgrep "x" gs:///p` salen
-> ambos con código `2`, stdout vacío, stderr no vacío y sin `Traceback`, y 0
-> llamadas de listado.
+> stderr contiene `gcsgrep: error:` y no contiene `Traceback`, y 0 llamadas de
+> listado.
 >
 > **VC-40** — Faltan argumentos: `gcsgrep` (sin argumentos) y `gcsgrep "x"` (sin
-> ubicación) salen ambos con código `2`, stdout vacío, stderr no vacío y sin
-> `Traceback`, y 0 llamadas de listado.
+> ubicación) salen ambos con código `2`, stdout vacío, stderr contiene
+> `gcsgrep: error:` y no contiene `Traceback`, y 0 llamadas de listado.
+>
+> **VC-46** (v1.7) — Abreviaturas: `gcsgrep --ig "x" gs://b/p/`,
+> `gcsgrep --line "x" gs://b/p/` y `gcsgrep --ma=3 "x" gs://b/p/` salen con código
+> `2`, stdout vacío, stderr contiene `gcsgrep: error:`, y 0 llamadas de listado.
+>
+> **VC-47** (v1.7) — Lo que *Dentro* sí acepta: con `gs://b/p/a.txt` cuyas líneas son
+> `a -x b` y `Hit`, `gcsgrep -- -x gs://b/p/` sale con `0` y stdout es exactamente
+> `gs://b/p/a.txt:a -x b`; `gcsgrep -in hit gs://b/p/` y
+> `gcsgrep --max=1 -i -n hit gs://b/p/` salen con `0` y stdout es exactamente
+> `gs://b/p/a.txt:2:Hit`.
+
+*VC-39 se movió a FR-8 en la v1.7*, con su número.
+
+### FR-30 · Ayuda
+
+**Dado** la invocación `gcsgrep -h` o `gcsgrep --help`,
+**Cuando** la persona la ejecuta,
+**Entonces** el sistema imprime por stdout una ayuda que contiene `gcsgrep` y las
+opciones de *Dentro* (`--ignore-case`, `--line-number`, `--max`, `--help`), stderr
+queda vacío, sale con código `0`, y no hace ninguna llamada a GCS. Las formas largas
+`--ignore-case` y `--line-number` dan exactamente la misma salida que `-i` y `-n`.
+
+*Origen (v1.7):* la v1.5 puso `--help` y las formas largas en *Dentro* sin FR ni VC
+(revisión de la v1.5, Warning 1.5 y acción 11).
+
+> **VC-48** — `gcsgrep --help` y `gcsgrep -h` salen con código `0`, stdout contiene
+> `gcsgrep`, `--ignore-case`, `--line-number`, `--max` y `--help`, stderr queda
+> vacío, y 0 llamadas de listado.
+>
+> **VC-49** — Sobre el objeto de VC-43, `gcsgrep --ignore-case "árbol" gs://b/p/` da
+> el mismo stdout, stderr y exit code que `gcsgrep -i "árbol" gs://b/p/`; sobre el
+> de VC-3, `gcsgrep --line-number "timeout" gs://b/p/` da los mismos que
+> `gcsgrep -n "timeout" gs://b/p/`.
 
 ---
 
@@ -776,7 +895,8 @@ no un valor por defecto.
 
 ### BR-3 · Precedencia de exit codes ante fallos parciales
 
-Si ocurrió al menos un error de lectura sobre algún objeto (FR-6, FR-13, FR-21),
+Si ocurrió al menos un error de lectura sobre algún objeto (FR-6, FR-13, FR-21,
+FR-29),
 el exit code final es **`2`**, sin importar si hubo matches en los objetos que sí
 se pudieron leer. Sin errores de lectura: `0` si hubo matches, `1` si no. Los
 objetos salteados (FR-9, FR-10) y los de 0 bytes (FR-19) no son errores de lectura
@@ -826,7 +946,8 @@ encontrados** (ver FR-11 y
 [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md)). **El lector de GCS se
 abre con `chunk_size` ≤ 1 MiB** (v1.6): el bloque por defecto del lector de la
 librería cliente es de ~40 MiB, y leyendo a través de él el pico medido por la
-revisión de la v1.5 fue de ≈120 MiB.
+revisión de la v1.5 fue de ≈120 MiB. Fundamento y costo (más pedidos por objeto):
+[ADR-0020](../../docs/adr/ADR-0020-tamano-de-bloque-del-lector.md).
 
 > **VC-14** — Sobre un objeto simulado de **200 MiB** de contenido de texto, el
 > pico de memoria adicional asignada por el intérprete mientras se lee ese objeto
@@ -847,14 +968,20 @@ revisión de la v1.5 fue de ≈120 MiB.
 
 **Error de red** (definición única; FR-13 y este NFR la referencian): una operación
 sobre GCS **no obtiene una respuesta HTTP completa** (la conexión se rechaza o se
-corta, o vence un timeout) **o recibe una respuesta `5xx`**. Una respuesta `4xx`
-—en particular `403` (FR-6, FR-14) y `404` (FR-12, FR-21)— **no** es un error de
-red: la red funcionó y la respuesta fue explícita.
+corta, o vence el timeout de 60 s) **o recibe una respuesta `408`, `429` o `5xx`**
+(v1.7: `408` y `429` son el servicio diciendo "ahora no", con el mismo remedio que un
+`503`). Cualquier otro `4xx` —en particular `401` (FR-6, FR-28), `403` (FR-6,
+FR-14), `404` (FR-12, FR-21) y el resto (FR-29)— **no** es un error de red: la red
+funcionó y la respuesta fue explícita.
 
-**Política:** **0 reintentos automáticos**
-([ADR-0016](../../docs/adr/ADR-0016-sin-reintentos.md)). Ante un error de red,
-cada operación sobre GCS se intenta **una sola vez**, y el fallo se reporta según
-NFR-3 (sin traceback). Hay dos condiciones, cada una con su VC:
+**Política:** **0 reintentos automáticos, ni de `gcsgrep` ni de la librería
+cliente** (sus reintentos por defecto, de hasta 120 s, se desactivan), y **un
+timeout de 60 s por pedido HTTP**
+([ADR-0028](../../docs/adr/ADR-0028-sin-reintentos-tampoco-en-la-libreria.md), que
+desde la v1.7 supersede a [ADR-0016](../../docs/adr/ADR-0016-sin-reintentos.md)).
+Ante un error de red, cada operación sobre GCS se intenta **una sola vez**, y el
+fallo se reporta según NFR-3 (sin traceback). Hay dos condiciones, cada una con su
+VC:
 
 - **(a) Al listar:** la corrida aborta con código `2` y un mensaje por stderr que
   contiene `error de red` y el URI del bucket.
@@ -863,7 +990,10 @@ NFR-3 (sin traceback). Hay dos condiciones, cada una con su VC:
 
 > **VC-15** — Simulando que el listado inicial falla por un error de red, `gcsgrep`
 > sale con código `2`, stdout vacío, stderr contiene `error de red` y
-> `gs://<bucket>`, y el listado se invocó exactamente **1** vez.
+> `gs://<bucket>`, y el listado se invocó exactamente **1** vez. En el borde con la
+> librería (v1.7), `gcs` pide el listado y la apertura de cada objeto con
+> `retry=None` y `timeout=60`, y traduce a error de red una respuesta `408`, `429` o
+> `5xx` y una conexión cortada o vencida.
 >
 > **VC-29** — En el escenario de VC-21, el objeto `gs://b/p/a.txt` se abrió
 > exactamente **1** vez (0 reintentos), `gs://b/p/b.txt` se abrió exactamente 1
@@ -884,14 +1014,14 @@ requerimientos la referencian.
 proceso la re-lanza: stderr contiene el traceback y el exit code es el del
 intérprete (`1`). No es el comportamiento por defecto, no se activa sola, y no
 aplica a los errores previstos (FR-6, FR-8, FR-12, FR-13, FR-14, FR-15, FR-21,
-FR-25, FR-26, FR-28, BR-2, NFR-2), que siguen sin traceback aunque la variable esté
+FR-25, FR-26, FR-28, FR-29, BR-2, NFR-2), que siguen sin traceback aunque la variable esté
 definida. Existe para
 diagnosticar un bug nuevo
 ([ADR-0013](../../docs/adr/ADR-0013-frontera-de-excepciones.md)).
 
 > **VC-16 (a)** — Para cada caso de error o salteo cubierto (VC-6, VC-8, VC-9,
 > VC-10, VC-12, VC-13, VC-15, VC-18, VC-21, VC-22, VC-23, VC-32, VC-33, VC-37,
-> VC-38, VC-39, VC-40, VC-41, VC-45), stdout no contiene
+> VC-38, VC-39, VC-40, VC-41, VC-45, VC-46, VC-50), stdout no contiene
 > ninguna línea que no sea un match real, y stderr no contiene la palabra
 > `Traceback`.
 >
@@ -929,30 +1059,37 @@ exit code, con stdout redirigido a `/dev/null` y el contenido servido desde memo
 por el doble de prueba. **No incluye** el arranque del intérprete ni la importación
 de módulos (un costo fijo por invocación, que no depende del tamaño del objeto), ni
 la latencia de la red
-([ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md)).
+([ADR-0026](../../docs/adr/ADR-0026-nfr-4-recalibrado-en-ci.md), que desde la v1.7
+supersede a [ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md)).
 **Condición de carga:** un único objeto de **100 MiB** de texto, con líneas de
 **80 bytes** (~1,3 millones de líneas), lectura secuencial.
+**Plataforma de referencia (v1.7):** el runner `ubuntu-latest` del CI, en cada
+versión de Python de su matriz.
 **Umbrales:**
 
 - **(a) Patrón ausente:** **≥ 50 MiB/s** de contenido recorrido.
-- **(b) Patrón en todas las líneas:** **≥ 50 000 matches/s** emitidos por stdout.
+- **(b) Patrón en todas las líneas:** **≥ 150 000 matches/s** emitidos por stdout
+  (hasta la v1.6: 50 000).
 
 > **VC-30** — Ejecutando `gcsgrep` en proceso (su punto de entrada con el `argv`
 > de la corrida, sin arrancar un intérprete nuevo) sobre el objeto de la condición
 > de carga, con stdout a `/dev/null` y tomando la mejor de 3 corridas: en la
-> condición (a) la tasa es ≥ 50 MiB/s, y en la (b) la tasa es ≥ 50 000 matches/s con
-> exit `0`. Los dos umbrales discriminan: una implementación que lee el stream de a
-> un carácter procesa ~15 MiB/s y falla (a); una que abre y cierra el destino de la
-> salida por cada match emite **~31 000 matches/s** y falla (b) (medido el
-> 2026-10-01 sobre la misma máquina en la que la implementación actual emite
-> ~340 000 matches/s).
+> condición (a) la tasa es ≥ 50 MiB/s, y en la (b) la tasa es ≥ 150 000 matches/s
+> con exit `0`. Los dos umbrales discriminan en la plataforma de referencia y en la
+> de desarrollo: una implementación que lee el objeto de a un byte procesa
+> ~3 MiB/s y falla (a); una que abre y cierra el destino de la salida por cada match
+> emite entre **~32 000 y ~106 000 matches/s** según la plataforma y falla (b),
+> mientras la implementación actual emite entre ~319 000 y ~488 000 (medido el
+> 2026-10-02 con `scripts/medir-nfr4.py`; el CI lo imprime en cada corrida).
 
-*Qué tanto discrimina (b) (v1.5):* la revisión de la v1.4 pidió mostrar una
-implementación mala plausible que caiga debajo de (b). La de abrir y cerrar la
-salida por match cae ~1,6× por debajo; otras malas que se midieron, no: crear un
-`logging.StreamHandler` por match emite ~134 000 matches/s, y agregar `os.fsync`
-por match emite ~300 000 (contra `/dev/null` no sincroniza nada). (b) acota el peor caso del costo por
-match, no cualquier ineficiencia; el detalle está en la fila v1.5 del Historial.
+*Qué tanto discrimina (b):* en la v1.5, con 50 000, la implementación mala caía
+debajo en macOS (~31 000) y **no** en Linux (~242 000 según la revisión de la v1.5),
+que es donde corre el CI. Con 150 000, la mala queda abajo en el peor caso medido
+por 1,4× (105 613, `ubuntu-latest`, Python 3.12) y la actual arriba por 2,1×
+(319 034, `ubuntu-latest`, Python 3.9). Las tablas completas están en
+[ADR-0026](../../docs/adr/ADR-0026-nfr-4-recalibrado-en-ci.md). (b) acota el peor
+caso del costo por match, no cualquier ineficiencia: un `os.fsync` por match contra
+`/dev/null` no sincroniza nada y no lo detecta.
 
 ---
 
@@ -997,7 +1134,7 @@ ejecutó es una afirmación distinta de no tenerlo, y esta spec no las mezcla.
 | FR-5 | VC-5, VC-31 | borde (sin resultados) |
 | FR-6 | VC-6 | falla parcial (permiso de objeto) |
 | FR-7 | VC-7 | borde (bucket completo) |
-| FR-8 | VC-8 | falla (input inválido) |
+| FR-8 | VC-8, VC-39 | falla (input inválido · `gs://` sin bucket) |
 | FR-9 | VC-9, VC-20 | borde (binario) · límite exacto |
 | FR-10 | VC-10 | borde (.gz) |
 | FR-11 | VC-17 | invariante (observabilidad) |
@@ -1014,10 +1151,12 @@ ejecutó es una afirmación distinta de no tenerlo, y esta spec no las mezcla.
 | FR-22 | VC-34 | borde (terminador `\r\n` y `\r` suelto) |
 | FR-23 | VC-35 | borde (consumidor que corta stdout) |
 | FR-24 | VC-36 | borde (entrada vacía: patrón) |
-| FR-25 | VC-37, VC-38, VC-39, VC-40 | falla (invocación mal formada, un VC por defecto) |
+| FR-25 | VC-37, VC-38, VC-40, VC-46, VC-47 | falla (invocación mal formada, un VC por defecto) · borde (sintaxis aceptada) |
 | FR-26 | VC-41 | falla (credenciales sin token) |
 | FR-27 | VC-44 | borde (BOM UTF-8) |
 | FR-28 | VC-45 | falla (`401` al listar) |
+| FR-29 | VC-50 | falla parcial (otro `4xx` sobre un objeto) |
+| FR-30 | VC-48, VC-49 | feliz (ayuda · formas largas) |
 | BR-1 | VC-11, VC-31 | invariante |
 | BR-2 | VC-12, VC-42 | guardrail · límite exacto |
 | BR-3 | VC-13 | invariante |
@@ -1026,7 +1165,7 @@ ejecutó es una afirmación distinta de no tenerlo, y esta spec no las mezcla.
 | NFR-3 | VC-16 (a), (b), (c), VC-31 | invariante |
 | NFR-4 | VC-30 (a), (b) | medición |
 
-**35 requerimientos (28 FR, 3 BR, 4 NFR), 45 VCs, 0 huérfanos.** Cada condición
+**37 requerimientos (30 FR, 3 BR, 4 NFR), 50 VCs, 0 huérfanos.** Cada condición
 enumerada en un NFR tiene su propio VC o su propia parte de VC.
 
 ## Tabla de trazabilidad · borrador → spec
@@ -1038,20 +1177,20 @@ encontró la revisión (FR-g y NFR-a) están marcados con su resolución.
 
 | Ítem del borrador | Destino | Dónde |
 |---|---|---|
-| FR-a · patrón + ubicación, busca dentro de los objetos | FR-1 (literal), FR-16 (orden), FR-17…FR-20, FR-22, FR-27 (bordes de contenido y ubicación), FR-23 (corte de stdout), FR-24 (patrón vacío), FR-25 (invocación mal formada) | Iteración 1 (comportamiento) · Iteración 2 (VCs nuevos de v1.4 y v1.5) |
+| FR-a · patrón + ubicación, busca dentro de los objetos | FR-1 (literal), FR-16 (orden), FR-17…FR-20, FR-22, FR-27 (bordes de contenido y ubicación), FR-23 (corte de stdout), FR-24 (patrón vacío), FR-25 (invocación mal formada), FR-30 (ayuda) | Iteración 1 (comportamiento) · Iteración 2 (VCs nuevos de v1.4 y v1.5) |
 | FR-b · bucket completo o prefijo | FR-7, FR-18 | Iteración 1 |
 | FR-c · salida deja claro el objeto, y la línea si se puede | FR-4 (sin `-n`) + FR-3 (con `-n`) | Iteración 1 |
 | FR-d · búsqueda sin distinguir mayúsculas | FR-2 | Iteración 1 |
 | FR-e · avisar "no encontré nada" de forma detectable por un script | FR-5 (exit `1`) | Iteración 1 |
-| FR-f · un objeto ilegible no tira la corrida | FR-6 (permiso) + FR-13 (red, al abrir o al leer) + FR-21 (no encontrado al abrir) | Iteración 2 |
+| FR-f · un objeto ilegible no tira la corrida | FR-6 (permiso) + FR-13 (red) + FR-21 (no encontrado) + FR-29 (otro `4xx`), todos al abrir o al leer | Iteración 2 · Iteración 2b (FR-29) |
 | FR-g · notar el progreso con muchos objetos | **FR-11** — resuelto en v1.1, [ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md). Era huérfano en v1.0 (hallazgo H-1) | Iteración 1 |
 | BR-a? · nunca escribe en GCS | BR-1 | Iteración 1 (adelantada) |
 | BR-b? · no amplía el acceso del invocador | BR-1 (fusionado) + permisos mínimos + [ADR-0002](../../docs/adr/ADR-0002-autenticacion-adc.md) | Iteración 1 (adelantada) |
 | BR-c? · límite para no escanear un bucket enorme | BR-2, con tope decidido en objetos ([ADR-0006](../../docs/adr/ADR-0006-guardrail-de-costo.md)) | Iteración 1 (adelantada) |
-| BR-d? · saltear lo que no es texto | FR-9, FR-10 (es comportamiento observable, no regla de negocio) + [ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md), [ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md) | Iteración 2 |
-| NFR-a · rendimiento | **NFR-4** desde v1.4, [ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md) (supersede a ADR-0012, que lo había declinado). Fue huérfano en v1.0 (H-2) y declinado de v1.1 a v1.3 | Iteración 2 |
+| BR-d? · saltear lo que no es texto | FR-9, FR-10 (es comportamiento observable, no regla de negocio) + [ADR-0021](../../docs/adr/ADR-0021-avisos-de-salteo-por-objeto.md) (supersede a ADR-0005), [ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md) | Iteración 2 |
+| NFR-a · rendimiento | **NFR-4** desde v1.4, [ADR-0017](../../docs/adr/ADR-0017-nfr-rendimiento-costo-propio.md) (supersede a ADR-0012, que lo había declinado), recalibrado en la v1.7 por [ADR-0026](../../docs/adr/ADR-0026-nfr-4-recalibrado-en-ci.md). Fue huérfano en v1.0 (H-2) y declinado de v1.1 a v1.3 | Iteración 2 |
 | NFR-b · memoria con objetos grandes | NFR-1, umbral 20 MiB sobre 200 MiB | Iteración 1 |
-| NFR-c · comportamiento ante fallos de red | NFR-2 (0 reintentos, [ADR-0016](../../docs/adr/ADR-0016-sin-reintentos.md)) + FR-13 | Iteración 2 |
+| NFR-c · comportamiento ante fallos de red | NFR-2 (0 reintentos, también en la librería; [ADR-0028](../../docs/adr/ADR-0028-sin-reintentos-tampoco-en-la-libreria.md), que supersede a ADR-0016) + FR-13 | Iteración 2 |
 
 **14 ítems del borrador, 14 con destino explícito, 0 perdidos.**
 
@@ -1084,19 +1223,21 @@ encontró uno declarado desde la v1.0 y nunca cubierto.
 | GCS | **Red** — al leer un objeto | FR-13 + NFR-2 (b) + BR-3 | VC-21, VC-29 |
 | GCS | **Red** — al abrir un objeto | FR-13 + NFR-2 (b) + BR-3 — *sin cubrir en la v1.4, [H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md)* | VC-33 |
 | GCS | **Red** — al listar | NFR-2 (a) (aborta con `2`, sin traceback) | VC-15 |
+| GCS | **Otra respuesta de error** — sobre un objeto (`4xx` que no es `401`, `403`, `404`, `408` ni `429`) | **FR-29** + BR-3 — nuevo en v1.7 | VC-50 |
+| GCS | **Otra respuesta de error** — al listar | caso genérico de NFR-3 (aborta con `2`, sin traceback, VC-16 (b)) — decidido en [ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md) | VC-16 (b) |
 | GCS | **No existir** — el bucket | **FR-12** — *era el huérfano de H-13* | VC-18 |
 | GCS | **No existir** — el prefijo (0 objetos) | FR-5 (exit `1`, es un resultado válido, no un error) | VC-5 |
 | GCS | **No existir** — un objeto listado (borrado antes de leerlo) | **FR-21** + BR-3 — *el mismo caso que H-13, un nivel más abajo: sin cubrir en la v1.4, [H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md)* | VC-32 |
 | Entorno de credenciales | **Sin credenciales** | **FR-15** — nuevo en v1.4 | VC-23 |
 | Entorno de credenciales | **Credenciales inutilizables** (vencidas, revocadas, archivo de key inválido) | **FR-26** (sin token) — nuevo en v1.5; **FR-28** (`401` al listar) — v1.6; un `401` sobre un objeto, FR-6 | VC-41, VC-45 |
-| Persona usuaria | Ubicación mal escrita | FR-8 (exit `2` sin tocar la red) | VC-8 |
-| Persona usuaria | Invocación mal formada (flag, `--max`, `gs://` sin bucket, argumentos) | **FR-25** (exit `2` sin tocar la red) — nuevo en v1.5 | VC-37…VC-40 |
+| Persona usuaria | Ubicación mal escrita (incluida `gs://` sin bucket, v1.7) | FR-8 (exit `2` sin tocar la red) | VC-8, VC-39 |
+| Persona usuaria | Invocación mal formada (flag, abreviatura, `--max`, argumentos) | **FR-25** (exit `2` sin tocar la red) — nuevo en v1.5 | VC-37, VC-38, VC-40, VC-46 |
 | Persona usuaria | Prefijo gigante, corrida costosa | BR-2 (guardrail, tope 1000) | VC-12, VC-42 |
 | Script | Necesita decidir sin parsear texto | FR-5, BR-3, NFR-3 (exit codes + stdout limpio) | VC-5, VC-13, VC-16 |
 | Script | Necesita una salida reproducible | FR-16 (orden del listado) | VC-24 |
 | Script | Corta la salida antes del final (`\| head`) | **FR-23** (SIGPIPE, sin stderr) — nuevo en v1.5 | VC-35 |
 
-**16 modos de falla declarados, 16 cubiertos, 0 huérfanos.**
+**18 modos de falla declarados, 18 cubiertos, 0 huérfanos.**
 
 Tres notas sobre la forma de esta tabla:
 
@@ -1128,11 +1269,11 @@ comportamiento observable escrito en un requerimiento de esta spec:
 |---|---|---|---|
 | 1 | Sabor de regex | FR-1 (substring literal), VC-19 | ADR-0001 |
 | 2 | Autenticación | BR-1, FR-15 (sin credenciales → exit `2`), FR-26 (credenciales sin token), FR-28 (`401` al listar) | ADR-0002 |
-| 3 | Sintaxis de la ubicación | FR-7, FR-8, FR-18 (prefijo sin `/`), FR-25 (`gs://` sin bucket) | ADR-0003 |
-| 4 | Flags de `grep` | FR-2, FR-3, FR-4, BR-2, FR-25 (flags no soportados se rechazan) | ADR-0004 |
-| 5 | Binarios y `.gz` | FR-9 (ventana de 8192 bytes, `\x00` posterior, una línea por salteo), FR-10, FR-17, FR-27 (BOM) | ADR-0005, ADR-0018 |
+| 3 | Sintaxis de la ubicación | FR-7, FR-8 (incluida `gs://` sin bucket), FR-18 (prefijo sin `/`) | ADR-0003 |
+| 4 | Flags de `grep` | FR-2, FR-3, FR-4, BR-2, FR-25 (flags no soportados y abreviaturas se rechazan), FR-30 (ayuda) | ADR-0004, ADR-0023 |
+| 5 | Binarios y `.gz` | FR-9 (ventana de 8192 bytes, `\x00` posterior, una línea por salteo), FR-10, FR-17, FR-27 (BOM) | ADR-0021 (supersede a ADR-0005), ADR-0018, ADR-0022 |
 | 6 | Guardrail de costo | BR-2 | ADR-0006 |
-| 7 | Formato de salida | FR-3, FR-4, FR-22 (terminador de línea) | ADR-0007 |
+| 7 | Formato de salida | FR-3, FR-4, FR-22 (terminador y definición de línea) | ADR-0007, ADR-0022 |
 | 8 | Exit codes | FR-5, FR-8, BR-3, FR-23 (corte de stdout: señal, no exit code) | ADR-0008, ADR-0019 |
 | 9 | Concurrencia | FR-16 (orden del listado) | ADR-0009 |
 | 10 | Objeto modificado durante la lectura | Fuera (riesgo aceptado); el objeto **borrado** es FR-21 | ADR-0010 |
@@ -1172,6 +1313,34 @@ excepción se cierra con una fila del *Historial* que la nombre.
 | 18 | COULD | Referencias viejas de ADR-0007, ADR-0011 y ADR-0002 sin registrar en `docs/adr/README.md` | Documentación | Iteración 2 |
 | 19 | COULD | FR-8 y FR-25 se reparten `gs://` a secas | Los dos salen con `2` sin tocar la red | Iteración 2 (spec v1.7) |
 
+### Cierre en la v1.7 (Iteración 2b, 2026-10-02)
+
+La tabla de arriba queda como registro de lo que estaba abierto; no se editó. Cada
+acción se cierra así, y la fila 1.7 del *Historial* las nombra:
+
+| Acción | Cómo se cerró |
+|---|---|
+| 2 (parte) | [ADR-0020](../../docs/adr/ADR-0020-tamano-de-bloque-del-lector.md) (bloque de 1 MiB, su costo en pedidos); nombrado en *Tecnología* y en `01-base-context.md` |
+| 3 (`408`/`429` y otros `4xx`) | NFR-2 redefine "error de red" con `408` y `429`; **+FR-29/VC-50** para el resto de los `4xx`; actor GCS con "otra respuesta de error" y sus dos filas de trazabilidad; [ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md) |
+| 3 ("al abrir") | "Al abrir" definido una vez en FR-6 (antes del primer byte); FR-6 y FR-21 "al abrirlo o durante la lectura"; VC-6 y VC-32 aceptan el fallo en la primera lectura |
+| 4 | Definición de línea en FR-22; VC-36 con bytes y el caso `uno\n\ndos\n`; [ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md) |
+| 5 | FR-2 describe `str.lower()` con sus reglas contextuales; VC-43 con `ΟΔΟΣ`; [ADR-0023](../../docs/adr/ADR-0023-plegado-de-mayusculas.md) |
+| 6 | *Dentro* enumera la sintaxis aceptada; **+VC-46** (abreviaturas → `2`) y **+VC-47** (`--`, `-in`, `--max=N`) |
+| 7 | FR-23 "nada a causa del corte"; VC-35 con `b.txt` abierto 0 veces y dice con qué proceso corre |
+| 8 | VC-5 con el prefijo sin objetos |
+| 9 | NFR-4 con plataforma de referencia y (b) ≥ 150 000; [ADR-0026](../../docs/adr/ADR-0026-nfr-4-recalibrado-en-ci.md) supersede a ADR-0017 |
+| 10 | NFR-2 con 0 reintentos de la librería y timeout de 60 s; [ADR-0028](../../docs/adr/ADR-0028-sin-reintentos-tampoco-en-la-libreria.md) supersede a ADR-0016 |
+| 11 | **+FR-30** (ayuda) con **VC-48** y **VC-49** |
+| 12 | Fundamentos en ADRs: [ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md), [ADR-0023](../../docs/adr/ADR-0023-plegado-de-mayusculas.md), [ADR-0024](../../docs/adr/ADR-0024-patron-vacio.md); el desvío de ADR-0005 pasa a [ADR-0021](../../docs/adr/ADR-0021-avisos-de-salteo-por-objeto.md), que lo supersede |
+| 13 | FR-13 con el título como Dado; los dos momentos a VC-21 y VC-33 |
+| 14 | FR-25 con un Dado único y el texto fijo `gcsgrep: error:` en VC-37, VC-38, VC-40 y VC-46 |
+| 15 | VC-44 con un BOM fuera del principio |
+| 17 | *Tecnología*: Python ≥ 3.10, POSIX, `google-cloud-storage` ≥ 2.14; [ADR-0027](../../docs/adr/ADR-0027-piso-de-python-y-plataforma.md) |
+| 18 | Las tres referencias viejas registradas en [`docs/adr/README.md`](../../docs/adr/README.md) |
+| 19 | FR-8 absorbe `gs://` sin bucket, con el mismo mensaje; VC-39 se reubica bajo FR-8 |
+
+**Ninguna excepción queda abierta.**
+
 ## Qué sigue
 
 - Plan de iteraciones: [`03-plan.md`](./03-plan.md).
@@ -1190,6 +1359,31 @@ excepción se cierra con una fila del *Historial* que la nombre.
 | 1.5 | 2026-10-01 | **Revisión de la v1.4 (NEEDS WORK), las 21 acciones.** MUST: **"error de red" definido una vez** en NFR-2 (sin respuesta HTTP completa, o `5xx`; un `403`/`404` no lo es) y FR-13 lo referencia sin listar causas; **+FR-21/VC-32** (objeto listado que GCS responde no encontrado al abrirlo: `ya no existe`, sigue, BR-3); FR-13 cubre la red **al abrir** (+VC-33); BR-3, NFR-2 (b), los previstos de NFR-3 y la tabla de actores actualizados. SHOULD: **+FR-22/VC-34** (terminador `\n`, `\r\n` sin `\r`, `\r` suelto en la línea); **+FR-23/VC-35** (`\| head` → SIGPIPE sin stderr, [ADR-0019](../../docs/adr/ADR-0019-corte-de-stdout-sigpipe.md)); **+FR-24/VC-36** (patrón vacío matchea todo); **+FR-25/VC-37…VC-40** (invocación mal formada → `2`); **+FR-26/VC-41** (credenciales inutilizables); **+VC-42** (límite exacto de BR-2); texto literal del guardrail en BR-2; VC-7, VC-12, VC-13, VC-20, VC-23 con observables exactos; VC-9/VC-10 "stderr es exactamente"; FR-9/FR-10: una línea por salteo, sin resumen final (se aparta de ADR-0005); FR-9: `\x00` posterior a la ventana sale por stdout; FR-14 "no contiene `no existe`"; VC-15 sin "representación cruda"; NFR-1 y NFR-4 dicen lo que se mide (memoria del intérprete; ejecución en proceso), MiB en todo; VC-30 con contraste medido para (b). COULD: plegado de `-i` carácter por carácter (+VC-43); **+FR-27/VC-44** (BOM); formas largas y `--help` en *Dentro*; "no afecta el exit code" solo en BR-3; VC-31 (3) con bucket inexistente verificado; referencias viejas de ADRs anotadas en `docs/adr/README.md`. | [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md), [H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md), [errata de la respuesta](../../docs/respuesta-correccion-catedra.md#errata-revisión-v14) |
 | 1.6 | 2026-10-01 | **Revisión de la v1.5 (NEEDS WORK), los dos MUST.** **FR-26 partido:** FR-26 queda en credenciales que no producen un token (VC-41); **+FR-28/VC-45** (`401` al listar: aborta, `2`, 0 objetos leídos); un `401` sobre un objeto, después de haber leído otros, es FR-6. **NFR-1:** la métrica incluye los buffers de la librería cliente en el heap de Python, el lector de GCS se abre con `chunk_size` ≤ 1 MiB, y **+VC-14 (c)** mide a través de `BlobReader` (Iteración 2). Conteo de la tabla de actores (16) y VC-31 en la fila de NFR-3 (acción 16). El resto de las acciones queda en *Excepciones registradas (revisión v1.5)*. **Estado: habilitada con excepciones registradas.** | [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) |
 | 1.6.1 | 2026-10-01 | **Cambio de contrato implementado: BR-3** (anunciado desde la v1.2, sin número por adelantado). Sin cambio de texto normativo: ningún FR, BR, NFR ni VC cambia de redacción; esta fila registra que el comportamiento observable de corridas que la Iteración 1 ya podía producir **cambió** al implementarse la Iteración 2. Antes: un objeto que fallaba al abrirse o leerse abortaba la corrida (exit `2` por el genérico de ADR-0013, o `ObjetoNoEncontrado`/`AccesoDenegado`), y no se leían los objetos siguientes. Ahora: el objeto se informa por stderr (`sin permiso para leer`, `ya no existe`, `error de red al leer` + URI, FR-6/FR-21/FR-13), la corrida sigue, y el exit code es `2` **aunque haya habido matches**. Un script que leía `0` como "hubo matches" ahora puede recibir `2` con matches en stdout. Ejercitado por VC-6, VC-13, VC-21, VC-29, VC-32, VC-33 ([`04-cobertura-vc.md`](./04-cobertura-vc.md)). Por qué no sube a 1.7: la v1.7 queda reservada para las acciones de *Excepciones registradas* que sí cambian texto. | [`03-plan.md`](./03-plan.md), Iteración 2 · *Cambio de contrato* |
+| 1.7 | 2026-10-02 | **Cierre de las excepciones registradas de la revisión de la v1.5 (Iteración 2b).** Las 18 acciones abiertas, una por una, en *Cierre en la v1.7*: **+FR-29/VC-50** (otro `4xx` sobre un objeto: `no se pudo leer`, sigue, BR-3); **+FR-30/VC-48/VC-49** (ayuda y formas largas); **+VC-46/VC-47** (abreviaturas rechazadas, sintaxis aceptada); "error de red" con `408` y `429`; "al abrir" definido una vez; FR-6/FR-21 al abrir o durante la lectura; *refresh* rechazado sobre un objeto = FR-6; FR-26 con "fuente configurada" (variable o archivo de `gcloud`); definición de línea y lectura cortada dentro de la ventana; FR-2 con las reglas contextuales de `str.lower()`; FR-8 absorbe `gs://` sin bucket (VC-39 se reubica); FR-25 con Dado único y `gcsgrep: error:`; FR-23 "a causa del corte"; NFR-2 con 0 reintentos de la librería y timeout de 60 s; **NFR-4 (b) a 150 000 matches/s** sobre `ubuntu-latest`; runtime Python ≥ 3.10 y POSIX. ADRs nuevos ADR-0020…ADR-0028; ADR-0005, ADR-0016 y ADR-0017 pasan a superseded. **37 requerimientos, 50 VCs.** | [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md), [`03-plan.md`](./03-plan.md) Iteración 2 · *Pasa a una Iteración 2b* |
+
+**Qué cambió del contrato en v1.7.** Comportamiento observable que cambia respecto
+de lo que la Iteración 2 entregó, todo alcance de la Iteración 2b:
+
+- Un `408` o un `429` **sobre un objeto** dejan de abortar la corrida por el caso
+  genérico: se informan como error de red y la corrida sigue (FR-13, exit `2` por
+  BR-3). **Al listar**, el mensaje pasa del genérico a `error de red` (el exit `2` no
+  cambia).
+- Cualquier otro `4xx` sobre un objeto deja de abortar: `no se pudo leer` y la
+  corrida sigue (FR-29).
+- Un *refresh* de token rechazado a mitad de un objeto deja de abortar: es FR-6.
+- Un archivo de `gcloud auth application-default login` mal formado deja de decir
+  `no se encontraron credenciales` y dice `credenciales inválidas o vencidas`
+  (FR-26).
+- `gcsgrep "x" gs://` y `gs:///p`: el mensaje pasa a contener `gs://` (FR-8); el
+  exit `2` no cambia. `--max -1`: el mensaje pasa a empezar con `gcsgrep: error:`
+  (FR-25).
+- **Python 3.9 deja de estar soportado**: `pip` rechaza la instalación
+  ([ADR-0027](../../docs/adr/ADR-0027-piso-de-python-y-plataforma.md)).
+- NFR-4 (b) se vuelve más exigente (150 000 matches/s). La implementación actual ya
+  lo cumplía en todas las plataformas medidas.
+- Los reintentos de la librería ya estaban desactivados desde la Iteración 2; la
+  v1.7 lo escribe (NFR-2). El timeout de 60 s es el default de la librería, ahora
+  explícito.
 
 **Qué cambió del contrato en v1.5.** Dos clases de cambio, separadas en el plan:
 

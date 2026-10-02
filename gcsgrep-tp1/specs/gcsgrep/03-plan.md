@@ -413,6 +413,44 @@ que **no se empezaron** en esta sesión, más lo que el cierre destapó.
 
 ---
 
+## Iteración 2b · estado al cierre
+
+**Fecha:** 2026-10-02 · **Rama:** `iteracion-2b` · **Spec:** v1.7. Detalle por VC en
+[`04-cobertura-vc.md`](./04-cobertura-vc.md), sección *Iteración 2b · cierre*.
+
+Orden de trabajo, por [`proceso-cambios.md`](../../docs/proceso-cambios.md): primero
+la medición que decidía un número de la spec, después la spec y los ADRs, después el
+código con los tests en rojo, y al final los chequeos. Un commit por bloque.
+
+| # | Lo que pasaba a la 2b | Cómo se cerró | Estado |
+|---|---|---|---|
+| 1 | Chequeo de CI de la cobertura (H-15) | `scripts/check-cobertura.py` en el job de documentos. Su primera corrida encontró 6 contradicciones reales | ✅ |
+| 2 | I-6 contra un entorno sin ADC | `scripts/i6-adc-local.sh`: ADC real, sin emulador ni bucket (la falla ocurre al crear el cliente). Pasa en local y corre en cada push | ✅ (variante sin bucket; ver lo que no afirma, en la cobertura) |
+| 3 | Spec v1.7 con las excepciones registradas | Las 18 acciones, una por una, en *Cierre en la v1.7* de la spec; +FR-29, +FR-30, +VC-46…VC-50 | ✅ |
+| 4 | ADR del `chunk_size` (acción 2) | [ADR-0020](../../docs/adr/ADR-0020-tamano-de-bloque-del-lector.md), y `01-base-context.md` actualizado (también el colaborador `open_stream`) | ✅ |
+| 5 | Recalibrar VC-30 (b) en `ubuntu-latest` | Medido en el CI con `scripts/medir-nfr4.py` (paso informativo en cada corrida): la implementación mala daba 64 000–106 000 matches/s y pasaba el umbral de 50 000. (b) pasa a 150 000, [ADR-0026](../../docs/adr/ADR-0026-nfr-4-recalibrado-en-ci.md) supersede a ADR-0017 | ✅ |
+| 6 | Documentación (acciones 12 y 18) | ADR-0021…ADR-0024 (ADR-0021 supersede a ADR-0005); tres referencias viejas en `docs/adr/README.md` | ✅ |
+| 7 | Bordes de credenciales | *Refresh* rechazado sobre un objeto = FR-6; FR-26 también con el archivo de `gcloud` ([ADR-0025](../../docs/adr/ADR-0025-clasificacion-de-fallos.md)) | ✅ |
+| 8 | Piso de Python | 3.10 en `pyproject.toml`, CI y README; POSIX ([ADR-0027](../../docs/adr/ADR-0027-piso-de-python-y-plataforma.md)). El filtro de `FutureWarning` se queda | ✅ |
+
+**Además, por la spec v1.7** (no estaban en la lista): `408`/`429` como error de red,
+otro `4xx` sobre un objeto (FR-29), `retry=None` y `timeout=60` en la librería
+([ADR-0028](../../docs/adr/ADR-0028-sin-reintentos-tampoco-en-la-libreria.md),
+supersede a ADR-0016), `gs://` sin bucket con el mensaje de FR-8, y
+`gcsgrep: error:` para `--max` negativo.
+
+**Resultado:** 49 de los 50 VCs pasan contra dobles de prueba (161 tests
+offline). Falta VC-31, como antes.
+
+**Queda abierto, dicho:** `uv.lock` sigue declarando Python ≥ 3.9 (no había `uv`
+para regenerarlo; el CI usa `pip`); un `4xx` raro **al listar** sigue en el genérico
+por decisión de ADR-0025; I-6 no se corrió con el backend `gcs` del runbook ni con un
+token vencido de verdad; y VC-31 sigue sujeto a ADR-0015. Ninguno es un bloque a
+medias. Con esto no queda alcance pendiente de la Iteración 2; lo que sigue es la
+Iteración 3, que no está comprometida para esta entrega.
+
+---
+
 ## Iteración 3 — Concurrencia y rendimiento *(no comprometida para esta entrega)*
 
 **Por qué está en el plan:**

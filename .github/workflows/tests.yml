@@ -20,9 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.9 es el piso declarado en pyproject.toml; 3.12 es lo que se usa para
-        # desarrollar. Si el piso se sube, se cambia en los dos lugares.
-        python-version: ["3.9", "3.12"]
+        # 3.10 es el piso declarado en pyproject.toml (ADR-0027: las librerías de
+        # Google ya no soportan 3.9); 3.12 es lo que se usa para desarrollar. Si el
+        # piso se sube, se cambia en los dos lugares.
+        python-version: ["3.10", "3.12"]
 
     steps:
       - uses: actions/checkout@v4
@@ -41,6 +42,17 @@ jobs:
         # pyproject.toml: esta corrida no toca la red ni cuesta plata.
         run: python -m pytest -v
 
+      - name: I-6 contra ADC real, sin credenciales
+        # La falla de ADC ocurre al crear el cliente, antes de tocar Storage: I-6
+        # no necesita bucket. El runner no tiene credenciales de GCP.
+        run: bash scripts/i6-adc-local.sh gcsgrep
+
+      - name: Medir NFR-4 en esta plataforma (informativo)
+        # Deja en el log el número de la plataforma de referencia y el contraste de
+        # (b) contra la implementación mala (revisión v1.5, acción 9). No falla:
+        # el umbral lo verifica VC-30.
+        run: python scripts/medir-nfr4.py
+
   docs:
     name: Trazabilidad de los documentos
     runs-on: ubuntu-latest
@@ -55,6 +67,11 @@ jobs:
         # Un enlace roto entre spec, ADR, plan y cobertura es deuda silenciosa:
         # el documento se sigue leyendo bien y la trazabilidad ya no existe.
         run: python scripts/check-doc-links.py
+
+      - name: La tabla de cobertura coincide con los tests
+        # H-15: la tabla decía ⬜ para VCs con tests que pasaban. Falla si un VC con
+        # tests test_vcN_* no está ✅ en su fila vigente, o al revés.
+        run: python scripts/check-cobertura.py
 
       - name: El shell del campo de pruebas parsea
         run: bash -n scripts/testing-ground.sh
