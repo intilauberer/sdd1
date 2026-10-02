@@ -97,6 +97,7 @@ def test_vc8_ubicacion_invalida_no_lista(fake, capsys, ubicacion):
     assert exit_code == 2
     assert out == ""
     assert "gs://" in err
+    assert "Traceback" not in err
     assert fake.listados == 0
 
 
@@ -236,6 +237,7 @@ def test_vc12_texto_literal_del_tope(fake, capsys):
     assert out == ""
     assert "1001 objetos" in err
     assert "el tope es 1000" in err
+    assert "Traceback" not in err
     assert fake.aperturas == []
 
 

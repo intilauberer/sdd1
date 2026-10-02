@@ -78,6 +78,7 @@ def test_vc13_error_de_lectura_gana_aunque_haya_match(fake, capsys):
 
     assert out == "gs://b/p/a.txt:x hit\n"
     assert _linea_con(err, "sin permiso para leer", "gs://b/p/b.txt")
+    assert "Traceback" not in err
     assert exit_code == 2
 
 

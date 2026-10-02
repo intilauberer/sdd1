@@ -167,6 +167,128 @@ se editó.
 | VC-14 (c) | NFR-1, a través de `BlobReader` | — | pico adicional **< 20 MiB** sobre 200 MiB | según la revisión de la v1.5: ≈120 MiB | ⬜ Iteración 2 |
 | VC-45 | FR-28, `401` al listar | — | exit `2`, `credenciales inválidas o vencidas`, 0 aperturas | — | ⬜ Iteración 2 |
 
+## Iteración 2 · cierre (2026-10-01)
+
+Filas nuevas; ninguna fila anterior se editó. Las de arriba con ⬜ quedan como
+registro de lo que se esperaba **antes** de implementar; el estado vigente de cada
+VC es la fila de esta sección. Rama `iteracion-2`, cuatro bloques con un commit
+cada uno (ver [`03-plan.md`](./03-plan.md), *Iteración 2 · estado al cierre*).
+
+**Resumen.** 45 VCs en la spec (VC-1…VC-45, más VC-14 (c) y VC-16 (a)/(b)/(c)):
+**44 pasan contra dobles de prueba**; el que falta es **VC-31** (GCS real), sujeto a
+[ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md). Tests:
+**130** offline (antes 48) en 9 archivos, más 5 de integración. `python -m pytest`
+→ `130 passed, 5 deselected`.
+
+**Cambio en la costura de `core`.** El colaborador `open_text_stream` (líneas ya
+decodificadas) pasó a ser `open_stream` (lector de **bytes** con `read(n)`): FR-9,
+FR-17, FR-22 y FR-27 exigen mirar bytes antes de decodificar. Los documentos que
+nombran `open_text_stream` (`01-base-context.md` §3, ADRs, hallazgos, revisiones)
+lo hacen en contexto histórico y no se editaron; la actualización de
+`01-base-context.md` queda para la Iteración 2b.
+
+### Paso 0 · comportamiento existente (bloque 1, commit "Paso 0")
+
+Los tests se escribieron contra el código de la Iteración 1 **sin cambiarlo** y
+pasaron en la primera corrida: no apareció ningún defecto de la Iteración 1 (fila
+1 de [`proceso-cambios.md`](../../docs/proceso-cambios.md)), así que no hubo fase
+roja. Archivo: `tests/test_paso0.py`.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-1 (v1.4) | FR-1 | `test_vc1_stdout_exacto_y_stderr_vacio` | exit `0`, stdout `gs://b/logs/a.txt:connection timeout\n`, stderr `""` | ✅ |
+| VC-3 (v1.4) | FR-3 | `test_vc3_stdout_exacto_con_numero_de_linea` | stdout `gs://b/p/a.txt:3:error: timeout\n` | ✅ |
+| VC-4 (v1.4) | FR-4 | `test_vc4_stdout_exacto_sin_numero_de_linea` | stdout `gs://b/p/a.txt:error: timeout\n` | ✅ |
+| VC-7 (v1.5) | FR-7 | `test_vc7_bucket_completo_stdout_exacto[gs://b/, gs://b]` | las dos ubicaciones: stdout exacto en orden, stderr `""` | ✅ |
+| VC-8 (v1.4) | FR-8 | `test_vc8_ubicacion_invalida_no_lista[logs/, s3://b/]` | exit `2`, stdout `""`, `gs://` en stderr, **0 listados** | ✅ |
+| VC-12 (v1.5) | BR-2 | `test_vc12_texto_literal_del_tope` | `1001 objetos` y `el tope es 1000` en stderr, 0 aperturas | ✅ |
+| VC-16 (c) | NFR-3 | `test_vc16c_debug_no_afecta_a_un_error_previsto` (+ `test_vc16b_debug_reexpone_*` de la Iteración 1) | con `GCSGREP_DEBUG=1`, VC-18 sigue en exit `2` sin `Traceback` | ✅ |
+| VC-19 | FR-1 literal | `test_vc19_el_patron_es_literal` | `a.b` → solo `a.b`; `a*b` → solo `a*b` | ✅ |
+| VC-22 (v1.5) | FR-14 | `test_vc22_sin_permiso_de_listado` | `gs://privado`, `sin permiso`, sin `no existe`, 0 aperturas | ✅ |
+| VC-24 | FR-16 | `test_vc24_orden_de_la_salida` | las 6 líneas en orden exacto | ✅ |
+| VC-26 | FR-18 | `test_vc26_prefijo_sin_barra_es_un_prefijo_de_cadena` | `logs` → `logs-other/b.txt` y `logs/a.txt`; `logs/` → solo `logs/a.txt` | ✅ |
+| VC-27 | FR-19 | `test_vc27_objeto_de_0_bytes`, `test_vc27_solo_el_objeto_de_0_bytes` | `(0, match, "")` y `(1, "", "")` | ✅ |
+| VC-28 | FR-20 | `test_vc28_ultima_linea_sin_terminador` | `gs://b/p/a.txt:2:dos\n` | ✅ |
+| VC-30 | NFR-4 | `test_vc30_a_*`, `test_vc30_b_*` | antes de los bloques 2–4: (a) ~1254 MiB/s, (b) ~369 000 matches/s; **al cierre**: (a) **~874 MiB/s**, (b) **~357 000 matches/s** (Apple Silicon, Python 3.13, mejor de 3). La caída de (a) es el costo de decodificar bytes (FR-17); sigue 17× sobre el umbral | ✅ |
+| VC-36 | FR-24 | `test_vc36_patron_vacio_imprime_todas_las_lineas`, `test_vc36_una_linea_vacia_es_una_linea` | todas las líneas, exit `0`; `uno\n\ndos\n` son 3 líneas (excepción registrada, acción 4) | ✅ |
+| VC-37 | FR-25 | `test_vc37_flag_no_soportado` | `-l`: exit `2` (argparse), stdout `""`, 0 listados | ✅ |
+| VC-38 | FR-25 | `test_vc38_max_invalido[-1, abc]` | exit `2`, 0 listados | ✅ |
+| VC-39 | FR-25 | `test_vc39_gs_sin_bucket[gs://, gs:///p]` | exit `2`, 0 listados | ✅ |
+| VC-40 | FR-25 | `test_vc40_faltan_argumentos[[], [x]]` | exit `2`, 0 listados | ✅ |
+| VC-42 | BR-2 | `test_vc42_*` (3 casos) | 1000 → 1000 aperturas sin línea de tope; `--max 3`: 3 → 3 aperturas, 4 → 0 y `4 objetos`/`el tope es 3` | ✅ |
+| VC-43 | FR-2 | `test_vc43_ignore_case_con_tildes` | `-i "árbol"` → `Árbol caído`, exit `0`; sin `-i` → exit `1` | ✅ (el caso `ΟΔΟΣ` de la acción 5 no se agregó: 2b) |
+| — (acción 8) | FR-5 | `test_vc5_prefijo_sin_objetos` | prefijo sin objetos → `(1, "", "")` | ✅ |
+| — (acción 11) | *Dentro* | `test_help_imprime_la_ayuda_por_stdout_y_no_toca_gcs` | `--help`: exit `0`, ayuda por stdout, 0 listados | ✅ (sin VC en la spec todavía: v1.7) |
+
+### Errores por objeto (bloque 2) · `tests/test_errores_por_objeto.py`
+
+Fase roja observada: 23 de 24 tests fallaban antes del código.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-6 | FR-6 | `test_vc6_objeto_sin_permiso_no_aborta`, `test_vc6_core_emite_el_aviso_entre_los_matches`, `test_vc6_gcs_traduce_403_y_401_de_un_objeto[403, 401]`, `test_gcs.py::test_vc6_open_stream_traduce_forbidden_a_objeto_sin_permiso` | stdout `gs://b/p/c.txt:x hit\n`, línea con `sin permiso para leer` + `gs://b/p/b.txt`, exit `2`; `Forbidden` y `Unauthorized` reales → `ObjetoSinPermiso` | ✅ |
+| VC-13 | BR-3 | `test_vc13_error_de_lectura_gana_aunque_haya_match` | match en stdout **y** exit `2` | ✅ |
+| VC-15 | NFR-2 (a) | `test_vc15_red_caida_al_listar`, `test_vc15_gcs_traduce_red_al_listar[4 casos]`, `test_vc15_y_vc29_gcs_desactiva_los_reintentos_del_sdk` | exit `2`, `error de red` + `gs://b`, 1 listado; `ConnectionError`, `Timeout`, `503`, `500` → `ErrorDeRedAlListar`; `list_blobs(..., retry=None)` | ✅ |
+| VC-21 | FR-13 | `test_vc21_red_a_mitad_de_lectura`, `test_vc21_gcs_traduce_red_a_mitad_de_lectura[4 casos]` | `hit uno` y `hit dos` en orden, línea con `error de red al leer` + `gs://b/p/a.txt`, exit `2` | ✅ |
+| VC-29 | NFR-2 (b) | `test_vc29_cero_reintentos_al_leer`, `test_vc15_y_vc29_*` | aperturas `["p/a.txt", "p/b.txt"]` (1 y 1), exit `2`; `blob.open(..., retry=None)` | ✅ |
+| VC-32 | FR-21 | `test_vc32_objeto_que_ya_no_existe`, `test_vc32_gcs_traduce_404_de_un_objeto` | `hit a` y `hit c`, línea con `ya no existe` + `gs://b/p/b.txt`, exit `2` | ✅ |
+| VC-33 | FR-13 al abrir | `test_vc33_red_caida_al_abrir`, `test_vc33_gcs_traduce_red_al_abrir[4 casos]` | stdout solo `b.txt`, aviso de red para `a.txt`, exit `2`, 1 apertura de cada uno | ✅ |
+
+### Contenido no-texto (bloque 3) · `tests/test_contenido_no_texto.py`
+
+Fase roja observada: 11 de 11 fallaban antes del código.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-9 | FR-9 | `test_vc9_binario_se_saltea_con_una_linea_por_stderr`, `test_vc9_solo_el_binario` | stderr **exactamente** `gcsgrep: salteado (binario): gs://b/p/blob.bin\n`; exit `0` con `a.txt`, `1` sin | ✅ |
+| VC-20 | FR-9 ventana | `test_vc20_nul_en_el_offset_8191_es_binario`, `test_vc20_nul_en_el_offset_8192_es_texto_y_sale_tal_cual` | 8191 → salteo exacto, exit `1`; 8192 → stdout `gs://b/p/a.txt:2:\x00 timeout\n`, stderr `""` | ✅ |
+| VC-10 | FR-10 | `test_vc10_gz_se_saltea_sin_abrirlo` | gzip real con `timeout`: exit `1`, stderr exacto `gcsgrep: salteado (.gz): …`, **0 aperturas** | ✅ |
+| VC-25 | FR-17 | `test_vc25_latin1_se_decodifica_con_reemplazo`, `test_vc25_un_caracter_multibyte_partido_entre_lecturas_no_se_rompe` | `gs://b/p/a.txt:caf� timeout\n`, stderr `""`; una `ñ` partida en el borde de bloque se decodifica entera | ✅ |
+| VC-34 | FR-22 | `test_vc34_terminador_de_linea` | `2:dos\rtres\n` y `1:uno\n` (sin `\r`) | ✅ |
+| VC-44 | FR-27 | `test_vc44_bom_inicial_se_descarta`, `test_vc44_bom_fuera_del_principio_se_conserva` | `1:timeout\n`; un BOM en la línea 2 queda como `U+FEFF` (acción 15) | ✅ |
+| VC-14 (c) | NFR-1 | `test_vc14c_memoria_acotada_a_traves_de_blobreader` | a través de `BlobReader` real con `chunk_size` = 1 MiB: pico **3,1 MiB**. Contraste medido con el bloque por defecto: **120,1 MiB** (el VC puede fallar por la razón correcta) | ✅ |
+| VC-14 (a)/(b) | NFR-1 | los de la Iteración 1, ahora sobre el lector de bytes | siguen < 20 MiB | ✅ |
+| VC-17 | FR-11 | los de la Iteración 1 | siguen pasando; ver la decisión de abajo | ✅ |
+
+**Decisión de implementación que la spec no fija** (va a la v1.7, ver 2b): para
+clasificar un objeto hay que leer su ventana de 8192 bytes antes de emitir nada.
+Si la lectura **falla dentro de la ventana** sin haber visto un `\x00`, se buscan y
+emiten las líneas **completas** ya leídas y después se informa el error (la línea
+cortada se descarta, igual que a mitad de lectura). Si ya se vio un `\x00`, el
+objeto se informa como binario y no como error. Es lo que hace pasar VC-17 y VC-21
+con un doble que falla en los primeros bytes.
+
+### CLI (bloque 4) · `tests/test_cli_frontera.py`
+
+Fase roja observada: 12 de 14 fallaban (los 2 que pasaban: formas largas completas
+y `-- -x`, que ya andaban).
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-35 | FR-23 | `test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr`, `test_vc35_broken_pipe_no_llega_al_caso_generico` | `bash -c '… \| head -1'` con 200 000 matches: stdout `gs://b/p/a.txt:hit\n`, stderr de `gcsgrep` **vacío**, `PIPESTATUS[0]` = **141** | ✅ |
+| VC-37 (acción 6) | FR-25 | `test_vc37_abreviaturas_de_opciones_largas_se_rechazan[--ig, --line, --ma=3]`, `test_vc37_las_formas_largas_completas_siguen_andando`, `test_vc37_patron_que_empieza_con_guion_despues_de_doble_guion` | abreviaturas → exit `2`, 0 listados (`allow_abbrev=False`); `-- -x` busca `-x` | ✅ |
+| VC-23 | FR-15 | `test_vc23_sin_credenciales`, `test_vc23_gcs_traduce_adc_ausente` | exit `2`, `no se encontraron credenciales` + `gcloud auth application-default login`, 0 aperturas; `DefaultCredentialsError` sin `GOOGLE_APPLICATION_CREDENTIALS` → `SinCredenciales` | ✅ |
+| VC-41 | FR-26 | `test_vc41_y_vc45_credenciales_invalidas[VC-41]`, `test_vc41_gcs_traduce_archivo_de_credenciales_roto`, `test_vc41_gcs_traduce_refresh_rechazado` | `credenciales inválidas o vencidas`, sin `no se encontraron credenciales`; `DefaultCredentialsError` con la variable definida, y `RefreshError` al listar → `CredencialesInvalidas` | ✅ |
+| VC-45 | FR-28 | `test_vc41_y_vc45_credenciales_invalidas[VC-45]`, `test_vc45_gcs_traduce_401_al_listar` | `Unauthorized` real al listar → exit `2`, mensaje de FR-26, 0 aperturas | ✅ |
+| VC-16 (a) completo | NFR-3 | cada test de error o salteo de arriba asserta `Traceback` ausente o stderr exacto (VC-6, VC-8, VC-9, VC-10, VC-12, VC-13, VC-15, VC-18, VC-21, VC-22, VC-23, VC-32, VC-33, VC-37…VC-41, VC-45) | ningún stderr con `Traceback`, stdout solo matches | ✅ (deja de ser parcial) |
+
+### Lo que esta tabla **no** afirma
+
+- **I-6** (ADC ausente contra GCS real) no se corrió: sigue no verificable en
+  `floci` ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)) y
+  GCS real está declinado. VC-23 pasa contra el doble **y** contra la traducción de
+  `DefaultCredentialsError`; no contra un entorno sin ADC de verdad.
+- La heurística de FR-15 vs FR-26 (`GOOGLE_APPLICATION_CREDENTIALS` definida →
+  inválidas) cubre el ejemplo de la spec; otras fuentes rotas de ADC (metadata
+  server, `gcloud` mal configurado) se clasificarían como "no se encontraron".
+- Un `RefreshError` **a mitad de lectura de un objeto** no se traduce: cae en el
+  genérico (exit `2`, sin traceback) y aborta la corrida.
+- Ninguna corrida de integración nueva: los ✅ de esta sección son contra dobles y
+  contra excepciones reales del SDK, no contra la red.
+- El chequeo de CI que compara esta tabla con los tests `test_vcN_*`
+  ([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)) **no se
+  implementó**: Iteración 2b.
+
 ### Por qué VC-14 tiene dos filas
 
 En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**
