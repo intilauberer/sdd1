@@ -34,7 +34,7 @@ def test_vc7_bucket_completo_busca_en_todas_las_carpetas():
     fake.put("b", "c/z.txt", "sin nada relevante\n")
 
     config = core.SearchConfig(pattern="timeout")
-    matches = list(core.search("b", "", config, fake.list_objects, fake.open_text_stream))
+    matches = list(core.search("b", "", config, fake.list_objects, fake.open_stream))
 
     matched_objects = {m.object_name for m in matches}
     assert matched_objects == {"a/x.txt", "c/y.txt"}
@@ -45,7 +45,7 @@ def test_vc1_busqueda_basica_encuentra_match():
     fake.put("b", "logs/a.txt", "connection timeout\nok\n")
 
     config = core.SearchConfig(pattern="timeout")
-    matches = list(core.search("b", "logs/", config, fake.list_objects, fake.open_text_stream))
+    matches = list(core.search("b", "logs/", config, fake.list_objects, fake.open_stream))
 
     assert len(matches) == 1
     assert matches[0].bucket == "b"
@@ -60,11 +60,11 @@ def test_vc2_ignore_case():
 
     sin_i = list(core.search(
         "b", "logs/", core.SearchConfig(pattern="timeout"),
-        fake.list_objects, fake.open_text_stream,
+        fake.list_objects, fake.open_stream,
     ))
     con_i = list(core.search(
         "b", "logs/", core.SearchConfig(pattern="timeout", ignore_case=True),
-        fake.list_objects, fake.open_text_stream,
+        fake.list_objects, fake.open_stream,
     ))
 
     assert sin_i == []
@@ -78,7 +78,7 @@ def test_vc3_numero_de_linea():
 
     matches = list(core.search(
         "b", "logs/", core.SearchConfig(pattern="match"),
-        fake.list_objects, fake.open_text_stream,
+        fake.list_objects, fake.open_stream,
     ))
 
     assert len(matches) == 1
@@ -91,7 +91,7 @@ def test_vc5_sin_resultados():
 
     matches = list(core.search(
         "b", "logs/", core.SearchConfig(pattern="timeout"),
-        fake.list_objects, fake.open_text_stream,
+        fake.list_objects, fake.open_stream,
     ))
 
     assert matches == []
@@ -120,7 +120,7 @@ def test_vc17_primer_match_se_emite_sin_abrir_el_resto_del_prefijo():
 
     resultados = core.search(
         "b", "logs/", core.SearchConfig(pattern="timeout"),
-        fake.list_objects, fake.open_text_stream,
+        fake.list_objects, fake.open_stream,
     )
 
     primero = next(resultados)
@@ -150,7 +150,7 @@ def test_vc12_mil_un_objetos_sin_max_no_lee_ninguno():
     config = core.SearchConfig(pattern="timeout")
 
     with pytest.raises(errors.TopeExcedido) as exc_info:
-        list(core.search("b", "logs/", config, fake.list_objects, fake.open_text_stream))
+        list(core.search("b", "logs/", config, fake.list_objects, fake.open_stream))
 
     assert exc_info.value.encontrados == 1001
     assert exc_info.value.tope == 1000
@@ -162,7 +162,7 @@ def test_vc12_el_mensaje_menciona_la_cantidad_y_el_tope():
 
     with pytest.raises(errors.TopeExcedido) as exc_info:
         list(core.search("b", "logs/", core.SearchConfig(pattern="x"),
-                    fake.list_objects, fake.open_text_stream))
+                    fake.list_objects, fake.open_stream))
 
     mensaje = str(exc_info.value)
     assert "1001" in mensaje and "1000" in mensaje
@@ -173,7 +173,7 @@ def test_vc12_exactamente_en_el_tope_no_dispara():
     fake = _fake_con_n_objetos(1000)
 
     matches = list(core.search("b", "logs/", core.SearchConfig(pattern="timeout"),
-                          fake.list_objects, fake.open_text_stream))
+                          fake.list_objects, fake.open_stream))
 
     assert len(matches) == 1000
 
@@ -183,7 +183,7 @@ def test_vc12_max_0_quita_el_tope_y_si_lee():
     fake = _fake_con_n_objetos(1001)
     config = core.SearchConfig(pattern="timeout", max_objetos=core.SIN_TOPE)
 
-    matches = list(core.search("b", "logs/", config, fake.list_objects, fake.open_text_stream))
+    matches = list(core.search("b", "logs/", config, fake.list_objects, fake.open_stream))
 
     assert len(matches) == 1001
     assert len(fake.opened) == 1001
@@ -198,7 +198,7 @@ def test_vc12_max_0_no_materializa_el_listado():
     fake = _fake_con_n_objetos(3)
     config = core.SearchConfig(pattern="timeout", max_objetos=core.SIN_TOPE)
 
-    resultados = core.search("b", "logs/", config, fake.list_objects, fake.open_text_stream)
+    resultados = core.search("b", "logs/", config, fake.list_objects, fake.open_stream)
     primero = next(resultados)
     resultados.close()
 
@@ -213,6 +213,6 @@ def test_vc12_un_tope_bajo_tambien_protege():
 
     with pytest.raises(errors.TopeExcedido):
         list(core.search("b", "logs/", core.SearchConfig(pattern="x", max_objetos=4),
-                    fake.list_objects, fake.open_text_stream))
+                    fake.list_objects, fake.open_stream))
 
     assert fake.opened == []

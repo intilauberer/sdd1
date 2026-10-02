@@ -84,7 +84,7 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     found_any = False
     hubo_error_de_lectura = False
     try:
-        for evento in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_text_stream):
+        for evento in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_stream):
             if isinstance(evento, core.Aviso):
                 # Avisos de objetos ilegibles o salteados: stderr, en el momento.
                 print(f"gcsgrep: {evento.mensaje}", file=sys.stderr, flush=True)

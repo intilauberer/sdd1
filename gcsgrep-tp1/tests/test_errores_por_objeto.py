@@ -29,18 +29,18 @@ class _ContadorGCS(FakeGCS):
         self.listados += 1
         return super().list_objects(bucket, prefix)
 
-    def open_text_stream(self, bucket, name):
+    def open_stream(self, bucket, name):
         self.aperturas.append(name)
         if (bucket, name) in self._a_mitad:
             return ExplodingStream(*self._a_mitad[(bucket, name)])
-        return super().open_text_stream(bucket, name)
+        return super().open_stream(bucket, name)
 
 
 @pytest.fixture
 def fake(monkeypatch):
     f = _ContadorGCS()
     monkeypatch.setattr(gcs, "list_objects", f.list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", f.open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", f.open_stream)
     return f
 
 
@@ -169,7 +169,7 @@ def test_vc6_core_emite_el_aviso_entre_los_matches():
     fake.put("b", "p/c.txt", "hit c\n")
 
     eventos = list(
-        core.search("b", "p/", core.SearchConfig("hit"), fake.list_objects, fake.open_text_stream)
+        core.search("b", "p/", core.SearchConfig("hit"), fake.list_objects, fake.open_stream)
     )
 
     assert [type(e).__name__ for e in eventos] == ["Match", "Aviso", "Match"]
@@ -238,7 +238,7 @@ def test_vc6_gcs_traduce_403_y_401_de_un_objeto(monkeypatch, error_sdk):
     monkeypatch.setattr(gcs, "_get_client", lambda: _ClienteCon(_BlobQueFalla(al_abrir=error_sdk)))
 
     with pytest.raises(errors.ObjetoSinPermiso):
-        gcs.open_text_stream("b", "p/a.txt")
+        gcs.open_stream("b", "p/a.txt")
 
 
 def test_vc32_gcs_traduce_404_de_un_objeto(monkeypatch):
@@ -246,7 +246,7 @@ def test_vc32_gcs_traduce_404_de_un_objeto(monkeypatch):
     monkeypatch.setattr(gcs, "_get_client", lambda: _ClienteCon(blob))
 
     with pytest.raises(errors.ObjetoNoEncontrado):
-        gcs.open_text_stream("b", "p/a.txt")
+        gcs.open_stream("b", "p/a.txt")
 
 
 _ERRORES_DE_RED = [
@@ -263,7 +263,7 @@ def test_vc33_gcs_traduce_red_al_abrir(monkeypatch, error_sdk):
     monkeypatch.setattr(gcs, "_get_client", lambda: _ClienteCon(blob))
 
     with pytest.raises(errors.ErrorDeRedAlLeer):
-        gcs.open_text_stream("b", "p/a.txt")
+        gcs.open_stream("b", "p/a.txt")
 
 
 @pytest.mark.parametrize("error_sdk", _ERRORES_DE_RED)
@@ -272,8 +272,8 @@ def test_vc21_gcs_traduce_red_a_mitad_de_lectura(monkeypatch, error_sdk):
     monkeypatch.setattr(gcs, "_get_client", lambda: _ClienteCon(blob))
 
     with pytest.raises(errors.ErrorDeRedAlLeer):
-        with gcs.open_text_stream("b", "p/a.txt") as stream:
-            for _ in stream:
+        with gcs.open_stream("b", "p/a.txt") as stream:
+            while stream.read(65536):
                 pass
 
 
@@ -295,7 +295,7 @@ def test_vc15_y_vc29_gcs_desactiva_los_reintentos_del_sdk(monkeypatch):
     monkeypatch.setattr(gcs, "_get_client", lambda: cliente)
 
     list(gcs.list_objects("b", "p/"))
-    gcs.open_text_stream("b", "p/a.txt")
+    gcs.open_stream("b", "p/a.txt")
 
     assert cliente.list_kwargs.get("retry", "falta") is None
     assert blob.open_kwargs.get("retry", "falta") is None

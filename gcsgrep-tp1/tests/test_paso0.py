@@ -28,16 +28,16 @@ class _ContadorGCS(FakeGCS):
         self.listados += 1
         return super().list_objects(bucket, prefix)
 
-    def open_text_stream(self, bucket, name):
+    def open_stream(self, bucket, name):
         self.aperturas.append(name)
-        return super().open_text_stream(bucket, name)
+        return super().open_stream(bucket, name)
 
 
 @pytest.fixture
 def fake(monkeypatch):
     f = _ContadorGCS()
     monkeypatch.setattr(gcs, "list_objects", f.list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", f.open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", f.open_stream)
     return f
 
 
@@ -354,7 +354,7 @@ def test_vc43_ignore_case_con_tildes(fake, capsys):
 
 # --- NFR-4 · rendimiento (VC-30) --------------------------------------------------------
 
-_LINEA_80 = "x" * 79 + "\n"
+_LINEA_80 = b"x" * 79 + b"\n"
 _MIB = 1024 * 1024
 _REPETICIONES = 100 * _MIB // len(_LINEA_80)
 
@@ -364,7 +364,7 @@ def _corrida_en_proceso(monkeypatch, patron):
     con stdout a /dev/null. Devuelve (exit code, segundos)."""
     monkeypatch.setattr(gcs, "list_objects", lambda b, p: ["p/a.txt"])
     monkeypatch.setattr(
-        gcs, "open_text_stream", lambda b, n: HugeLineStream(_LINEA_80, _REPETICIONES)
+        gcs, "open_stream", lambda b, n: HugeLineStream(_LINEA_80, _REPETICIONES)
     )
     with open(os.devnull, "w") as devnull:
         monkeypatch.setattr(sys, "stdout", devnull)

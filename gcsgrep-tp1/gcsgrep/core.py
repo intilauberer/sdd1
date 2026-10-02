@@ -5,8 +5,9 @@ por cantidad de objetos (BR-2 / ADR-0006) y objetos ilegibles que no abortan la
 corrida (FR-6, FR-13, FR-21; Iteración 2).
 """
 
+import codecs
 from dataclasses import dataclass
-from typing import Callable, ContextManager, Iterable, Iterator, Tuple, Union
+from typing import Any, Callable, ContextManager, Iterable, Iterator, Optional, Tuple, Union
 
 from . import errors
 
@@ -20,10 +21,21 @@ SIN_TOPE = 0
 #: Puede ser lazy: `core` no consume el iterable de una sola vez.
 ListObjects = Callable[[str, str], Iterable[str]]
 
-#: Abre un objeto como texto. El valor devuelto es un **context manager** que
-#: al entrar da un iterable de líneas (un file-like de texto lo cumple).
-#: `core` nunca lee el objeto completo: itera línea por línea (NFR-1).
-OpenTextStream = Callable[[str, str], ContextManager[Iterable[str]]]
+#: Abre un objeto. El valor devuelto es un **context manager** que al entrar da
+#: un lector de **bytes** con `read(n)` (un file-like binario lo cumple). `core`
+#: nunca lee el objeto completo: lee de a `BLOQUE_DE_LECTURA` (NFR-1), y es quien
+#: decide qué es texto (FR-9, FR-17, FR-22, FR-27). Hasta la Iteración 1 se
+#: llamaba `open_text_stream` y entregaba líneas ya decodificadas.
+OpenStream = Callable[[str, str], ContextManager[Any]]
+
+#: Ventana de detección de binarios: un `\x00` en los primeros 8192 bytes (FR-9,
+#: ADR-0018).
+VENTANA_BINARIA = 8192
+
+#: Tamaño de cada `read` sobre el lector del objeto.
+BLOQUE_DE_LECTURA = 64 * 1024
+
+_BOM_UTF8 = codecs.BOM_UTF8
 
 
 @dataclass(frozen=True)
@@ -78,12 +90,77 @@ def parse_location(location: str) -> Tuple[str, str]:
     return bucket, prefix
 
 
+def _lineas(stream) -> Iterator[str]:
+    """Parte el contenido de un objeto de texto en líneas, ya decodificadas.
+
+    - UTF-8 con reemplazo (`U+FFFD`) de toda secuencia inválida (FR-17); el
+      decodificador es incremental, así que un carácter partido entre dos
+      lecturas no se rompe.
+    - Una línea termina **solo** en `\n`; el `\r` de `\r\n` se quita y un `\r`
+      suelto queda en la línea (FR-22). La última línea sin `\n` cuenta (FR-20).
+    - El primer bloque ya fue mirado por `search` (binario y BOM).
+    """
+    decoder = codecs.getincrementaldecoder("utf-8")(errors="replace")
+    pendiente = ""
+    while True:
+        bloque = stream.read(BLOQUE_DE_LECTURA)
+        if not bloque:
+            break
+        partes = (pendiente + decoder.decode(bloque)).split("\n")
+        pendiente = partes.pop()
+        for linea in partes:
+            yield linea[:-1] if linea.endswith("\r") else linea
+    pendiente += decoder.decode(b"", final=True)
+    if pendiente:
+        yield pendiente
+
+
+class _ConCabeza:
+    """El lector del objeto con sus primeros bytes ya leídos devueltos adelante.
+
+    Si la lectura de la cabeza falló, después de devolverla levanta ese error:
+    así las líneas **completas** que alcanzaron a leerse se buscan y se emiten
+    antes del aviso (FR-13, VC-17), y la línea que quedó cortada se descarta.
+    """
+
+    def __init__(self, cabeza: bytes, stream, error: Optional[Exception]) -> None:
+        self._cabeza = cabeza
+        self._stream = stream
+        self._error = error
+
+    def read(self, size: int) -> bytes:
+        if self._cabeza:
+            data, self._cabeza = self._cabeza, b""
+            return data
+        if self._error is not None:
+            raise self._error
+        return self._stream.read(size)
+
+
+def _leer_cabeza(stream) -> Tuple[bytes, Optional[Exception]]:
+    """Lee al menos `VENTANA_BINARIA` bytes (o hasta el final del objeto).
+
+    Devuelve también el error si la lectura falló antes: lo leído hasta ahí no
+    se pierde (ver `_ConCabeza`).
+    """
+    cabeza = b""
+    try:
+        while len(cabeza) < VENTANA_BINARIA:
+            bloque = stream.read(BLOQUE_DE_LECTURA)
+            if not bloque:
+                break
+            cabeza += bloque
+    except Exception as exc:  # noqa: BLE001 — se re-levanta en `_ConCabeza`
+        return cabeza, exc
+    return cabeza, None
+
+
 def search(
     bucket: str,
     prefix: str,
     config: SearchConfig,
     list_objects: ListObjects,
-    open_text_stream: OpenTextStream,
+    open_stream: OpenStream,
 ) -> Iterator[Evento]:
     """Emite cada match de `config.pattern` (substring literal) bajo `prefix`.
 
@@ -92,7 +169,7 @@ def search(
     acotada por el match más grande y no por la cantidad de matches (NFR-1), y
     por la que la salida aparece mientras la búsqueda avanza (FR-11).
 
-    `list_objects` y `open_text_stream` son los únicos puntos de contacto con
+    `list_objects` y `open_stream` son los únicos puntos de contacto con
     GCS (o con un doble de prueba); `core` no importa `google.cloud.storage`.
 
     Antes de leer contenido aplica el guardrail de costo (BR-2 / ADR-0006): si el
@@ -114,13 +191,28 @@ def search(
             raise errors.TopeExcedido(len(nombres), config.max_objetos)
 
     for object_name in nombres:
+        uri = f"gs://{bucket}/{object_name}"
+        # FR-10: los .gz se saltean por extensión, sin abrirlos. No es error (BR-3).
+        if object_name.endswith(".gz"):
+            yield Aviso(f"salteado (.gz): {uri}", es_error=False)
+            continue
         # Un objeto que no se puede leer no aborta la corrida (FR-6, FR-13,
         # FR-21): los matches que ya salieron quedan, se emite un aviso y se
         # sigue. No se vuelve a abrir (NFR-2, 0 reintentos).
         try:
-            with open_text_stream(bucket, object_name) as stream:
-                for line_number, raw_line in enumerate(stream, start=1):
-                    line = raw_line.rstrip("\n")
+            with open_stream(bucket, object_name) as stream:
+                cabeza, error = _leer_cabeza(stream)
+                # FR-9: un \x00 en la ventana → binario, sin matchear nada. Si la
+                # lectura se cortó dentro de la ventana pero ya se vio un \x00,
+                # el objeto es binario igual y no hacía falta leer más.
+                if b"\x00" in cabeza[:VENTANA_BINARIA]:
+                    yield Aviso(f"salteado (binario): {uri}", es_error=False)
+                    continue
+                # FR-27: el BOM se descarta solo si son los tres primeros bytes.
+                if cabeza.startswith(_BOM_UTF8):
+                    cabeza = cabeza[len(_BOM_UTF8):]
+                lineas = _lineas(_ConCabeza(cabeza, stream, error))
+                for line_number, line in enumerate(lineas, start=1):
                     haystack = line.lower() if config.ignore_case else line
                     if needle in haystack:
                         yield Match(bucket, object_name, line_number, line)

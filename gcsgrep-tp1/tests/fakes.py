@@ -1,24 +1,29 @@
 """Dobles de prueba para la capa `gcs`. Sin red, sin credenciales."""
 
 import io
-from typing import Dict, Iterator, List
+from typing import Dict, Iterator, List, Union
 
 
 class FakeGCS:
+    """Doble del módulo `gcs`. Desde la Iteración 2 entrega **bytes**, como el
+    lector real (`open_stream`): `core` es quien decide qué es texto (FR-9, FR-17)."""
+
     def __init__(self) -> None:
-        self._objects: Dict[str, Dict[str, str]] = {}
+        self._objects: Dict[str, Dict[str, bytes]] = {}
         self._errors: Dict[str, Dict[str, Exception]] = {}
 
-    def put(self, bucket: str, name: str, content: str) -> None:
+    def put(self, bucket: str, name: str, content: Union[str, bytes]) -> None:
         """Siembra contenido. Es setup del test, no parte de la superficie que
         `core` puede usar: `core` solo recibe `list_objects` y
-        `open_text_stream`.
+        `open_stream`.
 
         Pendiente para VC-11 (Iteración 2): separar la siembra de la superficie
         observable, para que el test de "solo operaciones de lectura" pueda
         distinguir una escritura del setup de una del código bajo prueba.
         Ver docs/revision-spec.md, hallazgo H-10.
         """
+        if isinstance(content, str):
+            content = content.encode("utf-8")
         self._objects.setdefault(bucket, {})[name] = content
 
     def explode_on(self, bucket: str, name: str, error: Exception) -> None:
@@ -28,18 +33,18 @@ class FakeGCS:
         objeto existe para GCS cuando se lista y ya no —o no se puede leer—
         cuando se lo va a abrir. Es setup del test, igual que `put` (ver H-10).
         """
-        self._objects.setdefault(bucket, {})[name] = ""
+        self._objects.setdefault(bucket, {})[name] = b""
         self._errors.setdefault(bucket, {})[name] = error
 
     def list_objects(self, bucket: str, prefix: str) -> Iterator[str]:
         names = self._objects.get(bucket, {})
         return iter(sorted(n for n in names if n.startswith(prefix)))
 
-    def open_text_stream(self, bucket: str, name: str) -> io.StringIO:
+    def open_stream(self, bucket: str, name: str) -> io.BytesIO:
         error = self._errors.get(bucket, {}).get(name)
         if error is not None:
             raise error
-        return io.StringIO(self._objects[bucket][name])
+        return io.BytesIO(self._objects[bucket][name])
 
 
 class RecordingFakeGCS(FakeGCS):
@@ -61,22 +66,24 @@ class RecordingFakeGCS(FakeGCS):
             self.listed.append(name)
             yield name
 
-    def open_text_stream(self, bucket: str, name: str) -> io.StringIO:
+    def open_stream(self, bucket: str, name: str) -> io.BytesIO:
         self.opened.append(name)
-        return super().open_text_stream(bucket, name)
+        return super().open_stream(bucket, name)
 
 
 class HugeLineStream:
     """Simula un objeto remoto enorme sin materializarlo en memoria.
 
-    Genera la misma línea `repeat` veces bajo demanda (streaming real), para
-    poder ejercitar VC-14 sin depender de un objeto de GCS de 200 MB de
-    verdad.
+    Entrega por `read(n)` los bytes de la misma línea repetida `repeat` veces,
+    generados bajo demanda (streaming real), para poder ejercitar VC-14 y VC-30
+    sin depender de un objeto de GCS de 200 MB de verdad. `read()` sin tamaño
+    (leer todo) es justo lo que NFR-1 prohíbe: falla.
     """
 
-    def __init__(self, line: str, repeat: int) -> None:
-        self._line = line
-        self._repeat = repeat
+    def __init__(self, line: Union[str, bytes], repeat: int) -> None:
+        self._line = line.encode("utf-8") if isinstance(line, str) else line
+        self._total = len(self._line) * repeat
+        self._pos = 0
 
     def __enter__(self) -> "HugeLineStream":
         return self
@@ -84,9 +91,16 @@ class HugeLineStream:
     def __exit__(self, *exc_info) -> bool:
         return False
 
-    def __iter__(self) -> Iterator[str]:
-        for _ in range(self._repeat):
-            yield self._line
+    def read(self, size: int = -1) -> bytes:
+        assert size is not None and size >= 0, "NFR-1: nadie lee el objeto entero"
+        n = min(size, self._total - self._pos)
+        if n <= 0:
+            return b""
+        largo = len(self._line)
+        offset = self._pos % largo
+        data = (self._line * ((offset + n) // largo + 1))[offset:offset + n]
+        self._pos += n
+        return data
 
 
 class ExplodingStream:
@@ -98,7 +112,7 @@ class ExplodingStream:
     """
 
     def __init__(self, lines: List[str], error: Exception) -> None:
-        self._lines = lines
+        self._pendiente = "".join(lines).encode("utf-8")
         self._error = error
 
     def __enter__(self) -> "ExplodingStream":
@@ -107,9 +121,11 @@ class ExplodingStream:
     def __exit__(self, *exc_info) -> bool:
         return False
 
-    def __iter__(self) -> Iterator[str]:
-        for line in self._lines:
-            yield line
+    def read(self, size: int = -1) -> bytes:
+        # Entrega las líneas de a una lectura y en la siguiente falla.
+        if self._pendiente:
+            data, self._pendiente = self._pendiente, b""
+            return data
         raise self._error
 
 
@@ -160,9 +176,9 @@ class ClienteSoloLectura:
                 self._nombre = nombre
 
             def open(self, mode: str, **kwargs):
-                assert mode == "r", f"BR-1: se abrió un blob en modo '{mode}', no 'r'"
-                cliente.invocaciones.append("blob.open(r)")
-                return io.StringIO("contenido\n")
+                assert mode == "rb", f"BR-1: se abrió un blob en modo '{mode}', no 'rb'"
+                cliente.invocaciones.append("blob.open(rb)")
+                return io.BytesIO(b"contenido\n")
 
             def __getattr__(self, attr):
                 cliente.invocaciones_prohibidas.append(f"blob.{attr}")

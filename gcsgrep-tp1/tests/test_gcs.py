@@ -23,9 +23,9 @@ class _FakeBlob:
         self._content = content
         self.opened_with_mode = None
 
-    def open(self, mode: str, **kwargs) -> io.StringIO:
+    def open(self, mode: str, **kwargs) -> io.BytesIO:
         self.opened_with_mode = mode
-        return io.StringIO(self._content)
+        return io.BytesIO(self._content.encode("utf-8"))
 
 
 class _FakeBucket:
@@ -59,15 +59,15 @@ def test_list_objects_llama_a_list_blobs_con_bucket_y_prefix(monkeypatch):
     assert fake_client.list_blobs_calls == [("mi-bucket", "logs/")]
 
 
-def test_open_text_stream_abre_el_blob_correcto_en_modo_lectura(monkeypatch):
+def test_open_stream_abre_el_blob_correcto_en_modo_lectura(monkeypatch):
     blob = _FakeBlob("logs/a.txt", content="contenido\n")
     fake_client = _FakeClient([blob])
     monkeypatch.setattr(gcs, "_get_client", lambda: fake_client)
 
-    stream = gcs.open_text_stream("mi-bucket", "logs/a.txt")
+    stream = gcs.open_stream("mi-bucket", "logs/a.txt")
 
-    assert blob.opened_with_mode == "r"
-    assert stream.read() == "contenido\n"
+    assert blob.opened_with_mode == "rb"
+    assert stream.read(1024) == b"contenido\n"
 
 
 def test_get_client_es_singleton(monkeypatch):
@@ -164,7 +164,7 @@ def test_vc18_los_dos_errores_del_listado_dan_mensajes_distintos(monkeypatch):
     assert str(no_existe.value) != str(denegado.value)
 
 
-def test_vc6_open_text_stream_traduce_forbidden_a_objeto_sin_permiso(monkeypatch):
+def test_vc6_open_stream_traduce_forbidden_a_objeto_sin_permiso(monkeypatch):
     """Hasta la Iteración 1 esto era `AccesoDenegado` (un `ErrorDeAcceso`, que
     aborta). Desde FR-6 es un error por objeto que no aborta la corrida."""
     monkeypatch.setattr(
@@ -174,12 +174,12 @@ def test_vc6_open_text_stream_traduce_forbidden_a_objeto_sin_permiso(monkeypatch
     )
 
     with pytest.raises(errors.ObjetoSinPermiso) as exc_info:
-        gcs.open_text_stream("b", "logs/a.txt")
+        gcs.open_stream("b", "logs/a.txt")
 
     assert "logs/a.txt" in str(exc_info.value)
 
 
-def test_vc18_open_text_stream_traduce_notfound_a_objeto_no_encontrado(monkeypatch):
+def test_vc18_open_stream_traduce_notfound_a_objeto_no_encontrado(monkeypatch):
     """Un objeto que desapareció entre el listado y la lectura no es "sin
     permiso": es la ventana de ADR-0010."""
     monkeypatch.setattr(
@@ -189,7 +189,7 @@ def test_vc18_open_text_stream_traduce_notfound_a_objeto_no_encontrado(monkeypat
     )
 
     with pytest.raises(errors.ObjetoNoEncontrado):
-        gcs.open_text_stream("b", "logs/a.txt")
+        gcs.open_stream("b", "logs/a.txt")
 
 
 # --- VC-11 · BR-1 solo lectura ------------------------------------------------
@@ -246,11 +246,11 @@ def test_vc11_un_doble_que_solo_permite_leer_no_registra_llamadas_prohibidas(mon
     monkeypatch.setattr(gcs, "_get_client", lambda: cliente)
 
     assert list(gcs.list_objects("b", "logs/")) == ["logs/a.txt", "logs/b.txt"]
-    with gcs.open_text_stream("b", "logs/a.txt") as stream:
-        assert list(stream) == ["contenido\n"]
+    with gcs.open_stream("b", "logs/a.txt") as stream:
+        assert stream.read(1024) == b"contenido\n"
 
     assert cliente.invocaciones_prohibidas == []
-    assert set(cliente.invocaciones) <= {"list_blobs", "bucket", "bucket.blob", "blob.open(r)"}
+    assert set(cliente.invocaciones) <= {"list_blobs", "bucket", "bucket.blob", "blob.open(rb)"}
 
 
 def test_vc11_el_doble_efectivamente_detecta_una_escritura():

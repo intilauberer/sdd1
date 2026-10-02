@@ -31,6 +31,12 @@ _ERRORES_DE_RED = (
     gcs_exceptions.ServerError,
 )
 
+#: Tamaño de bloque del lector de la librería cliente (NFR-1, spec v1.6). El
+#: default de `BlobReader` es ~40 MiB y leyendo a través de él el pico medido fue
+#: de ≈120 MiB; con 1 MiB queda bajo el umbral de 20 MiB (VC-14 (c)). Costo: más
+#: pedidos HTTP por objeto (1 por MiB), que pesa en la latencia real, no en NFR-4.
+CHUNK_SIZE = 1024 * 1024
+
 _client: Optional[storage.Client] = None
 
 
@@ -104,10 +110,13 @@ class _LectorTraducido:
             return self._lector.read(size)
 
 
-def open_text_stream(bucket: str, object_name: str):
-    """Devuelve un file-like de texto que streamea el contenido del objeto."""
+def open_stream(bucket: str, object_name: str):
+    """Devuelve un lector de **bytes** que streamea el contenido del objeto.
+
+    Binario a propósito: qué es texto lo decide `core` (FR-9, FR-17, FR-22, FR-27).
+    """
     client = _get_client()
     blob = client.bucket(bucket).blob(object_name)
     with _traducir_errores_de_objeto(bucket, object_name):
-        lector = blob.open("r", retry=None)
+        lector = blob.open("rb", chunk_size=CHUNK_SIZE, retry=None)
     return _LectorTraducido(lector, bucket, object_name)
