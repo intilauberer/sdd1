@@ -16,11 +16,12 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: Iteración 2 implementada.** 44 de 45 VCs pasando contra dobles de
-> prueba (130 tests); falta VC-31 (GCS real). Las dos Restricciones del enunciado
+> **Estado: Iteraciones 2 y 2b implementadas (spec v1.7).** 49 de 50 VCs pasando
+> contra dobles de prueba (161 tests); falta VC-31 (GCS real). Las dos Restricciones del enunciado
 > implementadas, y la verificación de integración de la Iteración 1 ejecutada
-> contra el emulador `floci-gcp`. Lo que queda está en la
-> [Iteración 2b](./specs/gcsgrep/03-plan.md#pasa-a-una-iteración-2b). La verificación contra GCS real se
+> contra el emulador `floci-gcp`, e I-6 (sin credenciales) contra ADC real. Lo que
+> queda abierto está en el
+> [cierre de la Iteración 2b](./specs/gcsgrep/03-plan.md#iteración-2b--estado-al-cierre). La verificación contra GCS real se
 > declinó con fundamento y obligación registrada
 > ([ADR-0015](./docs/adr/ADR-0015-verificacion-real-declinada.md)) — ver
 > [Estado](#estado).
@@ -208,9 +209,10 @@ El manejo de errores sigue la misma dirección: `gcs` traduce las excepciones de
 Con `uv`, cada comando se ejecuta mediante `uv run`:
 
 ```bash
-uv run pytest                              # 130 tests, offline, sin credenciales
+uv run pytest                              # 161 tests, offline, sin credenciales
 uv run pytest -v                           # con el nombre de cada VC
 uv run python scripts/check-doc-links.py   # enlaces entre artefactos
+uv run python scripts/check-cobertura.py   # la tabla de cobertura coincide con los tests
 ```
 
 Sobre un entorno instalado con `pip`, los mismos comandos se corren sin prefijo:
@@ -219,6 +221,7 @@ Sobre un entorno instalado con `pip`, los mismos comandos se corren sin prefijo:
 python -m pytest
 python -m pytest -v
 python scripts/check-doc-links.py
+python scripts/check-cobertura.py
 ```
 
 Los tests están nombrados por el VC que ejercitan
@@ -232,7 +235,7 @@ chequeo de enlaces, en cada push y cada PR.
 
 ### Verificación de integración
 
-Los 130 tests corren contra dobles de prueba. Para verificar contra un GCS de
+Los 161 tests corren contra dobles de prueba. Para verificar contra un GCS de
 verdad —real o emulado— hay un campo de pruebas desechable:
 
 ```bash
@@ -258,10 +261,10 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | Spec v1.4 (respuesta a la corrección de la cátedra) | ✅ escrita — 27 requerimientos, 31 VCs; [qué cambió por cada acción](./docs/respuesta-correccion-catedra.md) |
 | Spec v1.5 (respuesta a la [revisión de la v1.4](./revisiones/spec-v1.4-2026-10-01.md)) | ✅ escrita — 34 requerimientos, 44 VCs; las 21 acciones en la fila v1.5 del historial de la spec |
 | Iteración 2 (regularización de VCs v1.4 y v1.5, resiliencia, contenido no-texto, rendimiento) | ✅ **implementada 2026-10-01** — los cuatro bloques completos; [estado al cierre](./specs/gcsgrep/03-plan.md#iteración-2--estado-al-cierre) |
-| Iteración 2b (chequeo de CI de la cobertura, I-6, spec v1.7, ADR del `chunk_size`, recalibrar VC-30 (b)) | ⬜ pendiente — [lista](./specs/gcsgrep/03-plan.md#pasa-a-una-iteración-2b) |
+| Iteración 2b (chequeo de CI de la cobertura, I-6, spec v1.7, ADR-0020…ADR-0028, NFR-4 recalibrado, Python ≥ 3.10) | ✅ **implementada 2026-10-02** — [estado al cierre](./specs/gcsgrep/03-plan.md#iteración-2b--estado-al-cierre) |
 | Iteración 3 (concurrencia y su NFR comparativo) | ⬜ no comprometida; obligación registrada |
 
-**44/45 VCs pasando** contra dobles de prueba (falta VC-31, GCS real), 130 tests offline más 5 de integración.
+**49/50 VCs pasando** contra dobles de prueba (falta VC-31, GCS real), 161 tests offline más 5 de integración.
 
 El enunciado pide que la Iteración 1 "corra una búsqueda real y sus chequeos de
 verificación pasen". Eso **está cumplido** contra el emulador: los seis chequeos

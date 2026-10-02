@@ -316,6 +316,79 @@ hay un 3.9 local). Y el fondo del problema sigue ahí: Google ya no da soporte a
 que es el piso declarado en `pyproject.toml`. Subir el piso a 3.10 es una decisión
 para la Iteración 2b (spec v1.7, acción 17: el runtime no está nombrado en la spec).
 
+## Iteración 2b · cierre (2026-10-02, spec v1.7)
+
+Filas nuevas; ninguna anterior se editó. Rama `iteracion-2b`. El estado vigente de
+cada VC es su **última** fila antes del *Histórico*, y desde esta iteración lo
+verifica una máquina: `scripts/check-cobertura.py`, en el job de documentos del CI
+([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)).
+
+**Resumen.** 50 VCs en la spec v1.7 (VC-1…VC-50): **49 pasan contra dobles de
+prueba**; el que falta sigue siendo **VC-31** (GCS real,
+[ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md)). Tests: **161**
+offline en 10 archivos, más 5 de integración. Fase roja observada: **14** tests en
+rojo antes del código (de los 45 de `test_iteracion_2b.py` y
+`test_cli_frontera.py`); los demás ya pasaban porque describen comportamiento que la
+Iteración 2 tenía y la v1.7 escribió.
+
+**Control del chequeo de cobertura.** Su primera corrida, antes de esta sección,
+falló con 6 contradicciones reales: VC-35 (vigente ❌, la fila de la regresión de
+Python 3.9) y VC-46…VC-50 (con tests y sin fila). Es lo que demuestra que puede
+fallar por la razón correcta.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-35 (v1.7) | FR-23 | `test_cli_frontera.py::test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr` | proceso real en bash con el doble inyectado: una línea en stdout, stderr vacío, `PIPESTATUS[0]` = 141, y el registro de aperturas es exactamente `p/a.txt` (`b.txt` 0 veces). Pasa en el CI desde el arreglo del filtro de `FutureWarning` (Python 3.9) y en la matriz nueva (3.10, 3.12) | ✅ |
+| VC-39 (v1.7, bajo FR-8) | FR-8 | `test_iteracion_2b.py::test_vc39_gs_sin_bucket_es_ubicacion_invalida[gs://, gs:///p]` | exit `2`, stdout vacío, stderr con `gs://`, 0 listados. Antes del código: el mensaje era `falta el nombre del bucket`, sin `gs://` (rojo) | ✅ |
+| VC-37, VC-38, VC-40 (v1.7) | FR-25 | `test_iteracion_2b.py::test_vc37_vc38_vc40_vc46_rechazo_con_texto_fijo` (6 casos) | stderr con `gcsgrep: error:` en todos. Antes del código: `--max -1` no lo tenía (rojo) | ✅ |
+| VC-46 | FR-25 | `test_cli_frontera.py::test_vc46_abreviaturas_de_opciones_largas_se_rechazan[--ig, --line, --ma=3]`, `test_iteracion_2b.py::test_vc37_vc38_vc40_vc46_*[--ig]` | exit `2`, 0 listados, `gcsgrep: error:` | ✅ |
+| VC-47 | FR-25 | `test_iteracion_2b.py::test_vc47_sintaxis_aceptada` (3 casos), `test_cli_frontera.py::test_vc47_patron_que_empieza_con_guion_despues_de_doble_guion` | `-- -x`, `-in` y `--max=1 -i -n`: exit `0` y stdout exacto | ✅ |
+| VC-48 | FR-30 | `test_iteracion_2b.py::test_vc48_ayuda[--help, -h]`, `test_paso0.py::test_vc48_help_imprime_la_ayuda_por_stdout_y_no_toca_gcs` | exit `0`, stdout con `gcsgrep` y las cuatro opciones, stderr vacío, 0 listados | ✅ |
+| VC-49 | FR-30 | `test_iteracion_2b.py::test_vc49_las_formas_largas_dan_la_misma_salida`, `test_cli_frontera.py::test_vc49_las_formas_largas_completas_siguen_andando` | `--ignore-case` ≡ `-i` y `--line-number` ≡ `-n`: mismo exit, stdout y stderr | ✅ |
+| VC-50 | FR-29 | `test_iteracion_2b.py::test_vc50_otro_4xx_en_la_primera_lectura_no_aborta`, `test_vc50_gcs_traduce_otros_4xx_al_abrir[400, 409, 412]` | a través del `gcs` real con un cliente falso: `400` en la primera lectura de `b.txt` → `hit a` y `hit c` en stdout, `no se pudo leer` + `gs://b/p/b.txt`, exit `2`. Antes del código: abortaba por el genérico (rojo) | ✅ |
+| VC-6, VC-32 (v1.7) | FR-6, FR-21 | `test_iteracion_2b.py::test_vc6_y_vc32_fallo_en_la_primera_lectura[403, 401, refresh, 404]` | el fallo llega en la **primera lectura**, como con `BlobReader`: el objeto anterior sale, la línea correcta en stderr, exit `2`. El caso *refresh* rechazado estaba en rojo (abortaba) | ✅ |
+| VC-21 (v1.7) | FR-13 | `test_iteracion_2b.py::test_vc21_408_y_429_sobre_un_objeto_son_error_de_red[408, 429]` | `error de red al leer`, la corrida sigue, exit `2`. El `408` lo entrega el SDK como `GoogleAPICallError` sin clase propia (`from_http_status(408)`), por eso se clasifica por código. Antes: rojo | ✅ |
+| VC-15 (v1.7) | NFR-2 (a) | `test_iteracion_2b.py::test_vc15_408_y_429_al_listar_son_error_de_red`, `test_vc15_y_vc29_sin_reintentos_y_timeout_de_60s_en_la_libreria` | `408`/`429` al listar → `ErrorDeRedAlListar`; `list_blobs` y `blob.open` reciben `retry=None` y `timeout=60`. Antes: rojo (sin `timeout`, y los `4xx` al genérico) | ✅ |
+| VC-29 (v1.7) | NFR-2 (b) | `test_vc15_y_vc29_sin_reintentos_y_timeout_de_60s_en_la_libreria` (+ los de la Iteración 2) | ídem, sobre la apertura de cada objeto | ✅ |
+| VC-41 (v1.7) | FR-26 | `test_iteracion_2b.py::test_vc41_archivo_de_gcloud_presente_da_credenciales_invalidas` | archivo de `gcloud` mal formado en `$CLOUDSDK_CONFIG` → `CredencialesInvalidas`. Antes: `SinCredenciales` (rojo) | ✅ |
+| VC-23 (v1.7) | FR-15 | `test_iteracion_2b.py::test_vc23_sin_variable_ni_archivo_de_gcloud_son_credenciales_ausentes` | sin variable y con `$CLOUDSDK_CONFIG` vacío → `SinCredenciales` | ✅ |
+| VC-43 (v1.7) | FR-2 | `test_iteracion_2b.py::test_vc43_sigma_final_con_ignore_case` | `ΟΔΟΣ`: `-i "σ"` → `(1, "", "")`; `-i "ς"` → exit `0` | ✅ |
+| VC-5, VC-36, VC-44 (v1.7) | FR-5, FR-24, FR-27 | `test_paso0.py::test_vc5_prefijo_sin_objetos`, `test_vc36_una_linea_vacia_es_una_linea`, `test_contenido_no_texto.py::test_vc44_bom_fuera_del_principio_se_conserva` | los casos que la v1.7 agregó al texto ya estaban ejercitados desde la Iteración 2 (acciones 8, 4 y 15) | ✅ |
+| VC-30 (v1.7) | NFR-4 | `test_paso0.py::test_vc30_a_*`, `test_vc30_b_todo_matchea_al_menos_150000_matches_por_segundo` | umbral (b) = 150 000. `ubuntu-latest` (run `36949165784`): Python 3.12 → (a) 573 MiB/s, (b) 488 152/s, mala 105 613/s; Python 3.9 → (a) 306, (b) 319 034, mala 64 090. macOS: (a) 924, (b) 359 782, mala (b) 31 859, mala (a) 3,2 MiB/s | ✅ |
+| VC-16 (a) (v1.7) | NFR-3 | los de arriba que assertan `Traceback` ausente o stderr exacto, más VC-46 y VC-50 | ningún stderr con `Traceback` | ✅ |
+
+### I-6 contra ADC real, sin emulador (2026-10-02)
+
+H-14 dejó I-6 sin verificar porque en `floci` el SDK no mira credenciales. Pero I-6
+no necesita GCS: la falla de ADC ocurre **al crear el cliente**, antes de cualquier
+pedido a Storage. Se corrió el `gcsgrep` instalado con el SDK real
+(`google-auth 2.59.1`, `google-cloud-storage 3.16.0`, Python 3.13, macOS), con
+`$CLOUDSDK_CONFIG` apuntando a un directorio temporal para que ADC no viera la
+configuración de `gcloud` de la máquina, contra `gs://gcsgrep-test-no-existe-i6/`.
+Script: [`scripts/i6-adc-local.sh`](../../scripts/i6-adc-local.sh), que además
+corre en cada push como paso del job de VCs del CI (el runner no tiene credenciales
+de GCP).
+
+| Chequeo | VCs que toca | Entorno | Esperado | Observado | Fecha |
+|---|---|---|---|---|---|
+| I-6 (ADC ausente) | VC-23 | sin `GOOGLE_APPLICATION_CREDENTIALS`, `$CLOUDSDK_CONFIG` vacío | exit `2`, `no se encontraron credenciales` + `gcloud auth application-default login`, sin traceback | ✅ exit `2`, stdout 0 B, stderr exactamente `gcsgrep: no se encontraron credenciales de Google Cloud. Obtenelas con: gcloud auth application-default login`; 6 s (ADC prueba el servidor de metadata de GCE antes de rendirse) | 2026-10-02 |
+| I-6 (variable a un archivo inexistente) | VC-41 | `GOOGLE_APPLICATION_CREDENTIALS=…/no-existe.json` | exit `2`, `credenciales inválidas o vencidas` | ✅ exit `2`, stdout 0 B, stderr `gcsgrep: credenciales inválidas o vencidas. Renovalas con: gcloud auth application-default login` | 2026-10-02 |
+| I-6 (archivo de `gcloud` mal formado) | VC-41 | `$CLOUDSDK_CONFIG` con `application_default_credentials.json` = `{ no es json` | ídem | ✅ ídem | 2026-10-02 |
+
+**Qué no afirma esto:** no es el backend `gcs` del runbook (no hubo bucket ni red
+hacia Storage), y no ejercita un token **vencido** de verdad (FR-28, un `401` real al
+listar), que sigue cubierto solo por el doble. VC-31 sigue sin ejecutar.
+
+### Lo que la Iteración 2b deja abierto
+
+- `uv.lock` todavía declara `requires-python = ">=3.9"`: no hay `uv` en la máquina
+  donde se hizo la iteración, y regenerarlo a mano no es seguro. El CI instala con
+  `pip` y no lo usa. Hay que correr `uv lock` donde haya `uv`.
+- Un `4xx` que no es `401`/`403`/`404`/`408`/`429` **al listar** sigue en el
+  genérico (exit `2`, sin traceback). Es una decisión de ADR-0025, no un hueco.
+- El número de NFR-4 en Python 3.10 (el piso nuevo) queda en el log del CI de esta
+  rama; se registra abajo cuando corra.
+
 ### Por qué VC-14 tiene dos filas
 
 En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**
