@@ -3,7 +3,7 @@
 | | |
 |---|---|
 | **Versión** | 1.7 |
-| **Estado** | habilitada; cierra las excepciones registradas de la revisión de la v1.5 (Iteración 2b, ver el *Historial*) |
+| **Estado** | habilitada; cierra las excepciones registradas de la revisión de la v1.5 (Iteración 2b, ver el *Historial*). **La v1.6 y la v1.7 no pasaron por una revisión adversarial propia:** la última es la de la v1.5. Correr el corrector sobre la v1.7 es el primer paso antes de la Iteración 3 |
 | **Fecha** | 2026-10-02 |
 | **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-19, 16 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) · [corrección de la cátedra](../../docs/correccion-catedra-iteracion-1.md), respondida acción por acción en [`docs/respuesta-correccion-catedra.md`](../../docs/respuesta-correccion-catedra.md) · [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md) (NEEDS WORK, 21 acciones) · [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) (NEEDS WORK, 2 MUST resueltos en v1.6, el resto registrado como excepción) |
 | **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (28 ADRs) |

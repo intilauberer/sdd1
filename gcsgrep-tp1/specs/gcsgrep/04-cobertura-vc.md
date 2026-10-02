@@ -19,6 +19,19 @@
 > La tabla no dice "lo probé". Dice, para cada criterio de verificación, con qué
 > se lo ejercita y qué se observó.
 
+## Estado vigente (2026-10-02, spec v1.7)
+
+**49 de 50 VCs pasan** contra dobles de prueba; falta **VC-31** (GCS real, sujeto a
+[ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md)). 161 tests
+offline más 5 de integración, verificados en CI por `scripts/check-cobertura.py`.
+El detalle está en [*Iteración 2b · cierre*](#iteración-2b--cierre-2026-10-02-spec-v17)
+y, para lo anterior, en [*Iteración 2 · cierre*](#iteración-2--cierre-2026-10-01).
+
+Los resúmenes y las tablas que siguen hasta esas secciones son **registros de su
+fecha**, y no se editan (append-only): las filas ⬜ de las secciones *Spec v1.4* y
+*Spec v1.5* quedaron superadas por las filas ✅ de los cierres de las Iteraciones 2
+y 2b. El estado de cada VC es su **última** fila antes del *Histórico*.
+
 ## Resumen al 2026-10-01 (spec v1.5)
 
 | | |
