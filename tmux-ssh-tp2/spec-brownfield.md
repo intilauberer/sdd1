@@ -9,9 +9,9 @@
 | | |
 |---|---|
 | **Repo** | [`tmux/tmux`](https://github.com/tmux/tmux) · commit base `5a820e63b72f05c121441149c72327aeeb16dfa4` (`next-3.9`) |
-| **Versión** | v1.3 · 2026-10-01 · Grupo 4 |
-| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). Sin implementación, por consigna |
-| **Conteo** | FR: 58 · BR: 5 · NFR: 3 · INV: 7 · VC: 69 |
+| **Versión** | v1.4 · 2026-10-01 · Grupo 4 |
+| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). v1.4 agrega, después de esa vuelta, tres decisiones que salieron de una revisión externa (D-17 a D-19, ver Historial). Sin implementación, por consigna |
+| **Conteo** | FR: 60 · BR: 5 · NFR: 3 · INV: 7 · VC: 71 |
 
 ## 1 · Propósito
 
@@ -230,6 +230,12 @@ ssh-pane [-dh] [-i identity-file] [-P port] [-t target-pane] destination
   posicional.
 - Cualquier otra letra es un error de tmux (FR-27). En particular, `p`, `l`, `x`,
   `X`, `y` e `Y` no pueden aceptarse, porque las lee el layout (N-8, D-8).
+- `identity-file` tiene que ser un path absoluto (FR-59, D-18). En un
+  `.tmux.conf` o un binding, el parser de comandos de tmux ya expande un `~` al
+  principio de una palabra, salvo entre comillas simples (`cmd-parse.y:1710`).
+  Desde la shell, lo expande la shell.
+- El proceso remoto recibe solo `TERM`. No se manda ninguna otra variable de
+  entorno (FR-60, D-19).
 
 **FR-6 · Abrir un pane remoto.**
 **Dado** el entorno base,
@@ -319,6 +325,18 @@ y el tamaño es `F C`.
 > con `12 `. El servidor `tmux` no hace nada nuevo para esto: el resize le llega
 > al hijo como `SIGWINCH` por `TIOCSWINSZ` (`window.c:612`), y el hijo lo reenvía
 > como `window-change`.
+
+**FR-60 · Solo viaja `TERM`.**
+**Dado** el entorno base, con `T set-environment -g LC_PRUEBA x` antes del
+comando, y el `sshd` de §9, que acepta `LANG` y `LC_*` (`AcceptEnv LANG LC_*`,
+el default de Ubuntu),
+**cuando** se corre `T ssh-pane alice@servidor`,
+**entonces** la shell remota no tiene `LC_PRUEBA`: el cliente no manda ningún
+pedido `env` (D-19). `TERM` llega por el pedido de PTY (FR-13).
+
+> **VC-71** — `echo "E=${LC_PRUEBA-unset}"` en el remoto da `E=unset`. De
+> control, el mismo eco en `T split-window 'ssh alice@servidor'` con
+> `ssh -o SendEnv=LC_PRUEBA` da `E=x`, así que el `sshd` sí la aceptaría.
 
 **FR-15 · Estado de salida remoto.**
 **Dado** una sesión abierta,
@@ -511,6 +529,16 @@ lectura,
 
 > **VC-34** — Con `/nonexistent` y con un archivo en modo `000`: el stderr
 > exacto, exit 1, y la cantidad de panes sin cambio.
+
+**FR-59 · Clave explícita con path relativo.**
+**Dado** un `<path>` que no empieza con `/`,
+**cuando** se corre `T ssh-pane -i <path> alice@servidor`,
+**entonces** stderr es `identity file must be an absolute path: <path>`, aunque
+el archivo exista. Este chequeo va antes que el de FR-34.
+
+> **VC-70** — Con `k`, `./k` y `'~/k'` (entre comillas simples, que llega
+> literal), habiendo un `k` legible en el cwd del cliente y en `~`: el stderr
+> exacto de cada uno, exit 1, y la cantidad de panes sin cambio.
 
 **FR-35 · Target inexistente.**
 **Dado** que `%99` no existe,
@@ -884,8 +912,9 @@ su log en stderr, que en el hijo es el PTY del pane.
 
 ## 7 · Trazabilidad
 
-Cada FR-n tiene su VC-n (FR-1 → VC-1, …, FR-58 → VC-58). El VC end-to-end es
-VC-6.
+Cada FR-n tiene su VC-n (FR-1 → VC-1, …, FR-58 → VC-58). FR-59 y FR-60, de
+v1.4, tienen VC-70 y VC-71, para no renumerar los VCs de BR, NFR e INV. El VC
+end-to-end es VC-6.
 
 | Req | VC | | Req | VC | | Req | VC |
 |---|---|---|---|---|---|---|---|
@@ -894,7 +923,7 @@ VC-6.
 | FR-25 … FR-37 | VC-25 … VC-37 | | BR-3 | VC-61 | | NFR-3 | VC-66 |
 | FR-38 … FR-54 | VC-38 … VC-54 | | BR-4 | VC-62 | | INV-1 | VC-67 |
 | FR-55 … FR-58 | VC-55 … VC-58 | | BR-5 | VC-63 | | INV-2, 3, 4, 6 | VC-68 |
-| | | | | | | INV-5, 7 | VC-69 |
+| FR-59, FR-60 | VC-70, VC-71 | | | | | INV-5, 7 | VC-69 |
 
 Caminos de falla por recurso externo:
 
@@ -903,7 +932,7 @@ Caminos de falla por recurso externo:
 | Host / red | FR-38 | FR-39 | — | FR-28 … FR-33, FR-55 | FR-40, FR-41, FR-53 |
 | `sshd` | — | FR-48, FR-52 | FR-42 | — | FR-54 |
 | `known_hosts` | FR-43, FR-44 | FR-45 (sin permiso) | FR-56 (línea mal formada) | FR-46, FR-47 (clave que no coincide) | — |
-| Clave | FR-34 | FR-34 (sin permiso), FR-48 | FR-57 (no es una clave) | FR-49, FR-50 (con passphrase) | — |
+| Clave | FR-34 | FR-34 (sin permiso), FR-48 | FR-57 (no es una clave) | FR-49, FR-50 (con passphrase), FR-59 (path relativo) | — |
 | Agente | FR-51 (socket muerto) | FR-58 (bloqueado) | — | — | — |
 | Proceso / layout | FR-35 | FR-37 | — | FR-25 … FR-27 | FR-36 |
 
@@ -916,7 +945,7 @@ hay otro documento de decisiones que abrir.
 | # | Pregunta | Decisión | Se descartó, y por qué |
 |---|---|---|---|
 | D-1 | ¿Entrada nueva en la tabla de comandos? | **Sí: `ssh-pane`, sin alias**, bajo `#ifdef ENABLE_SSH` | Un flag nuevo en `split-window` (`-S host`): cambia el `usage` de un comando existente y viola INV-4. Un nombre que empiece con `sp` o `sw`, o un alias corto: le roba prefijos a `split-window` o `swap-*` (N-1, INV-3) |
-| D-2 | ¿Dónde engancha en el camino de spawn? | **En el hijo de `spawn_pane()`, después de `environ_push` (`spawn.c:544`) y antes del `if` de `spawn.c:550`**. Es el mismo lugar que eligió systemd (`spawn.c:504`) | Un pane `SPAWN_EMPTY` alimentado desde el servidor: no tiene PTY, cambia `wp->fd` y `wp->pid` y rompe el resize (N-3, INV-5). Una función de spawn paralela: duplica layout, entorno y cwd, y se desincroniza con cada merge de upstream |
+| D-2 | ¿Dónde engancha en el camino de spawn? | **En el hijo de `spawn_pane()`, después de `environ_push` (`spawn.c:544`) y antes del `if` de `spawn.c:550`**. Es el mismo lugar que eligió systemd (`spawn.c:504`) | Un pane `SPAWN_EMPTY` alimentado desde el servidor: no tiene PTY, cambia `wp->fd` y `wp->pid` y rompe el resize (N-3, INV-5). Una función de spawn paralela: duplica layout, entorno y cwd, y se desincroniza con cada merge de upstream. Que el hijo re-ejecute el propio `tmux` en un modo helper: ver D-17 |
 | D-3 | ¿libssh u OpenSSH? | **libssh ≥ 0.9.0**, enlazada dinámicamente | OpenSSH no tiene librería de cliente: usarlo es ejecutar `ssh`. libssh2 (BSD) era viable, porque también lee `known_hosts` de OpenSSH, pero hay que armar a mano el agente, las claves por defecto y la clasificación de la host key, que libssh ya trae (N-7). La licencia BSD de libssh2 no pesa, porque libssh (LGPL-2.1) enlazada dinámicamente no le impone condiciones a tmux (ISC). Versiones anteriores a 0.9.0 no tienen `SSH_OPTIONS_PROCESS_CONFIG`, que BR-3 necesita |
 | D-4 | ¿Cómo se integra con el event loop? | **No se integra.** El cliente es un proceso aparte, detrás del PTY. El servidor sigue leyendo `wp->fd` con su `bufferevent` (`window.c:1677`). El hijo tiene su propio bucle, que espera a la vez el fd 0 y el socket | libssh no bloqueante dentro de libevent. `ssh_connect` resuelve el nombre con `getaddrinfo`, que bloquea igual (N-7), y el resto del handshake habría que reescribirlo como máquina de estados. Un crash de libssh mataría el servidor, y además hace falta un pane sin PTY (INV-5). NFR-1 detecta este diseño |
 | D-5 | ¿Auth por claves o por agente? | **Primero el agente**, por `SSH_AUTH_SOCK`, si responde. **Después, claves sin passphrase**: la de `-i` si se pasó; si no, `~/.ssh/id_ed25519`, `~/.ssh/id_ecdsa` y `~/.ssh/id_rsa`, en ese orden. Una clave por defecto con passphrase se saltea (FR-49) | Password, keyboard-interactive y pedir la passphrase: son prompts en el PTY antes de que exista el canal, y ese diseño de UX y seguridad merece su propia spec. La clave con passphrase se puede usar igual, cargándola en el agente |
@@ -926,11 +955,14 @@ hay otro documento de decisiones que abrir.
 | D-9 | ¿Sintaxis del destino? | **`[user@]host`**, con a lo sumo un `@` y sin `:` | `host:puerto`: choca con los IPv6 literales, y `[::1]:22` pide un parser para un caso fuera de alcance. Partir en el último `@`, como OpenSSH: un usuario con `@` no es un caso de v1, y rechazar es más simple de verificar |
 | D-10 | ¿Reintentos y timeouts? | **Un solo intento.** Un presupuesto de **10 s** desde el comando hasta tener el canal con PTY y shell, que cubre TCP, banner, key exchange y autenticación (FR-40, FR-41). Sin keepalive | Reintentar esconde errores de configuración y le suma a cada pane una espera que no se ve. Sin tope, en Linux una conexión a un host que descarta paquetes dura lo que dan los reintentos de SYN del kernel: con el `net.ipv4.tcp_syn_retries = 6` por defecto, unos 127 s. ¿Por qué 10 s? El RTO inicial de SYN en Linux es 1 s y se duplica en cada reintento, así que en 10 s el kernel manda el SYN a los 0, 1, 3 y 7 s: se toleran tres SYN perdidos. Con 5 s se toleraban dos, y con 30 s el usuario mira un pane en negro medio minuto. Keepalive: sin él, un remoto que desaparece sin `RST` deja el pane colgado. Se acepta en v1, igual que `ssh(1)` con `ServerAliveInterval` en 0 (su default). Para reconectar, se abre otro `ssh-pane` |
 | D-11 | ¿Qué comando guarda el pane? | **Ninguno.** `cmd-ssh-pane.c` arma el contexto con cero argumentos de comando, a diferencia de `split-window`, que mete los posicionales en `argv` (`cmd-split-window.c:195`). Así, el pane queda como cualquier pane creado sin comando. Si `default-command` está vacío (el valor por defecto), no guarda nada, y `respawn-pane` arranca una shell de login local (FR-21). Si no está vacío, `spawn_pane` guarda ese comando en el pane (`spawn.c:380`) y `respawn-pane` lo corre, igual que hoy con cualquier pane | Copiar `args_to_vector` de `split-window`: el destino quedaría como comando, y un `respawn-pane` correría `$SHELL -c alice@servidor`. Guardar el destino en el pane: es un campo nuevo en `struct window_pane` y viola INV-5 |
-| D-12 | ¿Qué muestra `#{pane_current_command}`? | **`tmux`** (FR-19), y por eso la ventana se renombra a `tmux` (FR-20) | `prctl(PR_SET_NAME)`: no cambia `/proc/<pid>/cmdline`, que es lo que lee `osdep_get_name` (N-6). Reescribir el `argv` del servidor desde el hijo: es frágil y depende de la plataforma |
+| D-12 | ¿Qué muestra `#{pane_current_command}`? | **`tmux`** (FR-19), y por eso la ventana se renombra a `tmux` (FR-20) | `prctl(PR_SET_NAME)`: no cambia `/proc/<pid>/cmdline`, que es lo que lee `osdep_get_name` (N-6). Reescribir el `argv` del servidor desde el hijo: es frágil y depende de la plataforma. Re-ejecutar `tmux` con otro `argv[0]`: es un `execve`, descartado en D-17 |
 | D-13 | ¿Cómo ve el usuario un error asíncrono? | **Una línea en el pane y status 255.** `remain-on-exit` (que acepta `failed-key`, `options-table.c:95`) decide si queda visible | Que `ssh-pane` cambie `remain-on-exit` del pane: es una opción del usuario. Avisarle al cliente por IPC: el hijo no conserva ningún descriptor del servidor (`spawn.c:541`) |
 | D-14 | ¿Qué archivos de host keys se consultan? | **`~/.ssh/known_hosts` y `/etc/ssh/ssh_known_hosts`**, solo para leer. Es el comportamiento por defecto de libssh y el de OpenSSH (N-7) | Solo el del usuario: un host que el administrador registró en el archivo global fallaría con `ssh-pane` y andaría con `ssh` |
 | D-15 | ¿`--enable-static`? | **No se combina con `--enable-ssh`** (FR-4) | Enlazar libssh en forma estática obliga, por la LGPL, a distribuir lo necesario para reenlazar, y hace que libssh dependa de la libcrypto estática |
 | D-16 | ¿Qué flags de `split-window` se copian? | **Solo `-d`, `-h` y `-t`**: elegir dónde va el pane y si se activa | `-l`, `-b`, `-f`, `-Z`, `-c`, `-e`, `-F`/`-P`: no los pide la consigna, cada uno suma un VC, y `-l` además hace que el layout lea los argumentos (N-8). Se pueden agregar en otra spec sin romper esta |
+| D-17 | ¿El hijo puede hacer `exec`? | **No** (BR-2). El cliente corre en el hijo del `fork`, sin `execve`. **Costos aceptados:** (a) el hijo conserva la memoria del servidor, con la historia de **todos** los panes y los buffers de pegado, mientras habla con un servidor remoto que puede ser hostil. Un bug explotable de libssh en el hijo expone esa memoria, no solo la sesión SSH. BR-5 evita que quede en disco, pero no la protege en vivo. (b) `#{pane_current_command}` vale `tmux` (D-12) | Que el hijo re-ejecute el propio `tmux` (`/proc/self/exe`) en un modo helper. Da una imagen de memoria limpia y un nombre de proceso propio, pero: (1) el modo helper es una entrada nueva en `main()` (`tmux.c:435`), un archivo compartido con OpenBSD que hoy está fuera de "Dentro", y suma una interfaz oculta de línea de comandos que hay que especificar y testear; (2) el destino y el path de la clave tienen que cruzar el `exec`: por `argv` o por el entorno quedan visibles en `/proc/<pid>/cmdline` o `environ`, y si no, hace falta otro canal (un descriptor heredado, que `closefrom` en `spawn.c:541` hoy cierra); (3) BR-2 deja de poder verificarse como "cero `execve`" (VC-60), y "sin invocar `ssh`" pasa a ser "solo este `execve`", una regla más débil. Si el riesgo (a) se vuelve inaceptable, el camino es esta alternativa en otra spec, no un parche en v1 |
+| D-18 | ¿Cómo se resuelve el path de `-i`? | **Solo paths absolutos** (FR-59). `~` no es un problema: lo expande la shell, o el parser de tmux en la config (`cmd-parse.y:1710`) | Resolverlo contra el cwd del cliente (`server_client_get_cwd`, `server-client.c:2926`). Esa función devuelve cosas distintas según quién invoca: el cwd del cliente que cargó la config, el de la sesión o `~`. El mismo `ssh-pane -i k` del `.tmux.conf` y de un binding leería archivos distintos. Resolverlo contra el cwd del servidor: es un detalle de implementación que el usuario no ve |
+| D-19 | ¿Qué variables de entorno se mandan al remoto? | **Ninguna, salvo `TERM`**, que va en el pedido de PTY (FR-13, FR-60). El locale remoto es el que configure el servidor | Mandar `LANG` y `LC_*`, como `ssh(1)` en Debian y Ubuntu. Lo hace por `SendEnv LANG LC_*` en `/etc/ssh/ssh_config`, que es configuración de la distribución, no un default de OpenSSH, y BR-3 no lee esa configuración. Copiar esa lista en el código fijaría la política de una distribución. Un flag para elegir variables: no lo pide la consigna, y se puede agregar en otra spec |
 
 ## 9 · Entorno de verificación (contra un sistema real)
 
@@ -983,7 +1015,7 @@ Se corre en jobs de CI **del repo de este TP**, no de upstream:
 
 | Job | Dónde | Qué VCs |
 |---|---|---|
-| `linux-ssh` | `docker compose`, `cliente` con `libssh-dev` y `--enable-ssh` | VC-1, VC-4, VC-6 a VC-66, VC-68 (variante con el flag) |
+| `linux-ssh` | `docker compose`, `cliente` con `libssh-dev` y `--enable-ssh` | VC-1, VC-4, VC-6 a VC-66, VC-68 (variante con el flag), VC-70, VC-71 |
 | `linux-sin-ssh` | `cliente` con `libssh-dev`, **sin** el flag | VC-5, VC-68 (variante sin el flag) |
 | `linux-sin-libssh` | `cliente` **sin** `libssh-dev`, con el flag | VC-3 |
 | `macos` | runner `macos-26`, Homebrew sin `libssh` | VC-2, VC-67 |
@@ -1021,8 +1053,8 @@ línea de base.
 
 | Iteración | Alcance | Cierra |
 |---|---|---|
-| **1 · La guarda y el enganche** | `configure.ac`, `Makefile.am`, `cmd.c`, `tmux.h`, `cmd-ssh-pane.c` completo, y el bloque del hijo en `spawn.c`. En esta iteración, `ssh-pane.c` solo escribe `ssh-pane: not implemented` y termina con 255 | VC-1…5, VC-22…37, VC-55 y VC-67…69: todas las invariantes **antes** de que exista el cliente. Se ve un pane que muere con `1 255` |
-| **2 · El camino feliz** | La conexión, la host key, la autenticación, el canal y el bucle de E/S | VC-6…21 y VC-61…63 |
+| **1 · La guarda y el enganche** | `configure.ac`, `Makefile.am`, `cmd.c`, `tmux.h`, `cmd-ssh-pane.c` completo, y el bloque del hijo en `spawn.c`. En esta iteración, `ssh-pane.c` solo escribe `ssh-pane: not implemented` y termina con 255 | VC-1…5, VC-22…37, VC-55, VC-67…69 y VC-70: todas las invariantes **antes** de que exista el cliente. Se ve un pane que muere con `1 255` |
+| **2 · El camino feliz** | La conexión, la host key, la autenticación, el canal y el bucle de E/S | VC-6…21, VC-61…63 y VC-71 |
 | **3 · Los caminos de falla y los NFR** | Los mensajes de §6.4, el presupuesto de 10 s y las mediciones | VC-38…54, VC-56…60 (BR-1 y BR-2 usan VC-43) y VC-64…66 |
 
 La Iteración 1 es la más angosta que se puede probar sola, y demuestra el límite
@@ -1036,3 +1068,4 @@ solo-Linux sin escribir una línea de SSH.
 | v1.1 | 2026-10-01 | Corrección adversarial ([`revisiones/spec-brownfield-2026-10-01.md`](./revisiones/spec-brownfield-2026-10-01.md)). `AM_CONDITIONAL` va fuera del `if`. `-l` y `-v` salen de la sinopsis (D-16). D-11 pasa a usar cero argumentos de comando, con su FR. Se parten los FRs de destino inválido. Se agregan 17 caminos de falla y bordes (FR-4, FR-11, FR-20, FR-21, FR-23, FR-24, FR-26, FR-27, FR-31, FR-37, FR-41, FR-42, FR-45, FR-49 a FR-52) y BR-5. Se fija la ventana en 200×50 y el texto se lee con `capture-pane -J`. Se rehace el descarte de libssh2. Se decide qué cubre el timeout y qué archivos `known_hosts` se leen. Se corrigen los chequeos de INV-3, INV-5 e INV-7 |
 | v1.2 | 2026-10-01 | Segunda corrección ([`revisiones/spec-brownfield-2026-10-01-r2.md`](./revisiones/spec-brownfield-2026-10-01-r2.md)) y revisión de PR ([`revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md`](./revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md)). FR-20 deja de usar `-n`. NFR-2 usa un marcador que el eco del comando no contiene. §9 fija los hostnames, el tipo de host key, los logs de `sshd` y los cinco jobs. Se agregan FR-55 a FR-58 (IPv6 literal, `known_hosts` mal formado, `-i` que no es una clave, agente bloqueado). BR-1 fija el orden de decisión. Hay una cota común de 12 s para §6.4. Los VCs de BR, NFR e INV pasan a VC-59…69 |
 | v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban. Después de la cuarta vuelta (READY, [`r4`](./revisiones/spec-brownfield-2026-10-01-r4.md)), FR-56 aclara que el filtrado de líneas mal formadas lo hace el cliente |
+| v1.4 | 2026-10-01 | Revisión externa, posterior al READY. D-17 registra el trade-off de no hacer `exec`: la memoria del servidor queda expuesta en el hijo, y se descarta re-ejecutar `tmux` en un modo helper. D-18 y FR-59/VC-70: `-i` solo acepta paths absolutos. D-19 y FR-60/VC-71: al remoto solo viaja `TERM`. FR-59 y FR-60 llevan VC-70 y VC-71 para no renumerar |

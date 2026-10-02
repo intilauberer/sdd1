@@ -87,3 +87,6 @@ spawn.c:223	options_set_number(w->options, "automatic-rename", 0);
 options-table.c:790	.default_str = "",
 spawn.c:385-386	argc = 0;
 spawn.c:574	execl(new_wp->shell, argv0, (char *)NULL);
+cmd-parse.y:1710	if (!yylex_token_tilde(&buf, &len))
+tmux.c:435	main(int argc, char **argv)
+server-client.c:2926	server_client_get_cwd(struct client *c, struct session *s)
