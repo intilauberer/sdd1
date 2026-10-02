@@ -1,6 +1,6 @@
 # ADR-0017 · NFR de rendimiento sobre el costo propio de `gcsgrep`, medido sin red
 
-- **Estado:** aceptado
+- **Estado:** superseded por [ADR-0026](./ADR-0026-nfr-4-recalibrado-en-ci.md)
 - **Fecha:** 2026-10-01
 - **Supersede:** [ADR-0012](./ADR-0012-nfr-rendimiento-diferido.md)
 - **Origen:** [corrección de la cátedra](../correccion-catedra-iteracion-1.md), Issue 4.1 — "declinarlo con fundamento no lo reemplaza"

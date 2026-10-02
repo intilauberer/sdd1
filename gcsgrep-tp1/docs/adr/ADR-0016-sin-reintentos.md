@@ -1,6 +1,6 @@
 # ADR-0016 · Sin reintentos automáticos ante fallos de red en v1
 
-- **Estado:** aceptado
+- **Estado:** superseded por [ADR-0028](./ADR-0028-sin-reintentos-tampoco-en-la-libreria.md)
 - **Fecha:** 2026-10-01
 - **Origen:** [corrección de la cátedra](../correccion-catedra-iteracion-1.md), Warning 5.3 — "Descartado en v1" sin fundamento
 - **Requerimientos que sostiene:** NFR-2 · FR-13

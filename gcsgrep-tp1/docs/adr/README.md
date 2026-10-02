@@ -34,7 +34,7 @@ el "por qué" se escribe una sola vez, en un solo lugar.
 | [ADR-0002](./ADR-0002-autenticacion-adc.md) | Autenticación únicamente por Application Default Credentials | aceptado |
 | [ADR-0003](./ADR-0003-sintaxis-ubicacion.md) | Esquema `gs://` obligatorio en el argumento de ubicación | aceptado |
 | [ADR-0004](./ADR-0004-flags-v1.md) | Solo `-i` y `-n` como flags de `grep` en v1 | aceptado |
-| [ADR-0005](./ADR-0005-binarios-y-gz.md) | Binarios y `.gz` se saltean, no se descomprimen | aceptado |
+| [ADR-0005](./ADR-0005-binarios-y-gz.md) | Binarios y `.gz` se saltean, no se descomprimen | superseded por ADR-0021 |
 | [ADR-0006](./ADR-0006-guardrail-de-costo.md) | Guardrail de costo por cantidad de objetos (tope 1000, `--max`) | aceptado |
 | [ADR-0007](./ADR-0007-formato-de-salida.md) | Formato de salida estilo `grep`, sin JSON | aceptado |
 | [ADR-0008](./ADR-0008-exit-codes.md) | Exit codes con la convención exacta de `grep` | aceptado |
@@ -45,10 +45,19 @@ el "por qué" se escribe una sola vez, en un solo lugar.
 | [ADR-0013](./ADR-0013-frontera-de-excepciones.md) | Frontera de excepciones en `cli`, errores de dominio traducidos en `gcs` | aceptado |
 | [ADR-0014](./ADR-0014-emulacion-local-floci.md) | Emulación local con `floci-gcp` para la verificación de integración | aceptado |
 | [ADR-0015](./ADR-0015-verificacion-real-declinada.md) | La verificación contra GCS real se declina para esta entrega, con obligación registrada | aceptado |
-| [ADR-0016](./ADR-0016-sin-reintentos.md) | Sin reintentos automáticos ante fallos de red en v1 | aceptado |
-| [ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md) | NFR de rendimiento sobre el costo propio de `gcsgrep`, medido sin red | aceptado |
+| [ADR-0016](./ADR-0016-sin-reintentos.md) | Sin reintentos automáticos ante fallos de red en v1 | superseded por ADR-0028 |
+| [ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md) | NFR de rendimiento sobre el costo propio de `gcsgrep`, medido sin red | superseded por ADR-0026 |
 | [ADR-0018](./ADR-0018-ventana-binaria-y-codificacion.md) | Ventana de 8192 bytes para detectar binarios, y UTF-8 con reemplazo | aceptado |
 | [ADR-0019](./ADR-0019-corte-de-stdout-sigpipe.md) | Si el consumidor corta stdout, `gcsgrep` termina por `SIGPIPE`, como `grep` | aceptado |
+| [ADR-0020](./ADR-0020-tamano-de-bloque-del-lector.md) | El lector de GCS se abre con bloques de 1 MiB | aceptado |
+| [ADR-0021](./ADR-0021-avisos-de-salteo-por-objeto.md) | Binarios y `.gz` se saltean con un aviso por objeto, sin resumen final | aceptado |
+| [ADR-0022](./ADR-0022-que-es-una-linea.md) | Qué es una línea de texto: `\n`, `\r\n`, BOM, línea vacía, lectura cortada | aceptado |
+| [ADR-0023](./ADR-0023-plegado-de-mayusculas.md) | `-i` usa la conversión a minúsculas completa de Unicode (`str.lower()`) | aceptado |
+| [ADR-0024](./ADR-0024-patron-vacio.md) | El patrón vacío matchea todas las líneas | aceptado |
+| [ADR-0025](./ADR-0025-clasificacion-de-fallos.md) | Clasificación de los fallos de GCS y de credenciales | aceptado |
+| [ADR-0026](./ADR-0026-nfr-4-recalibrado-en-ci.md) | NFR-4 recalibrado en la plataforma de CI: (b) ≥ 150 000 matches/s | aceptado |
+| [ADR-0027](./ADR-0027-piso-de-python-y-plataforma.md) | Python 3.10 como versión mínima, y plataforma POSIX | aceptado |
+| [ADR-0028](./ADR-0028-sin-reintentos-tampoco-en-la-libreria.md) | Sin reintentos, tampoco en la librería cliente; timeout de 60 s por pedido | aceptado |
 
 ## Trazabilidad hacia atrás
 
@@ -76,6 +85,15 @@ ADR-0019 salió de la [revisión de la spec v1.4](../../revisiones/spec-v1.4-202
 nombraba ("como `grep`") sin decidir. Complementa a ADR-0008 y ADR-0011 sin
 supersederlos.
 
+ADR-0020 a ADR-0028 salieron de la
+[revisión de la spec v1.5](../../revisiones/spec-v1.5-2026-10-01.md) y del cierre de
+la Iteración 2 (spec v1.7): llevan a ADRs los fundamentos que la v1.5 había dejado en
+prosa (ADR-0022, ADR-0023, ADR-0024), deciden lo que la revisión dejó como excepción
+registrada (ADR-0020, ADR-0025, ADR-0027), y superseden a tres ADRs cuya decisión
+cambió: ADR-0005 (resumen final de salteados → ADR-0021), ADR-0016 (reintentos del
+SDK fuera del contrato → ADR-0028) y ADR-0017 (umbral (b) que no discriminaba en
+Linux → ADR-0026).
+
 ## Referencias que la spec dejó viejas en ADRs aceptados
 
 Por la regla 1, un ADR aceptado no se edita para actualizar una referencia. Cuando
@@ -102,3 +120,15 @@ una decisión**: si alguna lo hiciera, haría falta un ADR nuevo que supersede.
 
 [`01-base-context.md`](../../specs/gcsgrep/01-base-context.md) repetía el "resumen de
 salteados" de ADR-0005; como no es un ADR, se corrigió en el lugar en la v1.5.
+
+### Spec v1.5 y v1.6 (registradas en la v1.7, acción 18 de la revisión de la v1.5)
+
+| ADR | Dice | Hoy corresponde |
+|---|---|---|
+| [ADR-0007](./ADR-0007-formato-de-salida.md) (Consecuencias) | "VC-4 parsea con `split(":", 2)` desde la izquierda" | Desde la v1.4, VC-4 compara stdout **exacto** (`gs://b/p/a.txt:error: timeout`). La propiedad que se buscaba —el texto de la línea queda intacto aunque contenga `:`— la sigue verificando VC-4 |
+| [ADR-0011](./ADR-0011-salida-incremental.md) (Decisión) | "NFR-3 exige que stderr sea solo para errores y resúmenes" | stderr es para errores, avisos de salteo (uno por objeto, [ADR-0021](./ADR-0021-avisos-de-salteo-por-objeto.md)) y el guardrail; **no hay resúmenes** |
+| [ADR-0002](./ADR-0002-autenticacion-adc.md) (Relacionado) | "Spec: BR-1 · VC-11 · NFR-2" | Las credenciales están en **FR-15, FR-26 y FR-28** (VC-23, VC-41, VC-45); NFR-2 es la política de red. BR-1 y VC-11 siguen valiendo |
+
+La fila de "desvío" de ADR-0005 de arriba quedó como historia: desde la v1.7 la
+decisión vigente es [ADR-0021](./ADR-0021-avisos-de-salteo-por-objeto.md), que lo
+supersede.

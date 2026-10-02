@@ -69,9 +69,11 @@ borrador **ítem por ítem**, no solo su lista de preguntas abiertas.
 
 ### Streaming, no descarga completa
 
-Cada objeto se lee con el streaming del cliente de GCS (`blob.open("r")`), línea
-por línea, sin materializar el objeto completo en memoria. Eso es lo que hace
-posible operar sobre objetos grandes con memoria acotada (NFR-1).
+Cada objeto se lee con el streaming del cliente de GCS (`blob.open("rb")`, en
+bloques de 1 MiB, [ADR-0020](../../docs/adr/ADR-0020-tamano-de-bloque-del-lector.md)),
+y `core` lo parte en líneas sin materializar el objeto completo en memoria. Eso es lo
+que hace posible operar sobre objetos grandes con memoria acotada (NFR-1). Hasta la
+Iteración 1 se abría en modo texto (`blob.open("r")`).
 
 El streaming va hasta el final del pipeline, no solo hasta el borde de GCS:
 `core.search` es un generador que emite cada match en cuanto lo encuentra, y
@@ -139,13 +141,15 @@ Es lo que hace sustituible a `gcs`:
 | Colaborador | Firma | Contrato |
 |---|---|---|
 | `list_objects` | `(bucket, prefix) -> Iterable[str]` | Puede ser lazy; `core` no lo consume de una sola vez |
-| `open_text_stream` | `(bucket, name) -> ContextManager[Iterable[str]]` | Al entrar, da un iterable de líneas; un file-like de texto lo cumple |
+| `open_stream` | `(bucket, name) -> ContextManager[lector]` | Al entrar, da un lector de **bytes** con `read(n)`; un file-like binario lo cumple |
 
-*Nota para la Iteración 2:* FR-9 (ventana binaria de 8192 bytes) y FR-17 (UTF-8 con
-reemplazo) obligan a mirar bytes antes de decodificar, así que el contrato de
-`open_text_stream` va a tener que cambiar o sumar un colaborador. Esa decisión es
-de diseño de la iteración y se registra cuando se tome, con
-[ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md) como insumo.
+*Cambio de la Iteración 2:* hasta la Iteración 1 el segundo colaborador era
+`open_text_stream`, que entregaba líneas ya decodificadas. FR-9 (ventana binaria de
+8192 bytes), FR-17 (UTF-8 con reemplazo), FR-22 (terminador) y FR-27 (BOM) obligan
+a mirar bytes antes de decodificar, así que pasó a entregar bytes y `core` parte las
+líneas ([ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md)). Los documentos
+anteriores a la Iteración 2 (revisiones, hallazgos, ADRs) nombran el colaborador
+viejo; no se editan.
 
 ---
 
