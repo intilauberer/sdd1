@@ -486,7 +486,7 @@ es parte de la verificación de integración (paso 5 del runbook).
 ## Cómo se ejercita todo
 
 ```bash
-python -m pytest            # 48 tests, sin credenciales ni red
+python -m pytest            # 161 tests, sin credenciales ni red
 ```
 
 Los tests corren en dos niveles:
@@ -505,7 +505,7 @@ Los tests corren en dos niveles:
   estar verificado de punta a punta contra un error que el SDK nunca produce.
 
 En CI, [`.github/workflows/tests.yml`](../../../.github/workflows/tests.yml) corre
-esta misma suite en Python 3.9 y 3.12 en cada push y cada PR. Eso es lo que
+esta misma suite en Python 3.10 y 3.12 (ADR-0027) en cada push y cada PR. Eso es lo que
 convierte los ✅ de esta tabla en una afirmación chequeada por una máquina y no
 en una línea de markdown que alguien se acordó de actualizar.
 

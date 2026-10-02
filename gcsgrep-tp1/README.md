@@ -40,7 +40,7 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 0 | [`enunciado.md`](./enunciado.md) | La consigna, tal como se recibió | externa |
 | 1 | [`specs/gcsgrep/00-requirements-draft.md`](./specs/gcsgrep/00-requirements-draft.md) | El borrador vago del que se partió | **congelado**, nunca se edita |
 | 2 | [`specs/gcsgrep/01-base-context.md`](./specs/gcsgrep/01-base-context.md) | Índice de decisiones + notas de diseño | se actualiza |
-| 3 | [`docs/adr/`](./docs/adr/) | 18 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
+| 3 | [`docs/adr/`](./docs/adr/) | 28 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
 | 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 34 requerimientos, 44 VCs | **versionada** (v1.5), con historial |
 | 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y los primeros 10 hallazgos | por revisión |
 | 5b | [`docs/correccion-catedra-iteracion-1.md`](./docs/correccion-catedra-iteracion-1.md) y [`docs/respuesta-correccion-catedra.md`](./docs/respuesta-correccion-catedra.md) | La corrección de la cátedra (NEEDS WORK) y qué se cambió por cada acción | la corrección es externa; la respuesta, por corrección |
