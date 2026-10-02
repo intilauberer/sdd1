@@ -112,3 +112,45 @@ Con los mismos comandos de la rúbrica:
   Iteración 1 y va por la fila 1 de [`proceso-cambios.md`](./proceso-cambios.md).
 - **No se renumeraron requerimientos ni VCs**, para no romper el vínculo con los
   nombres de los tests.
+
+## Errata (revisión v1.4)
+
+> Agregada el 2026-10-01, después de la
+> [revisión adversarial de la spec v1.4](../revisiones/spec-v1.4-2026-10-01.md)
+> (NEEDS WORK). Lo de arriba no se reescribe: es la respuesta tal como se entregó.
+> Esta sección corrige lo que resultó falso, y la corrección vive en la spec **v1.5**.
+
+**1. La fila "Decisiones con comportamiento observable que vivían solo en ADRs: 0"
+del *Resumen* es falsa.** Después de la v1.4 quedaban al menos seis, cada una con
+comportamiento en stdout, stderr o el exit code y sin requerimiento:
+
+| Decisión | Dónde vivía | Dónde vive desde la v1.5 |
+|---|---|---|
+| Un objeto borrado entre el listado y la lectura no aborta la corrida | ADR-0010, ADR-0013 (que decían "lo cubre FR-6", ya no cierto desde la v1.4) | **FR-21**, VC-32 |
+| Los salteados se informan por stderr (ADR-0005 decía "en un resumen final") | ADR-0005 | **FR-9/FR-10**: una línea por objeto, en el momento del salteo, sin resumen final (la spec se aparta del detalle de ADR-0005; registrado en `docs/adr/README.md`) |
+| Un `\x00` después de la ventana sale por stdout si está en una línea con match | ADR-0018 | **FR-9** (límite explícito), VC-20 |
+| Los flags no soportados se rechazan | ADR-0004 (alternativa descartada: "aceptarlos e ignorarlos") | **FR-25**, VC-37…VC-40 |
+| `gcsgrep … \| head` corta "como `grep`" | ADR-0011 | **FR-23**, VC-35, [ADR-0019](./adr/ADR-0019-corte-de-stdout-sigpipe.md) |
+| La red caída **al abrir** un objeto no aborta la corrida | ADR-0016 ("la apertura y lectura de cada objeto" se intentan una vez) | **FR-13** (al abrir o durante la lectura), VC-33 |
+
+El valor correcto de esa fila para la v1.4 es **≥ 6**, no 0; para la v1.5, las seis
+están en un requerimiento. El chequeo que se había hecho (C-15) recorrió las
+decisiones de los ADRs **como estaban enunciadas en su sección *Decisión***, y estas
+seis estaban en *Consecuencias*, en *Alternativas descartadas* o en una cláusula
+lateral. La próxima pasada de C-15 recorre el ADR entero.
+
+**2. La acción 1b ("Partir FR-6") no quedó resuelta como dice la tabla de MUST.**
+Se partió, pero FR-13 repitió en su Dado la forma que la cátedra marcó (tres causas
+alternativas), y el corte dejó sin requerimiento al objeto que falla al abrirse por
+`404` o por red. Es [H-16](./hallazgos/H-16-objeto-que-falla-al-abrir.md), con el mismo
+mecanismo que H-13, y produjo el criterio C-19 del checklist.
+
+**3. La acción 13 ("VC para NFR-2 con error de red al leer") quedó parcial.** NFR-2 (b)
+remitía a FR-13, que no cubría la red al abrir. Desde la v1.5, NFR-2 (b) dice "al
+abrir o leer" y VC-33 cubre la apertura.
+
+**4. M1 de la sección *Chequeos mecánicos* describe la v1.4.** Para la v1.5: FR 27 ·
+BR 3 · NFR 4 · VC 44, y VCs (44) ≥ FR+BR (30).
+
+El detalle de las 21 acciones de la revisión, con qué cambió y dónde, está en la fila
+v1.5 del *Historial de revisiones* de la spec.

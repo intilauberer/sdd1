@@ -42,6 +42,7 @@ no contra la intención de quien lo escribió.
 | C-16 | ¿Hay NFR de rendimiento, cada NFR tiene métrica, número y condición de carga **en su enunciado**, y cada condición enumerada tiene su propio VC? | agregado tras la corrección de la cátedra (4.1, 4.3) |
 | C-17 | ¿Están definidos **con VC** los bordes estándar: entrada vacía (0 bytes / 0 objetos), último elemento sin terminador, prefijo ambiguo, codificación, límites exactos de cada umbral? | agregado tras la corrección de la cátedra (3.4) |
 | C-18 | ¿Hay al menos un VC de punta a punta declarado contra el sistema real, y la spec nombra los permisos mínimos que necesita quien invoca? | agregado tras la corrección de la cátedra (3.6, 5.1) |
+| C-19 | **Al partir o angostar un requerimiento, ¿se volvió a recorrer la tabla actores → requerimiento?** (fila por fila: el requerimiento que nombra, ¿todavía cubre el modo de falla entero, o solo sigue existiendo?) | agregado tras la revisión de la v1.4 → ver **[H-16](./hallazgos/H-16-objeto-que-falla-al-abrir.md)** |
 
 **C-14 … C-18 tampoco existían.** Salieron de la
 [corrección de la cátedra](./correccion-catedra-iteracion-1.md) (NEEDS WORK): son
@@ -51,6 +52,13 @@ detalle, acción por acción, está en
 [`respuesta-correccion-catedra.md`](./respuesta-correccion-catedra.md). El mismo
 conjunto de chequeos está automatizado como agente adversarial en
 `.kiro/agents/corrector-specs` (en la raíz del repo).
+
+**C-19 salió de aplicar C-14.** La
+[revisión de la v1.4](../revisiones/spec-v1.4-2026-10-01.md) encontró que partir FR-6
+para que fuera atómico dejó sin requerimiento al objeto que falla al abrirse, con las
+tablas de trazabilidad cuadrando por ID. C-14 empuja a partir; C-19 obliga a contar
+lo que quedó del otro lado del corte
+([H-16](./hallazgos/H-16-objeto-que-falla-al-abrir.md)).
 
 **C-13 no existía cuando se aplicó este checklist**, y es la razón por la que H-13
 se descubrió recién al intentar la primera corrida real. Se agrega acá para que la
@@ -223,6 +231,7 @@ cada vez que se busca uno solo.
 | [H-13](./hallazgos/H-13-actores-sin-trazar.md) | La tabla de Actores declara modos de falla que ninguna tabla vigila → C-13, tercera tabla de trazabilidad | análisis de H-12 |
 | [H-14](./hallazgos/H-14-i6-no-verificable-en-emulador.md) | I-6 no es verificable contra el emulador, y el script lo corría igual | primera corrida del campo de pruebas |
 | [H-15](./hallazgos/H-15-cobertura-desincronizada.md) | La tabla de cobertura contradice su propio resumen desde la entrega | respuesta a la corrección de la cátedra |
+| [H-16](./hallazgos/H-16-objeto-que-falla-al-abrir.md) | Partir FR-6 dejó sin requerimiento al objeto que falla al abrirse → FR-21, C-19, spec v1.5 | revisión de la spec v1.4 |
 
 Qué artefacto cambia según lo que se descubra está en
 [`proceso-cambios.md`](./proceso-cambios.md).

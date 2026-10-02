@@ -48,6 +48,7 @@ el "por qué" se escribe una sola vez, en un solo lugar.
 | [ADR-0016](./ADR-0016-sin-reintentos.md) | Sin reintentos automáticos ante fallos de red en v1 | aceptado |
 | [ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md) | NFR de rendimiento sobre el costo propio de `gcsgrep`, medido sin red | aceptado |
 | [ADR-0018](./ADR-0018-ventana-binaria-y-codificacion.md) | Ventana de 8192 bytes para detectar binarios, y UTF-8 con reemplazo | aceptado |
+| [ADR-0019](./ADR-0019-corte-de-stdout-sigpipe.md) | Si el consumidor corta stdout, `gcsgrep` termina por `SIGPIPE`, como `grep` | aceptado |
 
 ## Trazabilidad hacia atrás
 
@@ -69,3 +70,35 @@ ADR-0016, ADR-0017 y ADR-0018 salieron de la
 primero fundamenta una decisión que la spec tomaba sin decir por qué (0
 reintentos), el segundo supersede a ADR-0012 y define el NFR de rendimiento, y el
 tercero precisa ADR-0005 con un número y una codificación.
+
+ADR-0019 salió de la [revisión de la spec v1.4](../../revisiones/spec-v1.4-2026-10-01.md)
+(spec v1.5): decide qué pasa cuando el consumidor corta stdout, que ADR-0011
+nombraba ("como `grep`") sin decidir. Complementa a ADR-0008 y ADR-0011 sin
+supersederlos.
+
+## Referencias que la spec dejó viejas en ADRs aceptados
+
+Por la regla 1, un ADR aceptado no se edita para actualizar una referencia. Cuando
+una versión de la spec renumera, parte o mueve un requerimiento que un ADR nombra,
+la referencia vieja queda acá, con lo que hoy corresponde. **Ninguna de estas cambia
+una decisión**: si alguna lo hiciera, haría falta un ADR nuevo que supersede.
+
+### Spec v1.4 (registradas en la v1.5)
+
+| ADR | Dice | Hoy corresponde |
+|---|---|---|
+| [ADR-0009](./ADR-0009-lectura-secuencial.md) (Consecuencias) | "Esta decisión es la razón por la que no hay un NFR de rendimiento en v1" | Desde la v1.4 hay NFR de rendimiento: **NFR-4** ([ADR-0017](./ADR-0017-nfr-rendimiento-costo-propio.md)). ADR-0009 sigue siendo la razón de que NFR-4 mida lectura **secuencial** |
+| [ADR-0010](./ADR-0010-objeto-modificado.md) (Consecuencias) | "Un objeto borrado entre el listado y la lectura … lo cubre FR-6 y fuerza exit `2` por BR-3" | Lo cubre **FR-21** (VC-32). Desde la v1.4, FR-6 es solo permiso denegado al abrir. El exit `2` por BR-3 no cambió |
+| [ADR-0013](./ADR-0013-frontera-de-excepciones.md) (encabezado y Decisión) | FR-12 como 404 **y** 403 del listado | FR-12 es solo el bucket inexistente (404); el permiso de listado (403) es **FR-14** (VC-22) |
+| [ADR-0013](./ADR-0013-frontera-de-excepciones.md) (Consecuencias) | "`ObjetoNoEncontrado` … Hoy aborta; que no aborte es FR-6" | Que no aborte es **FR-21** |
+| [ADR-0015](./ADR-0015-verificacion-real-declinada.md) | "La mitad 'sin permiso' de FR-12 / VC-18" | Es **FR-14 / VC-22** |
+| [ADR-0015](./ADR-0015-verificacion-real-declinada.md) | "El NFR de rendimiento de la Iteración 3" | El NFR de rendimiento secuencial es **NFR-4**, de la Iteración 2; a la Iteración 3 le queda el número **comparativo** de la concurrencia |
+
+### Un detalle de ADR del que la spec se aparta (v1.5)
+
+| ADR | Dice | La spec v1.5 dice | Por qué no es un ADR nuevo |
+|---|---|---|---|
+| [ADR-0005](./ADR-0005-binarios-y-gz.md) (Decisión) | Los salteados "se reportan como 'salteado' en un **resumen final** por stderr" | Una línea por objeto salteado, **en el momento del salteo**, y **ningún resumen final** (FR-9, FR-10, VC-9, VC-10) | La decisión de ADR-0005 —saltear binarios y `.gz`, no descomprimir, no es error— no cambia; cambia el formato del aviso, que es comportamiento observable y por la regla de C-15 vive en la spec. El fundamento del desvío está en la spec, bajo FR-9. Si se quisiera volver al resumen, va como versión nueva de la spec con su texto literal |
+
+[`01-base-context.md`](../../specs/gcsgrep/01-base-context.md) repetía el "resumen de
+salteados" de ADR-0005; como no es un ADR, se corrigió en el lugar en la v1.5.

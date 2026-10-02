@@ -53,6 +53,7 @@ es un hallazgo, es alcance pendiente.
 | H-13 | La tabla de Actores declara modos de falla que ninguna tabla vigila | crítico | [H-13](./H-13-actores-sin-trazar.md) | resuelto (3ra tabla de trazabilidad + C-13) |
 | H-14 | I-6 no es verificable contra el emulador, y el script lo corría igual | mayor | [H-14](./H-14-i6-no-verificable-en-emulador.md) | resuelto (I-6 exige backend `gcs`) |
 | H-15 | La tabla de cobertura contradice su propio resumen desde la entrega | mayor | [H-15](./H-15-cobertura-desincronizada.md) | resuelto (filas corregidas, superadas al histórico); queda el chequeo automático como tarea de la Iteración 2 |
+| H-16 | Partir FR-6 dejó sin requerimiento al objeto que falla al abrirse (mismo mecanismo que H-13) | mayor | [H-16](./H-16-objeto-que-falla-al-abrir.md) | resuelto (spec v1.5: FR-21, FR-13 al abrir, C-19) |
 
 ## De dónde salieron H-11, H-12 y H-13
 
