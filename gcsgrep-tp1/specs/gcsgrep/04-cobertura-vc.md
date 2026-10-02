@@ -389,6 +389,14 @@ listar), que sigue cubierto solo por el doble. VC-31 sigue sin ejecutar.
 - El número de NFR-4 en Python 3.10 (el piso nuevo) queda en el log del CI de esta
   rama; se registra abajo cuando corra.
 
+**Primera corrida del CI con la matriz nueva** (run `36950617861`, commit `26fb0b3`):
+los dos jobs de VCs, 161 passed; chequeo de cobertura y de enlaces OK; I-6 ✓ en
+las tres variantes, también en el runner.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-30 (Python 3.10, CI) | NFR-4 | `test_paso0.py::test_vc30_*` + `scripts/medir-nfr4.py` | `ubuntu-latest`, Python 3.10.21: (a) 301 MiB/s (mala: 0,7), (b) **328 560/s** (mala: **67 182**). En la misma corrida, Python 3.12: (b) 350 717/s (mala 77 682), contra 488 152 en el run `36949165784`: **~30 % de variación entre corridas del mismo runner**. Con 150 000 el margen sigue siendo ≥ 2,2× arriba y ≥ 1,9× abajo en esta corrida | ✅ |
+
 ### Por qué VC-14 tiene dos filas
 
 En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**
