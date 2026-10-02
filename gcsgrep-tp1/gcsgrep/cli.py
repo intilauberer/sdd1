@@ -8,6 +8,7 @@ FR-12, ADR-0013). Ver H-12 en docs/hallazgos/.
 
 import argparse
 import os
+import signal
 import sys
 from typing import Optional, Sequence
 
@@ -23,6 +24,9 @@ def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="gcsgrep",
         description="grep sobre el contenido de objetos de Google Cloud Storage.",
+        # FR-25: `--ig` no es `--ignore-case`. Lo que no respeta la forma se rechaza
+        # (excepción registrada de la revisión v1.5, acción 6).
+        allow_abbrev=False,
     )
     parser.add_argument("-i", "--ignore-case", action="store_true", help="búsqueda sin distinguir mayúsculas")
     parser.add_argument("-n", "--line-number", action="store_true", help="mostrar el número de línea de cada match")
@@ -48,6 +52,19 @@ def format_match(match: core.Match, show_line_numbers: bool) -> str:
     if show_line_numbers:
         return f"{uri}:{match.line_number}:{match.text}"
     return f"{uri}:{match.text}"
+
+
+def _terminar_por_sigpipe() -> None:
+    """El lector de stdout lo cerró: terminar por `SIGPIPE`, como `grep` (FR-23,
+    ADR-0019). Nada por stderr y nada más leído.
+
+    stdout se apunta a /dev/null antes, para que el intérprete no intente vaciar
+    el buffer al salir y escriba su propio aviso de `BrokenPipeError`.
+    """
+    devnull = os.open(os.devnull, os.O_WRONLY)
+    os.dup2(devnull, sys.stdout.fileno())
+    signal.signal(signal.SIGPIPE, signal.SIG_DFL)
+    os.kill(os.getpid(), signal.SIGPIPE)
 
 
 def main(argv: Optional[Sequence[str]] = None) -> int:
@@ -92,6 +109,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
                 continue
             found_any = True
             print(format_match(evento, args.line_number), flush=True)
+    except BrokenPipeError:
+        # Antes que el genérico: el corte no es un error de GCS (ADR-0019).
+        _terminar_por_sigpipe()
+        return 2  # no se llega: el proceso muere por la señal
     except errors.TopeExcedido as exc:
         # BR-2: no es un error, es la herramienta negándose a hacer algo caro. Sale
         # con 1, no con 2 (ADR-0006). Va antes del genérico porque `TopeExcedido`

@@ -58,6 +58,31 @@ class ErrorDeRedAlListar(ErrorDeAcceso):
         )
 
 
+_COMANDO_DE_CREDENCIALES = "gcloud auth application-default login"
+
+
+class SinCredenciales(ErrorDeAcceso):
+    """ADC no resolvió ninguna credencial (FR-15)."""
+
+    def __init__(self):
+        super().__init__(
+            f"no se encontraron credenciales de Google Cloud. "
+            f"Obtenelas con: {_COMANDO_DE_CREDENCIALES}"
+        )
+
+
+class CredencialesInvalidas(ErrorDeAcceso):
+    """Hay credenciales pero no producen un token (FR-26), o GCS responde `401`
+    al listar (FR-28). Mensaje distinto del de `SinCredenciales` a propósito:
+    "no se encontraron" mandaría a buscar algo que sí está."""
+
+    def __init__(self):
+        super().__init__(
+            f"credenciales inválidas o vencidas. "
+            f"Renovalas con: {_COMANDO_DE_CREDENCIALES}"
+        )
+
+
 class ErrorDeObjeto(Exception):
     """Un objeto puntual no se pudo leer (FR-6, FR-13, FR-21).
 

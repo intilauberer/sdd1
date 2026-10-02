@@ -8,6 +8,7 @@ errores de dominio de `errors`, para que `cli` pueda reportarlas sin importar
 `google.api_core` (ADR-0013).
 """
 
+import os
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
@@ -47,8 +48,24 @@ def _get_client() -> storage.Client:
     return _client
 
 
+def _crear_cliente() -> storage.Client:
+    """Crea el cliente traduciendo la falla de ADC (FR-15 / FR-26).
+
+    `DefaultCredentialsError` cubre los dos casos: no hay ninguna fuente, o la
+    fuente que `GOOGLE_APPLICATION_CREDENTIALS` nombra no sirve (archivo
+    inexistente o mal formado). Si la variable está definida, ADC encontró una
+    fuente y lo que falla es esa fuente: credenciales inválidas, no ausentes.
+    """
+    try:
+        return _get_client()
+    except auth_exceptions.DefaultCredentialsError:
+        if os.environ.get("GOOGLE_APPLICATION_CREDENTIALS"):
+            raise errors.CredencialesInvalidas() from None
+        raise errors.SinCredenciales() from None
+
+
 def list_objects(bucket: str, prefix: str) -> Iterator[str]:
-    client = _get_client()
+    client = _crear_cliente()
     try:
         # `retry=None`: 0 reintentos también dentro del SDK (NFR-2, ADR-0016).
         for blob in client.list_blobs(bucket, prefix=prefix, retry=None):
@@ -57,6 +74,10 @@ def list_objects(bucket: str, prefix: str) -> Iterator[str]:
         raise errors.BucketNoEncontrado(bucket) from None
     except gcs_exceptions.Forbidden:
         raise errors.AccesoDenegado(bucket) from None
+    except (gcs_exceptions.Unauthorized, auth_exceptions.RefreshError):
+        # `401` al listar (FR-28) o un refresh rechazado (FR-26). Va antes que la
+        # red: `RefreshError` no es `TransportError`, pero conviene no depender de eso.
+        raise errors.CredencialesInvalidas() from None
     except _ERRORES_DE_RED:
         raise errors.ErrorDeRedAlListar(bucket) from None
 
