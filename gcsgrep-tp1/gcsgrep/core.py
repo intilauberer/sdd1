@@ -86,7 +86,12 @@ def parse_location(location: str) -> Tuple[str, str]:
     rest = location[len(scheme):]
     bucket, _, prefix = rest.partition("/")
     if not bucket:
-        raise ValueError("ubicación inválida: falta el nombre del bucket")
+        # FR-8 (spec v1.7): `gs://` sin bucket es una ubicación inválida más, con el
+        # mismo mensaje que nombra la forma esperada.
+        raise ValueError(
+            f"ubicación inválida: se esperaba 'gs://<bucket>/<prefijo>', "
+            f"se recibió '{location}' (falta el nombre del bucket)"
+        )
     return bucket, prefix
 
 

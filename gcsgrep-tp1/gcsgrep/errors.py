@@ -118,6 +118,18 @@ class ErrorDeRedAlLeer(ErrorDeObjeto):
         )
 
 
+class ObjetoIlegible(ErrorDeObjeto):
+    """GCS respondió otro `4xx` sobre el objeto: no es permiso, no encontrado ni
+    red (FR-29, spec v1.7, ADR-0025)."""
+
+    def __init__(self, bucket: str, object_name: str):
+        super().__init__(
+            bucket, object_name,
+            f"no se pudo leer 'gs://{bucket}/{object_name}' (GCS respondió con un error). "
+            f"Se sigue con el resto.",
+        )
+
+
 class ObjetoNoEncontrado(ErrorDeObjeto):
     """El objeto estaba en el listado y GCS responde `404` al ir a leerlo (FR-21).
 

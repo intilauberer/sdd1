@@ -2,7 +2,7 @@
 name = "gcsgrep"
 version = "0.1.0"
 description = "grep sobre el contenido de objetos de Google Cloud Storage, sin bajarlos primero"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 dependencies = [
     "google-cloud-storage>=2.14",
 ]

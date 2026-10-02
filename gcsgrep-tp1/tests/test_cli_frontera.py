@@ -51,11 +51,20 @@ def _correr(capsys, argv):
 # --- FR-23 · `| head -1` → SIGPIPE ------------------------------------------------
 
 _PROGRAMA = """
-import sys
+import io, os, sys
 from gcsgrep import cli, gcs
 from tests.fakes import HugeLineStream
-gcs.list_objects = lambda b, p: ["p/a.txt"]
-gcs.open_stream = lambda b, n: HugeLineStream(b"hit\\n", 200000)
+
+def abrir(bucket, nombre):
+    # Se registra en el momento: el proceso muere por la señal, sin atexit.
+    with open(os.environ["GCSGREP_APERTURAS"], "a") as registro:
+        registro.write(nombre + "\\n")
+    if nombre == "p/a.txt":
+        return HugeLineStream(b"hit\\n", 200000)
+    return io.BytesIO(b"hit\\n")
+
+gcs.list_objects = lambda b, p: ["p/a.txt", "p/b.txt"]
+gcs.open_stream = abrir
 sys.exit(cli.main(["hit", "gs://b/p/"]))
 """
 
@@ -63,6 +72,7 @@ sys.exit(cli.main(["hit", "gs://b/p/"]))
 @pytest.mark.skipif(sys.platform == "win32", reason="SIGPIPE es POSIX")
 def test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr(tmp_path):
     stderr = tmp_path / "stderr"
+    aperturas = tmp_path / "aperturas"
     script = tmp_path / "gcsgrep_con_doble.py"
     script.write_text(_PROGRAMA)
     pipeline = (
@@ -73,7 +83,7 @@ def test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr(tmp_path):
     r = subprocess.run(
         ["bash", "-c", pipeline],
         cwd=RAIZ,
-        env={**os.environ, "PYTHONPATH": str(RAIZ)},
+        env={**os.environ, "PYTHONPATH": str(RAIZ), "GCSGREP_APERTURAS": str(aperturas)},
         capture_output=True,
         text=True,
         timeout=60,
@@ -82,6 +92,8 @@ def test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr(tmp_path):
     assert r.stdout == "gs://b/p/a.txt:hit\n"
     assert stderr.read_text() == ""
     assert "estado=141" in r.stderr
+    # Spec v1.7: no lee más objetos después del corte.
+    assert aperturas.read_text() == "p/a.txt\n"
 
 
 def test_vc35_broken_pipe_no_llega_al_caso_generico(fake, monkeypatch, capsys):
@@ -105,7 +117,7 @@ def test_vc35_broken_pipe_no_llega_al_caso_generico(fake, monkeypatch, capsys):
 
 
 @pytest.mark.parametrize("abreviatura", ["--ig", "--line", "--ma=3"])
-def test_vc37_abreviaturas_de_opciones_largas_se_rechazan(fake, capsys, abreviatura):
+def test_vc46_abreviaturas_de_opciones_largas_se_rechazan(fake, capsys, abreviatura):
     exit_code, out, err = _correr(capsys, [abreviatura, "x", "gs://b/p/"])
 
     assert exit_code == 2
@@ -114,7 +126,7 @@ def test_vc37_abreviaturas_de_opciones_largas_se_rechazan(fake, capsys, abreviat
     assert fake.listados == 0
 
 
-def test_vc37_las_formas_largas_completas_siguen_andando(fake, capsys):
+def test_vc49_las_formas_largas_completas_siguen_andando(fake, capsys):
     fake.put("b", "p/a.txt", "Hit\n")
 
     assert _correr(capsys, ["--ignore-case", "--line-number", "hit", "gs://b/p/"]) == (
@@ -122,7 +134,7 @@ def test_vc37_las_formas_largas_completas_siguen_andando(fake, capsys):
     )
 
 
-def test_vc37_patron_que_empieza_con_guion_despues_de_doble_guion(fake, capsys):
+def test_vc47_patron_que_empieza_con_guion_despues_de_doble_guion(fake, capsys):
     fake.put("b", "p/a.txt", "a -x b\n")
 
     assert _correr(capsys, ["--", "-x", "gs://b/p/"]) == (0, "gs://b/p/a.txt:a -x b\n", "")

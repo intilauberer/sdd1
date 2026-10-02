@@ -20,9 +20,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        # 3.9 es el piso declarado en pyproject.toml; 3.12 es lo que se usa para
-        # desarrollar. Si el piso se sube, se cambia en los dos lugares.
-        python-version: ["3.9", "3.12"]
+        # 3.10 es el piso declarado en pyproject.toml (ADR-0027: las librerías de
+        # Google ya no soportan 3.9); 3.12 es lo que se usa para desarrollar. Si el
+        # piso se sube, se cambia en los dos lugares.
+        python-version: ["3.10", "3.12"]
 
     steps:
       - uses: actions/checkout@v4

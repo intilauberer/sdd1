@@ -80,7 +80,7 @@ que la segunda feature no cueste nada.
 
 ## Instalación
 
-Requiere Python ≥ 3.9 y credenciales de GCP resueltas por
+Requiere Python ≥ 3.10 sobre Linux o macOS ([ADR-0027](./docs/adr/ADR-0027-piso-de-python-y-plataforma.md)) y credenciales de GCP resueltas por
 [ADC](./docs/adr/ADR-0002-autenticacion-adc.md).
 
 El proyecto se desarrolla con [`uv`](https://docs.astral.sh/uv/), que gestiona el
@@ -227,7 +227,7 @@ enlace entre el contrato y el código. La tabla de
 [`04-cobertura-vc.md`](./specs/gcsgrep/04-cobertura-vc.md) nombra el ejercitador
 de cada VC; si un test se renombra, esa tabla se actualiza.
 
-[CI](../.github/workflows/tests.yml) corre la suite en Python 3.9 y 3.12, más el
+[CI](../.github/workflows/tests.yml) corre la suite en Python 3.10 y 3.12, más el
 chequeo de enlaces, en cada push y cada PR.
 
 ### Verificación de integración
