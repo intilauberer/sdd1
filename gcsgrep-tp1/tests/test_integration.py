@@ -102,7 +102,7 @@ def test_i5_primer_match_sin_leer_el_objeto_completo(capsys):
     resultados = core.search(
         BUCKET, "grande/",
         core.SearchConfig(pattern="linea"),
-        gcs.list_objects, gcs.open_text_stream,
+        gcs.list_objects, gcs.open_stream,
     )
     try:
         primero = next(resultados)

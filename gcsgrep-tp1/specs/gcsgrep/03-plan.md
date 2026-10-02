@@ -354,6 +354,64 @@ no con una edición muda.
 
 ---
 
+## Iteración 2 · estado al cierre
+
+**Fecha:** 2026-10-01 · **Rama:** `iteracion-2`, integrada a `main` con un merge
+`--no-ff` · **Spec:** v1.6.1 (BR-3 registrado como cambio de contrato
+implementado). El detalle VC por VC, con ejercitador y lo observado, está en
+[`04-cobertura-vc.md`](./04-cobertura-vc.md), sección *Iteración 2 · cierre*.
+
+La sesión se trabajó por prioridad, en cuatro bloques con un commit cada uno
+(tests en rojo → código → verde). **Los cuatro quedaron completos**; ninguno quedó
+a medias.
+
+| Bloque | Qué entra | Estado |
+|---|---|---|
+| 1 · Paso 0 | Tests de VC-1, VC-3, VC-4, VC-7, VC-8, VC-12, VC-16 (c), VC-19, VC-22, VC-24, VC-26, VC-27, VC-28, VC-30, VC-36…VC-40, VC-42, VC-43, más las acciones 4, 8 y 11 de las excepciones registradas. Pasaron contra el código de la Iteración 1 sin tocarlo: **ningún defecto de la Iteración 1** | ✅ completo |
+| 2 · Errores por objeto | FR-6, FR-13 (al abrir y a mitad de lectura), FR-21, BR-3, NFR-2 (0 reintentos, también en el SDK con `retry=None`) — VC-6, VC-13, VC-15, VC-21, VC-29, VC-32, VC-33 | ✅ completo |
+| 3 · Contenido no-texto | FR-9 (ventana de 8192), FR-10, FR-17, FR-22, FR-27, `chunk_size` ≤ 1 MiB — VC-9, VC-10, VC-20, VC-25, VC-34, VC-44, VC-14 (c). VC-14 (a)/(b) y VC-30 siguen pasando | ✅ completo |
+| 4 · CLI | FR-23 (SIGPIPE), FR-25 (`allow_abbrev=False`, `-- -x`), FR-15, FR-26, FR-28 — VC-35, VC-23, VC-41, VC-45, y VC-16 (a) completo | ✅ completo |
+
+**Resultado:** 44 de los 45 VCs pasan contra dobles de prueba (130 tests
+offline). El que falta es VC-31, fuera del criterio de salida mientras
+[ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md) esté vigente.
+
+**Desvíos respecto de este plan, dichos:**
+
+- **La costura de `core` cambió.** `open_text_stream` (líneas de texto) pasó a ser
+  `open_stream` (bytes): FR-9/FR-17/FR-22/FR-27 lo exigían. El plan lo anticipaba
+  ("leer bytes y partir líneas a mano") sin nombrar el cambio de colaborador.
+- **Una decisión que la spec no fija:** si la lectura falla dentro de la ventana
+  de 8192 bytes, las líneas completas ya leídas se emiten antes del aviso. Está
+  registrada en la cobertura y va a la spec v1.7.
+- **NFR-4 (a) bajó** de ~1254 a ~874 MiB/s por decodificar bytes; sigue 17× sobre
+  el umbral.
+
+### Pasa a una Iteración 2b
+
+Nada de esto es un bloque a medias: son las partes del alcance de la Iteración 2
+que **no se empezaron** en esta sesión, más lo que el cierre destapó.
+
+1. **Chequeo de CI de la cobertura** (Paso 0, [H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)):
+   que falle si la tabla marca ⬜ un VC con tests `test_vcN_*` o ✅ uno sin ninguno.
+2. **I-6** contra un entorno sin ADC real. Sigue no verificable en `floci`
+   ([H-14](../../docs/hallazgos/H-14-i6-no-verificable-en-emulador.md)).
+3. **Spec v1.7** con las excepciones registradas que cambian texto: acción 3
+   (`429`/`408`; "al abrir" no observable con el SDK real — el código ya traduce
+   en cada lectura), 5 (`ΟΔΟΣ` en VC-43), 7, 10, 13, 14, 17, 19; VCs para `--help`
+   y para las abreviaturas; y la decisión de la ventana parcial de arriba.
+4. **ADR del `chunk_size`** (acción 2, MUST parcial): fundamento, efecto en la
+   cantidad de pedidos por objeto, y su lugar en *Tecnología* y
+   `01-base-context.md` (que además nombra todavía `open_text_stream`).
+5. **Recalibrar VC-30 (b) en `ubuntu-latest`** (acción 9): se midió solo en macOS.
+6. **Documentación** (acciones 12 y 18): desvío de ADR-0005 sin ADR que lo
+   supersede; referencias viejas en `docs/adr/README.md`.
+7. **Bordes de credenciales que el cierre destapó:** un `RefreshError` a mitad de
+   lectura de un objeto cae en el genérico y aborta; la heurística FR-15/FR-26 solo
+   mira `GOOGLE_APPLICATION_CREDENTIALS`.
+
+---
+
 ## Iteración 3 — Concurrencia y rendimiento *(no comprometida para esta entrega)*
 
 **Por qué está en el plan:**

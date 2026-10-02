@@ -25,10 +25,10 @@ def _colaboradores():
     def list_objects(bucket, prefix):
         return ["huge.txt"]
 
-    def open_text_stream(bucket, name):
+    def open_stream(bucket, name):
         return stream
 
-    return list_objects, open_text_stream
+    return list_objects, open_stream
 
 
 def _medir_pico(consumir):
@@ -48,11 +48,11 @@ def _mensaje(pico: int) -> str:
 
 
 def test_vc14_memoria_acotada_con_objeto_de_200mb_sin_matches():
-    list_objects, open_text_stream = _colaboradores()
+    list_objects, open_stream = _colaboradores()
     config = core.SearchConfig(pattern="patron-que-nunca-aparece")
 
     matches, pico = _medir_pico(
-        lambda: list(core.search("b", "", config, list_objects, open_text_stream))
+        lambda: list(core.search("b", "", config, list_objects, open_stream))
     )
 
     assert matches == []
@@ -66,12 +66,12 @@ def test_vc14_memoria_acotada_con_objeto_de_200mb_donde_todo_matchea():
     imprime cada uno y lo descarta. La memoria tiene que quedar acotada por el
     match más grande, no por la cantidad de matches.
     """
-    list_objects, open_text_stream = _colaboradores()
+    list_objects, open_stream = _colaboradores()
     config = core.SearchConfig(pattern="x")
 
     def consumir():
         total = 0
-        for _ in core.search("b", "", config, list_objects, open_text_stream):
+        for _ in core.search("b", "", config, list_objects, open_stream):
             total += 1
         return total
 

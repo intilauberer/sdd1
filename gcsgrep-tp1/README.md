@@ -16,9 +16,11 @@ línea, y emite los matches a medida que aparecen.
 Es **solo lectura, siempre**: no escribe, no borra, no cambia permisos, y nunca
 usa credenciales distintas de las de quien la invoca.
 
-> **Estado: entrega completa.** 14/14 VCs pasando contra dobles de prueba, las dos
-> Restricciones del enunciado implementadas, y la verificación de integración
-> ejecutada contra el emulador `floci-gcp`. La verificación contra GCS real se
+> **Estado: Iteración 2 implementada.** 44 de 45 VCs pasando contra dobles de
+> prueba (130 tests); falta VC-31 (GCS real). Las dos Restricciones del enunciado
+> implementadas, y la verificación de integración de la Iteración 1 ejecutada
+> contra el emulador `floci-gcp`. Lo que queda está en la
+> [Iteración 2b](./specs/gcsgrep/03-plan.md#pasa-a-una-iteración-2b). La verificación contra GCS real se
 > declinó con fundamento y obligación registrada
 > ([ADR-0015](./docs/adr/ADR-0015-verificacion-real-declinada.md)) — ver
 > [Estado](#estado).
@@ -168,11 +170,11 @@ en el ADR correspondiente:
 - Lectura concurrente ([ADR-0009](./docs/adr/ADR-0009-lectura-secuencial.md))
 - S3 o Azure Blob
 
-Además, son alcance de la **Iteración 2**: un objeto que falla al leerse
-**aborta** la corrida con exit `2` en vez de saltearse (FR-6, FR-13); no hay
-mensajes específicos para fallos de red (NFR-2) ni para la falta de credenciales
-(FR-15); y un objeto con bytes que no son UTF-8 también aborta la corrida, en vez
-de leerse con reemplazo (FR-17).
+Desde la **Iteración 2**, un objeto que no se puede leer (sin permiso, borrado,
+red caída) se informa por stderr y la corrida sigue, pero termina con exit `2`
+**aunque haya habido matches** (BR-3: un cambio de contrato respecto de la
+Iteración 1). Los binarios y los `.gz` se saltean con una línea por stderr, los
+bytes que no son UTF-8 se leen con `�`, y `| head` corta sin ruido (estado `141`).
 
 ## Arquitectura
 
@@ -206,7 +208,7 @@ El manejo de errores sigue la misma dirección: `gcs` traduce las excepciones de
 Con `uv`, cada comando se ejecuta mediante `uv run`:
 
 ```bash
-uv run pytest                              # 48 tests, offline, sin credenciales
+uv run pytest                              # 130 tests, offline, sin credenciales
 uv run pytest -v                           # con el nombre de cada VC
 uv run python scripts/check-doc-links.py   # enlaces entre artefactos
 ```
@@ -230,7 +232,7 @@ chequeo de enlaces, en cada push y cada PR.
 
 ### Verificación de integración
 
-Los 48 tests corren contra dobles de prueba. Para verificar contra un GCS de
+Los 130 tests corren contra dobles de prueba. Para verificar contra un GCS de
 verdad —real o emulado— hay un campo de pruebas desechable:
 
 ```bash
@@ -255,10 +257,11 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | Verificación contra GCS real | ⬜ **declinada con fundamento** — [ADR-0015](./docs/adr/ADR-0015-verificacion-real-declinada.md) enumera qué queda sin verificar |
 | Spec v1.4 (respuesta a la corrección de la cátedra) | ✅ escrita — 27 requerimientos, 31 VCs; [qué cambió por cada acción](./docs/respuesta-correccion-catedra.md) |
 | Spec v1.5 (respuesta a la [revisión de la v1.4](./revisiones/spec-v1.4-2026-10-01.md)) | ✅ escrita — 34 requerimientos, 44 VCs; las 21 acciones en la fila v1.5 del historial de la spec |
-| Iteración 2 (regularización de VCs v1.4 y v1.5, resiliencia, contenido no-texto, rendimiento) | ⬜ planificada, sin implementar |
+| Iteración 2 (regularización de VCs v1.4 y v1.5, resiliencia, contenido no-texto, rendimiento) | ✅ **implementada 2026-10-01** — los cuatro bloques completos; [estado al cierre](./specs/gcsgrep/03-plan.md#iteración-2--estado-al-cierre) |
+| Iteración 2b (chequeo de CI de la cobertura, I-6, spec v1.7, ADR del `chunk_size`, recalibrar VC-30 (b)) | ⬜ pendiente — [lista](./specs/gcsgrep/03-plan.md#pasa-a-una-iteración-2b) |
 | Iteración 3 (concurrencia y su NFR comparativo) | ⬜ no comprometida; obligación registrada |
 
-**14/14 VCs pasando**, 48 tests offline más 5 de integración.
+**44/45 VCs pasando** contra dobles de prueba (falta VC-31, GCS real), 130 tests offline más 5 de integración.
 
 El enunciado pide que la Iteración 1 "corra una búsqueda real y sus chequeos de
 verificación pasen". Eso **está cumplido** contra el emulador: los seis chequeos

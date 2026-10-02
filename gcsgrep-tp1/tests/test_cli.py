@@ -10,7 +10,7 @@ from .fakes import ExplodingStream, FakeGCS, RecordingFakeGCS
 def fake_gcs(monkeypatch):
     fake = FakeGCS()
     monkeypatch.setattr(gcs, "list_objects", fake.list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", fake.open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", fake.open_stream)
     return fake
 
 
@@ -128,11 +128,11 @@ def test_vc17_los_matches_se_imprimen_antes_de_que_termine_la_corrida(monkeypatc
     def list_objects(bucket, prefix):
         return ["logs/a.txt"]
 
-    def open_text_stream(bucket, name):
+    def open_stream(bucket, name):
         return ExplodingStream(["timeout uno\n", "timeout dos\n"], boom)
 
     monkeypatch.setattr(gcs, "list_objects", list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", open_stream)
 
     exit_code = cli.main(["timeout", "gs://b/logs/"])
 
@@ -211,7 +211,7 @@ def test_vc18_no_abre_ningun_objeto_cuando_falla_el_listado(monkeypatch, capsys)
         raise AssertionError("no se debería abrir ningún objeto")
 
     monkeypatch.setattr(gcs, "list_objects", explota)
-    monkeypatch.setattr(gcs, "open_text_stream", registrar_apertura)
+    monkeypatch.setattr(gcs, "open_stream", registrar_apertura)
 
     assert cli.main(["x", "gs://no-existe/"]) == 2
     assert aperturas == []
@@ -253,7 +253,7 @@ def test_vc16b_excepcion_inesperada_al_abrir_un_objeto_no_deja_traceback(
     def explota_al_abrir(bucket, object_name):
         raise ExcepcionQueNadiePrevio("falló al abrir")
 
-    monkeypatch.setattr(gcs, "open_text_stream", explota_al_abrir)
+    monkeypatch.setattr(gcs, "open_stream", explota_al_abrir)
 
     exit_code = cli.main(["timeout", "gs://b/logs/"])
     captured = capsys.readouterr()
@@ -306,7 +306,7 @@ def test_vc12_tope_excedido_sale_con_1_y_no_lee_nada(monkeypatch, capsys):
     fake = RecordingFakeGCS()
     _sembrar(fake, 1001)
     monkeypatch.setattr(gcs, "list_objects", fake.list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", fake.open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", fake.open_stream)
 
     exit_code = cli.main(["timeout", "gs://b/logs/"])
     captured = capsys.readouterr()
@@ -322,7 +322,7 @@ def test_vc12_max_0_quita_el_tope_de_punta_a_punta(monkeypatch, capsys):
     fake = RecordingFakeGCS()
     _sembrar(fake, 1001)
     monkeypatch.setattr(gcs, "list_objects", fake.list_objects)
-    monkeypatch.setattr(gcs, "open_text_stream", fake.open_text_stream)
+    monkeypatch.setattr(gcs, "open_stream", fake.open_stream)
 
     exit_code = cli.main(["--max", "0", "timeout", "gs://b/logs/"])
     captured = capsys.readouterr()
