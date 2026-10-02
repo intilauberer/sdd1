@@ -228,3 +228,33 @@ def test_vc45_gcs_traduce_401_al_listar(monkeypatch):
 
     with pytest.raises(errors.CredencialesInvalidas):
         list(gcs.list_objects("b", "p/"))
+
+
+# --- NFR-3 · los avisos del runtime del SDK no llegan a stderr ------------------------
+#
+# Regresión encontrada por CI (2026-10-02, job Python 3.9): `google-api-core` y
+# `google-auth` emiten `FutureWarning` por stderr **al importarse** en Pythons sin
+# soporte, o sea en toda corrida. Los tests en proceso no lo ven (los imports pasan
+# al recolectar, antes de capturar); VC-35, que arranca un intérprete nuevo, sí.
+# Este test lo reproduce en cualquier versión: emite el mismo tipo de aviso a
+# nombre de un módulo `google.*` después de importar `gcsgrep`.
+
+
+def test_vc1_un_futurewarning_del_sdk_no_llega_a_stderr():
+    programa = (
+        "import warnings, gcsgrep.cli\n"
+        "warnings.warn_explicit('Python sin soporte', FutureWarning, 'x.py', 1,\n"
+        "                       module='google.api_core._python_version_support')\n"
+    )
+
+    r = subprocess.run(
+        [sys.executable, "-c", programa],
+        cwd=RAIZ,
+        env={**os.environ, "PYTHONPATH": str(RAIZ)},
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+
+    assert r.returncode == 0
+    assert r.stderr == ""

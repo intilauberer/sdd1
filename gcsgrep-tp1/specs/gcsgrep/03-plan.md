@@ -409,6 +409,7 @@ que **no se empezaron** en esta sesión, más lo que el cierre destapó.
 7. **Bordes de credenciales que el cierre destapó:** un `RefreshError` a mitad de
    lectura de un objeto cae en el genérico y aborta; la heurística FR-15/FR-26 solo
    mira `GOOGLE_APPLICATION_CREDENTIALS`.
+8. **Piso de Python** (encontrado por CI el 2026-10-02): Google ya no da soporte a 3.9, que es el piso de `pyproject.toml` y del CI. Hoy sus `FutureWarning` se silencian en `gcs.py`; decidir si se sube a 3.10 (spec v1.7, acción 17).
 
 ---
 

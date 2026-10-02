@@ -289,6 +289,33 @@ y `-- -x`, que ya andaban).
   ([H-15](../../docs/hallazgos/H-15-cobertura-desincronizada.md)) **no se
   implementó**: Iteración 2b.
 
+### Regresión encontrada por CI (2026-10-02) · NFR-3 en Python 3.9
+
+El primer CI de `main` después de la Iteración 2 falló **solo en Python 3.9**, en
+`test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr`: el stderr de `gcsgrep` no
+estaba vacío, sino que tenía tres `FutureWarning` de `google-api-core` y
+`google-auth` ("non-supported Python version", "past its end of life"), emitidos **al
+importarse**. No es un defecto de VC-35: pasaba en **toda** corrida sobre 3.9 desde
+que las librerías empezaron a avisarlo, y viola NFR-3 ("en una corrida sin
+salteados, sin errores y sin guardrail excedido, stderr queda vacío"). Los tests en
+proceso no podían verlo, porque los imports ocurren cuando pytest carga los tests,
+antes de capturar la salida. VC-35 es el primero que corre `gcsgrep` en un
+intérprete nuevo. Se clasificó por la fila 1 de
+[`proceso-cambios.md`](../../docs/proceso-cambios.md): no cambió lo prometido,
+cambió lo cumplido.
+
+| VC | Requerimiento | Ejercitado por | Se observa | Estado |
+|---|---|---|---|---|
+| VC-35 (CI, Python 3.9) | NFR-3 / FR-23 | `test_cli_frontera.py::test_vc35_head_corta_la_salida_por_sigpipe_sin_stderr` | **antes del arreglo**, en el run de CI `36948215780` (job 3.9): stderr con 3 `FutureWarning` del SDK, `1 failed, 129 passed`; en 3.12 pasaba | ❌ → arreglado abajo |
+| VC-1 (intérprete nuevo) | NFR-3 | `test_cli_frontera.py::test_vc1_un_futurewarning_del_sdk_no_llega_a_stderr` | reproduce el defecto en cualquier versión: un `FutureWarning` a nombre de `google.api_core.*` después de importar `gcsgrep`. Sin el arreglo, stderr `x.py:1: FutureWarning: …` (rojo observado en local, Python 3.13); con el filtro de `gcs.py`, stderr `""` | ✅ |
+
+**Arreglo:** `gcs.py` instala, antes de importar el SDK, un filtro que ignora solo
+`FutureWarning` y solo de módulos `google.*`. **Lo que no cubre:** que el arreglo
+alcance en 3.9 de verdad lo confirma el job de CI de 3.9, no una corrida local (no
+hay un 3.9 local). Y el fondo del problema sigue ahí: Google ya no da soporte a 3.9,
+que es el piso declarado en `pyproject.toml`. Subir el piso a 3.10 es una decisión
+para la Iteración 2b (spec v1.7, acción 17: el runtime no está nombrado en la spec).
+
 ### Por qué VC-14 tiene dos filas
 
 En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**

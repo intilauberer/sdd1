@@ -9,10 +9,18 @@ errores de dominio de `errors`, para que `cli` pueda reportarlas sin importar
 """
 
 import os
+import warnings
 from contextlib import contextmanager
 from typing import Iterator, Optional
 
-import requests
+# NFR-3: en una corrida sin errores stderr queda vacío. `google-api-core` y
+# `google-auth` emiten `FutureWarning` **al importarse** cuando el Python ya no
+# tiene soporte (3.9), o sea en toda corrida. Es un aviso sobre el runtime, no
+# sobre la búsqueda: se silencia solo esa categoría y solo para módulos
+# `google.*`, y antes de importarlos. Encontrado por CI el 2026-10-02 (VC-35).
+warnings.filterwarnings("ignore", category=FutureWarning, module=r"google\.")
+
+import requests  # noqa: E402 — después del filtro, a propósito
 from google.api_core import exceptions as gcs_exceptions
 from google.auth import exceptions as auth_exceptions
 from google.cloud import storage
