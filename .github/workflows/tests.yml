@@ -41,6 +41,12 @@ jobs:
         # pyproject.toml: esta corrida no toca la red ni cuesta plata.
         run: python -m pytest -v
 
+      - name: Medir NFR-4 en esta plataforma (informativo)
+        # Deja en el log el número de la plataforma de referencia y el contraste de
+        # (b) contra la implementación mala (revisión v1.5, acción 9). No falla:
+        # el umbral lo verifica VC-30.
+        run: python scripts/medir-nfr4.py
+
   docs:
     name: Trazabilidad de los documentos
     runs-on: ubuntu-latest
