@@ -285,6 +285,12 @@ fila nueva en la cobertura).
   puede llegar al caso genérico de ADR-0013.
 - **FR-26:** error de dominio y mensaje para credenciales inutilizables
   (`credenciales inválidas o vencidas`), distinto del de FR-15.
+- **FR-28 (spec v1.6):** un `401` al listar aborta con el mismo mensaje que FR-26
+  (VC-45); un `401` sobre un objeto se informa como FR-6.
+- **NFR-1 (spec v1.6):** el lector de GCS se abre con `chunk_size` ≤ 1 MiB, y
+  **VC-14 (c)** mide el pico leyendo 200 MiB a través de
+  `google.cloud.storage.fileio.BlobReader` con un blob falso en memoria (< 20 MiB;
+  hoy ≈120 MiB).
 - **FR-9/FR-10 (v1.5):** una línea de salteo por objeto, en el momento del salteo,
   sin resumen final.
 - Auditoría completa de NFR-3: todo lo que no es un match va a stderr.
@@ -294,7 +300,8 @@ Después de implementarlos, **VC-14 y VC-30 tienen que seguir pasando**: son los
 VCs que detectan si el cambio rompió la memoria acotada o el rendimiento.
 
 **VCs en alcance:** los del Paso 0, más VC-6, VC-9, VC-10, VC-13, VC-15, VC-20,
-VC-21, VC-23, VC-25, VC-29, VC-32, VC-33, VC-34, VC-35, VC-41, VC-44, y
+VC-21, VC-23, VC-25, VC-29, VC-32, VC-33, VC-34, VC-35, VC-41, VC-44, VC-14 (c),
+VC-45, y
 **VC-16 (a) completo** — la lista enumerada, ahora
 con todos los casos de error implementados. Los VCs de la Iteración 1 (VC-1 a
 VC-5, VC-7, VC-8, VC-11, VC-12, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir

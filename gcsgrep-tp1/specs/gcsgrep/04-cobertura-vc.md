@@ -156,6 +156,17 @@ de la clasificación, no un ✅.
 | VC-41 | FR-26, credenciales inutilizables | — | `credenciales inválidas o vencidas` | — | ⬜ Iteración 2 |
 | VC-44 | FR-27, BOM | — | `1:timeout` sin BOM | con el doble: el `U+FEFF` queda al principio de la línea 1 | ⬜ Iteración 2 |
 
+## Spec v1.6 · VCs nuevos
+
+Agregados el 2026-10-01 por la
+[revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md). Ninguna fila anterior
+se editó.
+
+| VC | Requerimiento | Ejercitador hoy | Esperado | Observado hoy | Estado |
+|---|---|---|---|---|---|
+| VC-14 (c) | NFR-1, a través de `BlobReader` | — | pico adicional **< 20 MiB** sobre 200 MiB | según la revisión de la v1.5: ≈120 MiB | ⬜ Iteración 2 |
+| VC-45 | FR-28, `401` al listar | — | exit `2`, `credenciales inválidas o vencidas`, 0 aperturas | — | ⬜ Iteración 2 |
+
 ### Por qué VC-14 tiene dos filas
 
 En la versión anterior de esta tabla, VC-14 tenía una sola fila y medía **solo**

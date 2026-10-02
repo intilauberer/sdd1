@@ -2,10 +2,10 @@
 
 | | |
 |---|---|
-| **Versión** | 1.5 |
-| **Estado** | habilitada para planificar la Iteración 2, tras la revisión de la v1.4 (ver más abajo) |
+| **Versión** | 1.6 |
+| **Estado** | habilitada con excepciones registradas para planificar la Iteración 2, tras la revisión de la v1.5 (ver *Excepciones registradas (revisión v1.5)*) |
 | **Fecha** | 2026-10-01 |
-| **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-19, 16 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) · [corrección de la cátedra](../../docs/correccion-catedra-iteracion-1.md), respondida acción por acción en [`docs/respuesta-correccion-catedra.md`](../../docs/respuesta-correccion-catedra.md) · [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md) (NEEDS WORK, 21 acciones) |
+| **Revisada por** | [`docs/revision-spec.md`](../../docs/revision-spec.md) — checklist C-1…C-19, 16 hallazgos ([`docs/hallazgos/`](../../docs/hallazgos/)) · [corrección de la cátedra](../../docs/correccion-catedra-iteracion-1.md), respondida acción por acción en [`docs/respuesta-correccion-catedra.md`](../../docs/respuesta-correccion-catedra.md) · [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md) (NEEDS WORK, 21 acciones) · [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) (NEEDS WORK, 2 MUST resueltos en v1.6, el resto registrado como excepción) |
 | **Insumos** | [`01-base-context.md`](./01-base-context.md), [`00-requirements-draft.md`](./00-requirements-draft.md) (congelado), [`docs/adr/`](../../docs/adr/) (19 ADRs) |
 | **Salidas** | [`03-plan.md`](./03-plan.md), [`04-cobertura-vc.md`](./04-cobertura-vc.md) |
 
@@ -55,7 +55,7 @@ Cloud Storage sin descargarlos primero, con la misma experiencia mental que
   es la única invocación cuyo stdout no son líneas de match (NFR-3). Cualquier
   otra invocación que no respete esta forma se rechaza (FR-25).
 - Búsqueda literal (substring) sobre el contenido de objetos de texto (FR-1).
-- Autenticación por Application Default Credentials (BR-1, FR-15, FR-26).
+- Autenticación por Application Default Credentials (BR-1, FR-15, FR-26, FR-28).
 - Guardrail de costo por cantidad de objetos (BR-2).
 - Exit codes estilo `grep`, salida apta para scripting (NFR-3).
 - Salida incremental: cada match se imprime en cuanto se encuentra (FR-11).
@@ -213,7 +213,7 @@ objeto sin su terminador de línea (FR-22), y no contiene el número de línea.
 ### FR-6 · Un objeto sin permiso de lectura no aborta la corrida
 
 **Dado** un prefijo con varios objetos, donde GCS responde **permiso denegado**
-al abrir uno de ellos,
+al abrir uno de ellos (`403`, o `401` sobre un objeto: ver abajo),
 **Cuando** la persona ejecuta `gcsgrep`,
 **Entonces** el sistema escribe por stderr una línea que contiene
 `sin permiso para leer` y el URI `gs://<bucket>/<objeto>` de ese objeto, sigue
@@ -225,6 +225,11 @@ BR-3.
 > `gcsgrep "hit" gs://b/p/` imprime por stdout exactamente `gs://b/p/c.txt:x hit`,
 > stderr contiene una línea con `sin permiso para leer` y `gs://b/p/b.txt`, stderr
 > no contiene `Traceback`, y el exit code es `2`.
+
+*Un `401` sobre un objeto (v1.6):* si GCS ya aceptó el listado y responde `401` al
+abrir o leer un objeto, después de haber leído otros, se trata como este FR (línea
+con `sin permiso para leer` + URI, sigue, BR-3), no como FR-28: la corrida ya
+demostró que las credenciales sirven, y abortar tiraría los objetos que faltan.
 
 *Los tres caminos de un objeto que no se puede leer (v1.5):* GCS responde
 **permiso denegado** al abrirlo (FR-6), **no encontrado** al abrirlo (FR-21), o la
@@ -460,13 +465,12 @@ de credenciales del doble", que no existe: `core` tiene dos colaboradores,
 credenciales ausentes no existe todavía en el código; agregarlo, y que `gcs` traduzca
 a él la falla de ADC, es alcance de la Iteración 2.
 
-### FR-26 · Credenciales inutilizables
+### FR-26 · Credenciales que no producen un token
 
 **Dado** un entorno donde Application Default Credentials encuentra una fuente de
-credenciales pero ésta es **inutilizable**: no se puede obtener de ella un token
-válido, o GCS la rechaza como no autenticada (`401`). Por ejemplo, un token vencido
-o revocado, o `GOOGLE_APPLICATION_CREDENTIALS` apuntando a un archivo inexistente o
-mal formado,
+credenciales pero **no puede obtener de ella un token** (por ejemplo,
+`GOOGLE_APPLICATION_CREDENTIALS` apuntando a un archivo inexistente o mal formado, o
+un *refresh* rechazado por un token vencido o revocado),
 **Cuando** la persona ejecuta `gcsgrep` con una ubicación válida,
 **Entonces** el sistema escribe por stderr un mensaje que contiene
 `credenciales inválidas o vencidas` y el comando para renovarlas,
@@ -481,11 +485,31 @@ de remedio es el mismo, y es justo el que necesita quien tiene un token vencido.
 Hasta la v1.4 este caso caía en el genérico de NFR-3 (exit `2`, sin traceback, con el
 nombre de la excepción del SDK como mensaje).
 
-> **VC-41** — Con el doble de prueba cuyo `list_objects` levanta el error de dominio
-> de *credenciales inutilizables*, `gcsgrep "x" gs://b/p/` sale con código `2`, stdout
+> **VC-41** — Simulando que ADC no puede obtener un token (con el doble de prueba
+> cuyo `list_objects` levanta el error de dominio de *credenciales inutilizables*),
+> `gcsgrep "x" gs://b/p/` sale con código `2`, stdout
 > vacío, stderr contiene `credenciales inválidas o vencidas` y
 > `gcloud auth application-default login`, no contiene
 > `no se encontraron credenciales` ni `Traceback`, y se abren 0 objetos.
+
+*FR-26 partido en la v1.6:* hasta la v1.5 su Dado era "no se obtiene un token **o**
+GCS responde `401`", la forma no atómica que la cátedra marcó en FR-6 y FR-12, y su
+Entonces era falso para un `401` sobre un objeto. El `401` al listar es FR-28; sobre
+un objeto, FR-6.
+
+### FR-28 · GCS rechaza las credenciales al listar (`401`)
+
+**Dado** un entorno donde ADC obtuvo un token, y GCS responde `401` (no
+autenticado) al **listar** el prefijo,
+**Cuando** la persona ejecuta `gcsgrep` con una ubicación válida,
+**Entonces** la corrida aborta: el sistema escribe por stderr un mensaje que
+contiene `credenciales inválidas o vencidas` y `gcloud auth application-default login`,
+sale con código `2`, y no lee el contenido de ningún objeto (0 objetos leídos).
+
+> **VC-45** — Con el doble de prueba cuyo `list_objects` simula la respuesta `401`
+> de GCS, `gcsgrep "x" gs://b/p/` sale con código `2`, stdout vacío, stderr contiene
+> `credenciales inválidas o vencidas` y `gcloud auth application-default login`, no
+> contiene `Traceback`, y se abren 0 objetos.
 
 ### FR-16 · Orden de la salida
 
@@ -779,9 +803,10 @@ sin ambigüedad, igual que hace `grep` cuando un archivo no se puede abrir
 ### NFR-1 · Memoria acotada por streaming
 
 **Métrica:** pico de memoria adicional **asignada por el intérprete de Python**
-(la que registra `tracemalloc`) mientras se lee un objeto. No incluye memoria
-nativa fuera del heap de Python (buffers del SDK de GCS o de `ssl`) ni el tamaño
-residente del proceso.
+(la que registra `tracemalloc`) mientras se lee un objeto, **incluidos los buffers
+de la librería cliente de GCS que viven en el heap de Python** (v1.6). No incluye
+memoria nativa fuera del heap de Python (la de `ssl`) ni el tamaño residente del
+proceso.
 **Umbral:** **< 20 MiB**.
 **Condición de carga:** un objeto de **200 MiB** de texto, en dos condiciones:
 (a) con un patrón que no aparece en ninguna línea, y (b) con un patrón que
@@ -798,7 +823,10 @@ doble de prueba mediría el intérprete.
 Para cumplirlo, el sistema procesa cada objeto línea por línea por streaming, sin
 cargar el contenido completo en memoria, **y sin acumular los matches
 encontrados** (ver FR-11 y
-[ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md)).
+[ADR-0011](../../docs/adr/ADR-0011-salida-incremental.md)). **El lector de GCS se
+abre con `chunk_size` ≤ 1 MiB** (v1.6): el bloque por defecto del lector de la
+librería cliente es de ~40 MiB, y leyendo a través de él el pico medido por la
+revisión de la v1.5 fue de ≈120 MiB.
 
 > **VC-14** — Sobre un objeto simulado de **200 MiB** de contenido de texto, el
 > pico de memoria adicional asignada por el intérprete mientras se lee ese objeto
@@ -806,6 +834,14 @@ encontrados** (ver FR-11 y
 > expone el stream; nunca se llama a un equivalente de "leer todo el archivo"
 > sobre él), en las condiciones (a) y (b). La (b) es la que hace falsable al VC:
 > con acumulación de matches, el pico medido es de ~371 MiB.
+
+> **VC-14 (c)** (v1.6) — Sobre un objeto de **200 MiB** de texto con un patrón que
+> no aparece (condición (a)), leído **a través del lector real de la librería
+> cliente** (`google.cloud.storage.fileio.BlobReader`, abierto como lo abre `gcs`)
+> con un blob falso que implementa `download_as_bytes(start, end)` desde memoria, el
+> pico de memoria adicional medido con `tracemalloc` es menor a **20 MiB**. (a) y (b)
+> corren sobre el doble y no ven el lector; (c) es la que falla si el bloque de
+> lectura crece. Hoy da ≈120 MiB: alcance de la Iteración 2.
 
 ### NFR-2 · Política ante fallos de red: sin reintentos
 
@@ -848,14 +884,14 @@ requerimientos la referencian.
 proceso la re-lanza: stderr contiene el traceback y el exit code es el del
 intérprete (`1`). No es el comportamiento por defecto, no se activa sola, y no
 aplica a los errores previstos (FR-6, FR-8, FR-12, FR-13, FR-14, FR-15, FR-21,
-FR-25, FR-26, BR-2, NFR-2), que siguen sin traceback aunque la variable esté
+FR-25, FR-26, FR-28, BR-2, NFR-2), que siguen sin traceback aunque la variable esté
 definida. Existe para
 diagnosticar un bug nuevo
 ([ADR-0013](../../docs/adr/ADR-0013-frontera-de-excepciones.md)).
 
 > **VC-16 (a)** — Para cada caso de error o salteo cubierto (VC-6, VC-8, VC-9,
 > VC-10, VC-12, VC-13, VC-15, VC-18, VC-21, VC-22, VC-23, VC-32, VC-33, VC-37,
-> VC-38, VC-39, VC-40, VC-41), stdout no contiene
+> VC-38, VC-39, VC-40, VC-41, VC-45), stdout no contiene
 > ninguna línea que no sea un match real, y stderr no contiene la palabra
 > `Traceback`.
 >
@@ -979,17 +1015,18 @@ ejecutó es una afirmación distinta de no tenerlo, y esta spec no las mezcla.
 | FR-23 | VC-35 | borde (consumidor que corta stdout) |
 | FR-24 | VC-36 | borde (entrada vacía: patrón) |
 | FR-25 | VC-37, VC-38, VC-39, VC-40 | falla (invocación mal formada, un VC por defecto) |
-| FR-26 | VC-41 | falla (credenciales inutilizables) |
+| FR-26 | VC-41 | falla (credenciales sin token) |
 | FR-27 | VC-44 | borde (BOM UTF-8) |
+| FR-28 | VC-45 | falla (`401` al listar) |
 | BR-1 | VC-11, VC-31 | invariante |
 | BR-2 | VC-12, VC-42 | guardrail · límite exacto |
 | BR-3 | VC-13 | invariante |
-| NFR-1 | VC-14 (a), VC-14 (b) | medición |
+| NFR-1 | VC-14 (a), VC-14 (b), VC-14 (c) | medición (doble · lector real) |
 | NFR-2 | VC-15 (al listar), VC-29 (al leer), VC-33 (al abrir) | falla |
-| NFR-3 | VC-16 (a), (b), (c) | invariante |
+| NFR-3 | VC-16 (a), (b), (c), VC-31 | invariante |
 | NFR-4 | VC-30 (a), (b) | medición |
 
-**34 requerimientos (27 FR, 3 BR, 4 NFR), 44 VCs, 0 huérfanos.** Cada condición
+**35 requerimientos (28 FR, 3 BR, 4 NFR), 45 VCs, 0 huérfanos.** Cada condición
 enumerada en un NFR tiene su propio VC o su propia parte de VC.
 
 ## Tabla de trazabilidad · borrador → spec
@@ -1051,7 +1088,7 @@ encontró uno declarado desde la v1.0 y nunca cubierto.
 | GCS | **No existir** — el prefijo (0 objetos) | FR-5 (exit `1`, es un resultado válido, no un error) | VC-5 |
 | GCS | **No existir** — un objeto listado (borrado antes de leerlo) | **FR-21** + BR-3 — *el mismo caso que H-13, un nivel más abajo: sin cubrir en la v1.4, [H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md)* | VC-32 |
 | Entorno de credenciales | **Sin credenciales** | **FR-15** — nuevo en v1.4 | VC-23 |
-| Entorno de credenciales | **Credenciales inutilizables** (vencidas, revocadas, archivo de key inválido) | **FR-26** — nuevo en v1.5 | VC-41 |
+| Entorno de credenciales | **Credenciales inutilizables** (vencidas, revocadas, archivo de key inválido) | **FR-26** (sin token) — nuevo en v1.5; **FR-28** (`401` al listar) — v1.6; un `401` sobre un objeto, FR-6 | VC-41, VC-45 |
 | Persona usuaria | Ubicación mal escrita | FR-8 (exit `2` sin tocar la red) | VC-8 |
 | Persona usuaria | Invocación mal formada (flag, `--max`, `gs://` sin bucket, argumentos) | **FR-25** (exit `2` sin tocar la red) — nuevo en v1.5 | VC-37…VC-40 |
 | Persona usuaria | Prefijo gigante, corrida costosa | BR-2 (guardrail, tope 1000) | VC-12, VC-42 |
@@ -1059,7 +1096,7 @@ encontró uno declarado desde la v1.0 y nunca cubierto.
 | Script | Necesita una salida reproducible | FR-16 (orden del listado) | VC-24 |
 | Script | Corta la salida antes del final (`\| head`) | **FR-23** (SIGPIPE, sin stderr) — nuevo en v1.5 | VC-35 |
 
-**15 modos de falla declarados, 15 cubiertos, 0 huérfanos.**
+**16 modos de falla declarados, 16 cubiertos, 0 huérfanos.**
 
 Tres notas sobre la forma de esta tabla:
 
@@ -1090,7 +1127,7 @@ comportamiento observable escrito en un requerimiento de esta spec:
 | # | Pregunta | Requerimiento | ADR |
 |---|---|---|---|
 | 1 | Sabor de regex | FR-1 (substring literal), VC-19 | ADR-0001 |
-| 2 | Autenticación | BR-1, FR-15 (sin credenciales → exit `2`), FR-26 (credenciales inutilizables) | ADR-0002 |
+| 2 | Autenticación | BR-1, FR-15 (sin credenciales → exit `2`), FR-26 (credenciales sin token), FR-28 (`401` al listar) | ADR-0002 |
 | 3 | Sintaxis de la ubicación | FR-7, FR-8, FR-18 (prefijo sin `/`), FR-25 (`gs://` sin bucket) | ADR-0003 |
 | 4 | Flags de `grep` | FR-2, FR-3, FR-4, BR-2, FR-25 (flags no soportados se rechazan) | ADR-0004 |
 | 5 | Binarios y `.gz` | FR-9 (ventana de 8192 bytes, `\x00` posterior, una línea por salteo), FR-10, FR-17, FR-27 (BOM) | ADR-0005, ADR-0018 |
@@ -1103,6 +1140,37 @@ comportamiento observable escrito en un requerimiento de esta spec:
 Los dos huérfanos que encontró la revisión v1.1 se resolvieron como ADR-0011
 (FR-11) y ADR-0012, hoy superseded por ADR-0017 (NFR-4). La salida incremental de
 ADR-0011 tiene además su borde de pipe en FR-23 desde la v1.5.
+
+## Excepciones registradas (revisión v1.5)
+
+La [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) dio NEEDS WORK
+con 2 MUST, 10 SHOULD y 7 COULD. La v1.6 resuelve los dos MUST (FR-26/FR-28 y
+NFR-1/VC-14 (c)) y la acción 16 (conteo de la tabla de actores, VC-31 en NFR-3). El
+resto **no se resuelve en la v1.6**: queda acá, una fila por acción, con por qué se
+acepta y cuándo se atiende. Es el mismo mecanismo con el que la revisión v1.1 habilitó
+la spec con H-9 abierto ([`docs/revision-spec.md`](../../docs/revision-spec.md)). Una
+excepción se cierra con una fila del *Historial* que la nombre.
+
+| Acción | Nivel | Qué queda abierto | Por qué se acepta | Se atiende en |
+|---|---|---|---|---|
+| 2 (parte) | MUST | El tamaño de bloque (`chunk_size` ≤ 1 MiB) está en NFR-1 pero no en un ADR, ni su efecto en NFR-4 (más pedidos por objeto), ni en *Tecnología* y `01-base-context.md` | El comportamiento observable y su VC ya están en la spec; falta el fundamento escrito | Iteración 2, junto con la implementación de VC-14 (c) |
+| 3 | SHOULD | Un `429` o un `408` sobre un objeto no es ni red (FR-13), ni permiso (FR-6), ni no encontrado (FR-21): cae en el genérico | El genérico lo acota: exit `2`, sin traceback (NFR-3). No hay salida falsa, solo un mensaje menos preciso y una corrida que aborta | Iteración 2 (spec v1.7: redefinir "error de red" y un FR para "otra respuesta de error") |
+| 3 | SHOULD | "Al abrir" no es observable con el SDK real: `blob.open("r")` es perezoso y el `403`/`404` llega en la primera lectura; la nota de los tres caminos (FR-6) no es exhaustiva | Mismo acotamiento por el genérico; los VCs contra el doble siguen siendo correctos sobre la costura declarada | Iteración 2 (spec v1.7: "al abrir o durante la lectura" en FR-6/FR-21, VC-6/VC-32 en la primera lectura) |
+| 4 | SHOULD | Qué es una línea (`uno\n\ndos\n`) no está definido; VC-36 sin bytes explícitos | FR-22 y FR-20 ya fijan el terminador y la última línea; el caso de la línea vacía coincide con lo que hace el código | Iteración 2 (Paso 0) |
+| 5 | SHOULD | FR-2 dice "carácter por carácter" y "un carácter nunca se convierte en dos", falso para el plegado de `İ` → `i̇` y de `Σ` final → `ς` de `str.lower()` | Afecta solo a esos caracteres; VC-43 (`árbol`) es correcto | Iteración 2 (Paso 0, con el caso `ΟΔΟΣ` en VC-43) |
+| 6 | SHOULD | Las abreviaturas de opciones largas (`--ig`) se aceptan, aunque *Dentro* dice que lo que no respeta la forma se rechaza; un patrón que empieza con `-` no tiene VC | `--ig` hace lo mismo que `--ignore-case`: no produce salida falsa | Iteración 2 (`allow_abbrev=False`, VCs `--ig` → `2` y `-- -x`) |
+| 7 | SHOULD | FR-23 no distingue el stderr causado por el corte del ya escrito; VC-35 no dice con qué proceso corre | FR-23 ya es alcance de la Iteración 2 | Iteración 2 |
+| 8 | SHOULD | VC-5 no cubre el prefijo sin objetos que la tabla de actores le asigna | El comportamiento (exit `1`) es el de FR-5 y ya lo hace el código | Iteración 2 (Paso 0) |
+| 9 | SHOULD | NFR-4 (b) discrimina en macOS (29 185 matches/s, falla) pero **no en Linux/CI** (241 980 matches/s, pasa por 4,8×); el CI corre en `ubuntu-latest` | (a) sigue discriminando; (b) queda como piso de regresión de hecho hasta recalibrar | Iteración 2 (Paso 0, al medir VC-30: recalibrar en `ubuntu-latest` o ADR que supersede la parte de ADR-0017) |
+| 10 | SHOULD | Los reintentos y el timeout de la librería cliente no están en la spec con un número (solo en ADR-0016) | `gcsgrep` no reintenta; lo que agregue el SDK no cambia el resultado, solo la demora | Iteración 2 (con NFR-2) |
+| 11 | SHOULD | `--help` y las formas largas no tienen FR ni VC | Ya funcionan; no cambian la salida de una búsqueda | Iteración 2 (Paso 0) |
+| 12 | SHOULD | Fundamentos de la v1.5 en prosa en vez de ADR; el desvío de ADR-0005 sin ADR que lo supersede | Documentación; no cambia comportamiento | Iteración 2 |
+| 13 | COULD | FR-13: el Dado podría ser el título | Estilo; FR-13 ya es atómico por la definición de NFR-2 | Iteración 2 (spec v1.7) |
+| 14 | COULD | FR-25: Dado como predicado único y texto fijo en stderr | Los cuatro VCs ya cubren los defectos | Iteración 2 (spec v1.7) |
+| 15 | COULD | VC-44 sin un BOM fuera del principio | FR-27 lo dice en el texto | Iteración 2 (con FR-27) |
+| 17 | COULD | Runtime, librería cliente con versión mínima y plataforma (POSIX) sin nombrar | Están en `pyproject.toml` | Iteración 2 (spec v1.7) |
+| 18 | COULD | Referencias viejas de ADR-0007, ADR-0011 y ADR-0002 sin registrar en `docs/adr/README.md` | Documentación | Iteración 2 |
+| 19 | COULD | FR-8 y FR-25 se reparten `gs://` a secas | Los dos salen con `2` sin tocar la red | Iteración 2 (spec v1.7) |
 
 ## Qué sigue
 
@@ -1120,6 +1188,7 @@ ADR-0011 tiene además su borde de pipe en FR-23 desde la v1.5.
 | 1.3 | 2026-09-24 | **VC-17 acotado**: afirma que el primer match se emite sin haber *abierto* el resto, no sin haberlo *listado*. Consecuencia de implementar BR-2 (contar obliga a materializar el listado), anticipada por el plan. FR-11 no cambió. | [ADR-0006](../../docs/adr/ADR-0006-guardrail-de-costo.md), nota de regresión del plan |
 | 1.4 | 2026-10-01 | **Corrección de la cátedra (NEEDS WORK).** FRs atómicos: **FR-3/FR-4** pasan a ser un formato cada uno (con y sin `-n`); **FR-6** queda en permiso denegado y la red a mitad de lectura pasa a **FR-13**; **FR-12** queda en bucket inexistente y el permiso de listado pasa a **FR-14**. **NFR-1** con métrica, umbral y condición en el enunciado. **+NFR-4** de rendimiento (ADR-0017 supersede a ADR-0012). **NFR-2** reescrito como política de 0 reintentos (ADR-0016) con un VC por condición (+VC-29). Decisiones de ADRs que llegan a la spec: patrón literal (FR-1/VC-19), sin credenciales (**FR-15**), orden de salida (**FR-16**), prefijo sin `/` (**FR-18**), `GCSGREP_DEBUG` como excepción explícita de NFR-3 (VC-16 (c)). Bordes nuevos: codificación (**FR-17**), 0 bytes (**FR-19**), última línea sin `\n` (**FR-20**), ventana binaria de 8192 bytes (FR-9/VC-20, ADR-0018). VCs concretos en lugar de "stderr menciona" (VC-1, VC-3, VC-4, VC-6, VC-8, VC-9, VC-10). Permisos IAM mínimos. **+VC-31** de punta a punta contra GCS real. Regla "sin traceback" solo en NFR-3. +Actor *Entorno de credenciales*. | [corrección de la cátedra](../../docs/correccion-catedra-iteracion-1.md), [respuesta acción por acción](../../docs/respuesta-correccion-catedra.md) |
 | 1.5 | 2026-10-01 | **Revisión de la v1.4 (NEEDS WORK), las 21 acciones.** MUST: **"error de red" definido una vez** en NFR-2 (sin respuesta HTTP completa, o `5xx`; un `403`/`404` no lo es) y FR-13 lo referencia sin listar causas; **+FR-21/VC-32** (objeto listado que GCS responde no encontrado al abrirlo: `ya no existe`, sigue, BR-3); FR-13 cubre la red **al abrir** (+VC-33); BR-3, NFR-2 (b), los previstos de NFR-3 y la tabla de actores actualizados. SHOULD: **+FR-22/VC-34** (terminador `\n`, `\r\n` sin `\r`, `\r` suelto en la línea); **+FR-23/VC-35** (`\| head` → SIGPIPE sin stderr, [ADR-0019](../../docs/adr/ADR-0019-corte-de-stdout-sigpipe.md)); **+FR-24/VC-36** (patrón vacío matchea todo); **+FR-25/VC-37…VC-40** (invocación mal formada → `2`); **+FR-26/VC-41** (credenciales inutilizables); **+VC-42** (límite exacto de BR-2); texto literal del guardrail en BR-2; VC-7, VC-12, VC-13, VC-20, VC-23 con observables exactos; VC-9/VC-10 "stderr es exactamente"; FR-9/FR-10: una línea por salteo, sin resumen final (se aparta de ADR-0005); FR-9: `\x00` posterior a la ventana sale por stdout; FR-14 "no contiene `no existe`"; VC-15 sin "representación cruda"; NFR-1 y NFR-4 dicen lo que se mide (memoria del intérprete; ejecución en proceso), MiB en todo; VC-30 con contraste medido para (b). COULD: plegado de `-i` carácter por carácter (+VC-43); **+FR-27/VC-44** (BOM); formas largas y `--help` en *Dentro*; "no afecta el exit code" solo en BR-3; VC-31 (3) con bucket inexistente verificado; referencias viejas de ADRs anotadas en `docs/adr/README.md`. | [revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md), [H-16](../../docs/hallazgos/H-16-objeto-que-falla-al-abrir.md), [errata de la respuesta](../../docs/respuesta-correccion-catedra.md#errata-revisión-v14) |
+| 1.6 | 2026-10-01 | **Revisión de la v1.5 (NEEDS WORK), los dos MUST.** **FR-26 partido:** FR-26 queda en credenciales que no producen un token (VC-41); **+FR-28/VC-45** (`401` al listar: aborta, `2`, 0 objetos leídos); un `401` sobre un objeto, después de haber leído otros, es FR-6. **NFR-1:** la métrica incluye los buffers de la librería cliente en el heap de Python, el lector de GCS se abre con `chunk_size` ≤ 1 MiB, y **+VC-14 (c)** mide a través de `BlobReader` (Iteración 2). Conteo de la tabla de actores (16) y VC-31 en la fila de NFR-3 (acción 16). El resto de las acciones queda en *Excepciones registradas (revisión v1.5)*. **Estado: habilitada con excepciones registradas.** | [revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md) |
 
 **Qué cambió del contrato en v1.5.** Dos clases de cambio, separadas en el plan:
 
