@@ -1,9 +1,26 @@
 # gcsgrep — plan de iteraciones
 
-> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.4.
+> Salida del paso **Planificar**, a partir de [`02-spec.md`](./02-spec.md) v1.5.
 >
 > Cada iteración termina con código andando y sus VCs pasando antes de que
 > empiece la siguiente.
+>
+> **Enmienda 2026-10-01 (spec v1.5) · revisión de la v1.4.** La spec pasó de 27 a
+> 34 requerimientos (FR-21…FR-27) y de 31 a 44 VCs. Se clasificaron con el mismo
+> criterio que la v1.4:
+>
+> - **Comportamiento que la Iteración 1 ya tiene, ahora escrito → Paso 0:** VC-36
+>   (patrón vacío, FR-24), VC-37…VC-40 (invocación mal formada, FR-25), VC-42
+>   (límite exacto del tope, BR-2), VC-43 (`-i` con `Á`/`á`, FR-2), y VC-7, VC-12 y
+>   VC-22 re-redactados con observables exactos. Se verificaron a mano contra el
+>   código actual con el doble de prueba antes de clasificarlos; no hay tests nuevos
+>   todavía.
+> - **Comportamiento nuevo → Paso 1 de la Iteración 2:** VC-32 (FR-21, objeto que ya
+>   no existe), VC-33 (FR-13, red al abrir), VC-34 (FR-22, terminador `\r\n`), VC-35
+>   (FR-23, `| head` → SIGPIPE, [ADR-0019](../../docs/adr/ADR-0019-corte-de-stdout-sigpipe.md)),
+>   VC-41 (FR-26, credenciales inutilizables) y VC-44 (FR-27, BOM); y VC-13, VC-15,
+>   VC-20 y VC-23 re-redactados, que ya eran de esta iteración.
+> - Ninguno cambia la Iteración 1 ni la 3.
 >
 > **Enmienda 2026-10-01 (spec v1.4) · corrección de la cátedra.** La spec pasó
 > de 18 a 27 requerimientos sin cambiar lo que la Iteración 1 entrega. Se
@@ -70,7 +87,7 @@ porque esté comprometida para esta entrega.
 | Iteración | Entrega | Cubre |
 |---|---|---|
 | 1 | Búsqueda literal de punta a punta, con `-i`/`-n`, salida incremental y frontera de excepciones | FR-1, FR-2, FR-3, FR-4, FR-5, FR-7, FR-8, FR-11, **FR-12**, **FR-14**, FR-16, FR-18, FR-19, FR-20, BR-1, BR-2, NFR-1, NFR-3 (parcial, con la parte universal verificable). Los FR-14…FR-20 de esta fila son comportamiento existente escrito en la spec v1.4 |
-| 2 | Regularización de los VCs de la v1.4, resiliencia, contenido no-texto y rendimiento | FR-6, FR-9, FR-10, **FR-13**, **FR-15**, **FR-17**, BR-3, NFR-2, NFR-3 (completo), **NFR-4** |
+| 2 | Regularización de los VCs de la v1.4 y la v1.5, resiliencia, contenido no-texto y rendimiento | FR-6, FR-9, FR-10, **FR-13**, **FR-15**, **FR-17**, **FR-21**, **FR-22**, **FR-23**, **FR-26**, **FR-27**, BR-3, NFR-2, NFR-3 (completo), **NFR-4**; y los VCs de Paso 0 de **FR-24**, **FR-25**, FR-2 y BR-2 (comportamiento existente) |
 | 3 | Concurrencia y el NFR comparativo que la justifica | NFR comparativo contra NFR-4 (a definir), revisión de ADR-0009 y ADR-0011 |
 
 Las Iteraciones 1 y 2 son la entrega mínima pedida por el enunciado (≥ 2
@@ -194,7 +211,7 @@ nadie curó para la demo: objetos rotos, binarios, `.gz`, texto en otra
 codificación, redes que se cortan y entornos sin credenciales; y que su costo
 propio quede acotado por un número.
 
-### Paso 0 · Regularizar los VCs de la spec v1.4 (antes de cualquier código nuevo)
+### Paso 0 · Regularizar los VCs de las specs v1.4 y v1.5 (antes de cualquier código nuevo)
 
 La corrección de la cátedra hizo que la spec **diga** cosas que el código de la
 Iteración 1 ya hace. Antes de tocar `core` o `cli`, cada una de esas promesas
@@ -212,6 +229,13 @@ necesita un test que la ejercite, nombrado por su VC:
 | VC-28 | FR-20 | última línea sin `\n` con `-n` |
 | VC-16 (c) | NFR-3 | `GCSGREP_DEBUG=1` re-expone lo inesperado y **no** afecta lo previsto |
 | VC-30 | NFR-4 | medir; si no cumple, es el primer defecto de la iteración |
+| VC-7 (v1.5) | FR-7 | stdout exacto con `gs://b/` y con `gs://b` (sin `/`) |
+| VC-12 (v1.5) | BR-2 | stderr con `1001 objetos` y `el tope es 1000` (el mensaje actual ya lo dice) |
+| VC-22 (v1.5) | FR-14 | además, stderr sin `no existe` |
+| VC-36 | FR-24 | `gcsgrep "" …` imprime todas las líneas, exit `0` |
+| VC-37…VC-40 | FR-25 | flag no soportado, `--max -1`/`abc`, `gs://`/`gs:///p`, faltan argumentos: exit `2`, stdout vacío, 0 listados |
+| VC-42 | BR-2 | 1000 objetos sin `--max` se leen; `--max 3` con 3 se leen y con 4 no |
+| VC-43 | FR-2 | `-i "árbol"` encuentra `Árbol caído` |
 
 **También en el Paso 0:** un chequeo en CI que falle si la tabla de
 [`04-cobertura-vc.md`](./04-cobertura-vc.md) marca ⬜ un VC que tiene tests
@@ -245,6 +269,30 @@ fila nueva en la cobertura).
 - **FR-15:** mensaje específico sin credenciales (`no se encontraron
   credenciales` + `gcloud auth application-default login`). Hoy sale con `2` por
   el caso genérico de ADR-0013; cambia el mensaje, no el exit code.
+- **FR-21:** un objeto listado que GCS responde *no encontrado* al abrirlo se
+  informa (`ya no existe` + URI) y no aborta la corrida. Hoy
+  `gcs.open_text_stream` levanta `ObjetoNoEncontrado`, que aborta con `2`.
+- **FR-13 al abrir:** la red caída al abrir un objeto se informa igual que a mitad
+  de lectura (VC-33). "Error de red" es la definición de NFR-2: el borde de `gcs`
+  tiene que traducir a un error de dominio exactamente esos casos (sin respuesta
+  HTTP completa, o `5xx`), y no un `403`/`404`.
+- **FR-22:** una línea termina solo en `\n`; el `\r` de `\r\n` se quita, un `\r`
+  suelto queda. Sale naturalmente del cambio de FR-9/FR-17 (leer bytes y partir
+  líneas a mano), porque hoy el comportamiento depende de los *universal newlines*.
+- **FR-27:** descartar el BOM UTF-8 inicial, en el mismo cambio.
+- **FR-23:** `| head` termina por `SIGPIPE` sin stderr
+  ([ADR-0019](../../docs/adr/ADR-0019-corte-de-stdout-sigpipe.md)); el corte no
+  puede llegar al caso genérico de ADR-0013.
+- **FR-26:** error de dominio y mensaje para credenciales inutilizables
+  (`credenciales inválidas o vencidas`), distinto del de FR-15.
+- **FR-28 (spec v1.6):** un `401` al listar aborta con el mismo mensaje que FR-26
+  (VC-45); un `401` sobre un objeto se informa como FR-6.
+- **NFR-1 (spec v1.6):** el lector de GCS se abre con `chunk_size` ≤ 1 MiB, y
+  **VC-14 (c)** mide el pico leyendo 200 MiB a través de
+  `google.cloud.storage.fileio.BlobReader` con un blob falso en memoria (< 20 MiB;
+  hoy ≈120 MiB).
+- **FR-9/FR-10 (v1.5):** una línea de salteo por objeto, en el momento del salteo,
+  sin resumen final.
 - Auditoría completa de NFR-3: todo lo que no es un match va a stderr.
 
 FR-9 y FR-17 tocan el camino caliente (hay que mirar bytes antes de decodificar).
@@ -252,7 +300,9 @@ Después de implementarlos, **VC-14 y VC-30 tienen que seguir pasando**: son los
 VCs que detectan si el cambio rompió la memoria acotada o el rendimiento.
 
 **VCs en alcance:** los del Paso 0, más VC-6, VC-9, VC-10, VC-13, VC-15, VC-20,
-VC-21, VC-23, VC-25, VC-29, y **VC-16 (a) completo** — la lista enumerada, ahora
+VC-21, VC-23, VC-25, VC-29, VC-32, VC-33, VC-34, VC-35, VC-41, VC-44, VC-14 (c),
+VC-45, y
+**VC-16 (a) completo** — la lista enumerada, ahora
 con todos los casos de error implementados. Los VCs de la Iteración 1 (VC-1 a
 VC-5, VC-7, VC-8, VC-11, VC-12, VC-14, VC-16 (b), VC-17, VC-18) tienen que seguir
 pasando.
@@ -263,7 +313,7 @@ esté vigente: está especificado, y su ejecución es la obligación registrada 
 ADR. Si el equipo consigue una cuenta con billing, se ejecuta con el backend `gcs`
 del runbook y se supersede ADR-0015.
 
-**Chequeo de integración I-6** (ADC ausente → exit `2` sin traceback) pertenece a
+**Chequeo de integración I-6** (ADC ausente → exit `2` sin traceback; desde la spec v1.5, con los dos textos de FR-15) pertenece a
 esta iteración, no a la 1: verifica NFR-2
 ([H-11](../../docs/hallazgos/H-11-runbook-vs-plan.md)). Si el `try/except` que
 implementa FR-12 en la Iteración 1 termina capturando también el error de

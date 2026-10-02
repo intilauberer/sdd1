@@ -19,6 +19,13 @@
 > runbook corridos con el backend `gcs` (no `floci`) y una identidad con exactamente
 > `roles/storage.objectViewer` sobre el bucket. Correr este runbook con el backend
 > `gcs` **es** ejecutar VC-31.
+>
+> **Desde la spec v1.5**, dos ajustes que el script todavía no tiene (cambiarlo es
+> código, alcance de la Iteración 2): **I-6** exige los dos textos de FR-15
+> (`no se encontraron credenciales` y `gcloud auth application-default login`), no
+> solo "mensaje legible"; y el comando (3) de VC-31 apunta a un bucket con nombre
+> aleatorio **verificado inexistente** justo antes de correr, no al nombre fijo
+> `gcsgrep-test-no-existe-jamas` que usa I-7 (un tercero podría registrarlo).
 
 ### Iteración 1
 
@@ -39,7 +46,7 @@ propósito.
 
 | Chequeo | VC / decisión | Qué observa | Dónde corre |
 |---|---|---|---|
-| I-6 | ADR-0002, NFR-2 | sin ADC: exit `2`, mensaje legible, sin traceback | script, **solo backend `gcs`** |
+| I-6 | FR-15 / VC-23 (ADR-0002) | sin ADC: exit `2`, stderr contiene `no se encontraron credenciales` y `gcloud auth application-default login`, sin traceback | script, **solo backend `gcs`** |
 
 **Por qué I-6 se movió acá.** Hasta la spec v1.2 este runbook lo listaba como
 chequeo de la Iteración 1, pero verifica NFR-2, que el plan asigna a la Iteración 2

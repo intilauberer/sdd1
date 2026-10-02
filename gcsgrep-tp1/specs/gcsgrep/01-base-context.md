@@ -97,15 +97,16 @@ archivo`.
 | Persona usuaria | Ejecuta `gcsgrep` en una shell interactiva, lee la salida |
 | Script | Ejecuta `gcsgrep` y decide en base al **exit code** |
 | GCS | Fuente de los objetos; puede fallar (permisos, red, no existe) |
-| Entorno de credenciales (ADC) | Resuelve la identidad de quien invoca; puede no tener credenciales (FR-15) |
+| Entorno de credenciales (ADC) | Resuelve la identidad de quien invoca; puede no tener credenciales (FR-15) o tener credenciales inutilizables (FR-26) |
 
 ### Riesgos conocidos (no-objetivos explícitos)
 
 - Objeto modificado mientras se lee ([ADR-0010](../../docs/adr/ADR-0010-objeto-modificado.md)).
 - Acceso concurrente de dos invocaciones de `gcsgrep` entre sí: no comparten
   estado, no aplica (no hay escritura).
-- Un `.gz` que contiene el patrón produce un falso negativo, visible solo en el
-  resumen de salteados por stderr ([ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md)).
+- Un `.gz` que contiene el patrón produce un falso negativo, visible solo en la
+  línea de salteo por stderr (FR-10; [ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md)
+  hablaba de un resumen final, y la spec v1.5 fijó una línea por objeto).
 
 ---
 

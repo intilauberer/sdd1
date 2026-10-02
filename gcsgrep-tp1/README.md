@@ -38,7 +38,7 @@ Si venís a leer y no a usar la herramienta, **leé en este orden**:
 | 1 | [`specs/gcsgrep/00-requirements-draft.md`](./specs/gcsgrep/00-requirements-draft.md) | El borrador vago del que se partió | **congelado**, nunca se edita |
 | 2 | [`specs/gcsgrep/01-base-context.md`](./specs/gcsgrep/01-base-context.md) | Índice de decisiones + notas de diseño | se actualiza |
 | 3 | [`docs/adr/`](./docs/adr/) | 18 decisiones, una por archivo, con su fundamento | **inmutables**; se supersede, no se edita |
-| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 27 requerimientos, 31 VCs | **versionada** (v1.4), con historial |
+| 4 | [`specs/gcsgrep/02-spec.md`](./specs/gcsgrep/02-spec.md) | El contrato: 34 requerimientos, 44 VCs | **versionada** (v1.5), con historial |
 | 5 | [`docs/revision-spec.md`](./docs/revision-spec.md) | La revisión que habilitó la spec: checklist y los primeros 10 hallazgos | por revisión |
 | 5b | [`docs/correccion-catedra-iteracion-1.md`](./docs/correccion-catedra-iteracion-1.md) y [`docs/respuesta-correccion-catedra.md`](./docs/respuesta-correccion-catedra.md) | La corrección de la cátedra (NEEDS WORK) y qué se cambió por cada acción | la corrección es externa; la respuesta, por corrección |
 | 6 | [`docs/hallazgos/`](./docs/hallazgos/) | Lo que se descubrió *después*: un archivo por hallazgo | **inmutables**, como los ADRs |
@@ -254,7 +254,8 @@ CI en [`docs/integracion-gcs.md`](./docs/integracion-gcs.md).
 | Verificación de integración (backend `floci`) | ✅ **ejecutada 2026-09-24** — I-1…I-5 e I-7 pasan, por script y por pytest |
 | Verificación contra GCS real | ⬜ **declinada con fundamento** — [ADR-0015](./docs/adr/ADR-0015-verificacion-real-declinada.md) enumera qué queda sin verificar |
 | Spec v1.4 (respuesta a la corrección de la cátedra) | ✅ escrita — 27 requerimientos, 31 VCs; [qué cambió por cada acción](./docs/respuesta-correccion-catedra.md) |
-| Iteración 2 (regularización de VCs v1.4, resiliencia, contenido no-texto, rendimiento) | ⬜ planificada, sin implementar |
+| Spec v1.5 (respuesta a la [revisión de la v1.4](./revisiones/spec-v1.4-2026-10-01.md)) | ✅ escrita — 34 requerimientos, 44 VCs; las 21 acciones en la fila v1.5 del historial de la spec |
+| Iteración 2 (regularización de VCs v1.4 y v1.5, resiliencia, contenido no-texto, rendimiento) | ⬜ planificada, sin implementar |
 | Iteración 3 (concurrencia y su NFR comparativo) | ⬜ no comprometida; obligación registrada |
 
 **14/14 VCs pasando**, 48 tests offline más 5 de integración.

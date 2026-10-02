@@ -19,6 +19,21 @@
 > La tabla no dice "lo probé". Dice, para cada criterio de verificación, con qué
 > se lo ejercita y qué se observó.
 
+## Resumen al 2026-10-01 (spec v1.5)
+
+| | |
+|---|---|
+| VCs en la spec | 44 (VC-1…VC-44), sobre 34 requerimientos |
+| VCs pasando contra dobles de prueba | **14** — los mismos de la entrega; ninguno cambió de estado (la v1.5 no tocó código ni tests) |
+| VCs re-redactados (v1.4 o v1.5) cuyo ejercitador cubre la redacción anterior | 6 (VC-1, VC-3, VC-4, VC-8 en v1.4; VC-7, VC-12 en v1.5) — ✅ sobre la redacción anterior, ⬜ sobre la vigente hasta el Paso 0 |
+| VCs nuevos sobre comportamiento existente, sin ejercitador | 15 — los 8 de la v1.4, más VC-36, VC-37, VC-38, VC-39, VC-40, VC-42, VC-43 de la v1.5 (VC-22 se re-redactó en la v1.5 y sigue en este grupo) — Paso 0 de la Iteración 2 |
+| VCs de la Iteración 2, sin implementar | 17 — los 11 de la v1.4, más VC-32, VC-33, VC-34, VC-35, VC-41, VC-44 de la v1.5 |
+| VCs contra GCS real | **VC-31**, especificado (en la v1.5, con bucket inexistente verificado); ejecución sujeta a [ADR-0015](../../docs/adr/ADR-0015-verificacion-real-declinada.md) |
+| Tests que ejercitan todo esto | **48**, en 5 archivos |
+
+Las filas de la v1.5 están en la sección *Spec v1.5 · VCs nuevos y re-redactados*,
+debajo de las de la v1.4; ninguna fila anterior se editó.
+
 ## Resumen al 2026-10-01 (spec v1.4)
 
 | | |
@@ -105,6 +120,52 @@ cada fila de acá se reemplaza entonces por una fila con su ejercitador.
 **Lo que dicen las dos marcas "hoy" de VC-23 y VC-25** es una predicción a partir
 del código (ADR-0013, ADR-0018), no una observación: se confirma o se corrige cuando
 se escriba el test.
+
+## Spec v1.5 · VCs nuevos y re-redactados
+
+Agregados el 2026-10-01 por la
+[revisión de la v1.4](../../revisiones/spec-v1.4-2026-10-01.md). Igual que la sección
+de arriba: ninguno se ejercita todavía con su redacción v1.5, y cada fila se
+reemplaza por una con su ejercitador cuando se escriba el test. Las filas de la v1.4
+de VC-13, VC-15, VC-20, VC-22 y VC-23 **no se editaron**: las de acá las suceden.
+
+La columna *Observado hoy* de las filas de Paso 0 se verificó a mano el 2026-10-01
+contra el código actual con un doble en memoria (sin test en la suite): es evidencia
+de la clasificación, no un ✅.
+
+| VC | Requerimiento | Ejercitador hoy | Esperado | Observado hoy | Estado |
+|---|---|---|---|---|---|
+| VC-7 (v1.5) | FR-7 | `test_vc7_*` cubre matches en dos carpetas | stdout exacto con `gs://b/` y `gs://b` | — | ⬜ Paso 0 |
+| VC-12 (v1.5) | BR-2, texto literal | `test_vc12_*` cubre exit `1` y 0 aperturas | stderr con `1001 objetos` y `el tope es 1000` | el mensaje actual contiene los dos textos | ⬜ Paso 0 |
+| VC-22 (v1.5) | FR-14 | `test_vc18_sin_permiso_*` (bajo el VC viejo) | además, sin `no existe` | el mensaje actual de `AccesoDenegado` no lo contiene | ⬜ Paso 0 |
+| VC-36 | FR-24, patrón vacío | — | todas las líneas, exit `0` | todas las líneas, exit `0` | ⬜ Paso 0 |
+| VC-37 | FR-25, flag no soportado | — | exit `2`, stdout vacío, 0 listados | `-l`: exit `2` (argparse), 0 listados | ⬜ Paso 0 |
+| VC-38 | FR-25, `--max` inválido | — | ídem | `-1` y `abc`: exit `2`, 0 listados | ⬜ Paso 0 |
+| VC-39 | FR-25, `gs://` sin bucket | — | ídem | `gs://` y `gs:///p`: exit `2`, 0 listados | ⬜ Paso 0 |
+| VC-40 | FR-25, faltan argumentos | — | ídem | sin argumentos y sin ubicación: exit `2`, 0 listados | ⬜ Paso 0 |
+| VC-42 | BR-2, límite exacto | `test_vc12_*` cubre "exactamente en el tope no dispara" | 1000 se leen; `--max 3`: 3 se leen, 4 no | — | ⬜ Paso 0 (falta el test con su nombre) |
+| VC-43 | FR-2, `Á`/`á` | — | `-i "árbol"` encuentra `Árbol caído` | encuentra la línea, exit `0` | ⬜ Paso 0 |
+| VC-13 (v1.5) | BR-3, causa de FR-6 | — | `sin permiso para leer`, exit `2` con match | — | ⬜ Iteración 2 |
+| VC-15 (v1.5) | NFR-2 (a), sin "representación cruda" | — | `error de red` + `gs://<bucket>`, 1 listado | — | ⬜ Iteración 2 |
+| VC-20 (v1.5) | FR-9, ventana y `\x00` posterior | — | (1) offset 8191 → salteo exacto; (2) `\x00` en la línea 2 sale por stdout | — | ⬜ Iteración 2 |
+| VC-23 (v1.5) | FR-15, costura `list_objects` | — | `no se encontraron credenciales` | — | ⬜ Iteración 2 (el error de dominio no existe todavía) |
+| VC-32 | FR-21, objeto que ya no existe | — | `ya no existe`, sigue, exit `2` | hoy un `404` al abrir aborta la corrida (`ObjetoNoEncontrado` → exit `2`), predicción a partir de `gcs.py` | ⬜ Iteración 2 |
+| VC-33 | FR-13, red al abrir | — | 0 líneas de `a.txt`, sigue, exit `2`, 1 apertura | — | ⬜ Iteración 2 |
+| VC-34 | FR-22, terminador | — | `2:dos\rtres` y `1:uno` sin `\r` | con el doble: `uno\r` conserva el `\r` | ⬜ Iteración 2 |
+| VC-35 | FR-23, `\| head -1` | — | stderr vacío, estado `141` | según la revisión de la v1.4: exit `120` y `BrokenPipeError` en stderr | ⬜ Iteración 2 |
+| VC-41 | FR-26, credenciales inutilizables | — | `credenciales inválidas o vencidas` | — | ⬜ Iteración 2 |
+| VC-44 | FR-27, BOM | — | `1:timeout` sin BOM | con el doble: el `U+FEFF` queda al principio de la línea 1 | ⬜ Iteración 2 |
+
+## Spec v1.6 · VCs nuevos
+
+Agregados el 2026-10-01 por la
+[revisión de la v1.5](../../revisiones/spec-v1.5-2026-10-01.md). Ninguna fila anterior
+se editó.
+
+| VC | Requerimiento | Ejercitador hoy | Esperado | Observado hoy | Estado |
+|---|---|---|---|---|---|
+| VC-14 (c) | NFR-1, a través de `BlobReader` | — | pico adicional **< 20 MiB** sobre 200 MiB | según la revisión de la v1.5: ≈120 MiB | ⬜ Iteración 2 |
+| VC-45 | FR-28, `401` al listar | — | exit `2`, `credenciales inválidas o vencidas`, 0 aperturas | — | ⬜ Iteración 2 |
 
 ### Por qué VC-14 tiene dos filas
 
