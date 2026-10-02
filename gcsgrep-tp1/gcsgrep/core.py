@@ -1,12 +1,12 @@
 """Lógica de búsqueda, sin dependencia directa de la API de GCS.
 
-Búsqueda literal de punta a punta, con salida incremental y guardrail de costo
-por cantidad de objetos (BR-2 / ADR-0006). No maneja objetos ilegibles y no
-saltea binarios/.gz — eso sigue siendo Iteración 2 (ver specs/gcsgrep/03-plan.md).
+Búsqueda literal de punta a punta, con salida incremental, guardrail de costo
+por cantidad de objetos (BR-2 / ADR-0006) y objetos ilegibles que no abortan la
+corrida (FR-6, FR-13, FR-21; Iteración 2).
 """
 
 from dataclasses import dataclass
-from typing import Callable, ContextManager, Iterable, Iterator, Tuple
+from typing import Callable, ContextManager, Iterable, Iterator, Tuple, Union
 
 from . import errors
 
@@ -43,6 +43,23 @@ class Match:
     text: str
 
 
+@dataclass(frozen=True)
+class Aviso:
+    """Algo que no es un match y va por stderr (NFR-3): un objeto que no se pudo
+    leer (FR-6, FR-13, FR-21) o que se salteó (FR-9, FR-10).
+
+    `core` no escribe en stderr: emite el aviso **en su lugar del flujo**, entre
+    los matches, y `cli` lo imprime. `es_error` es lo que BR-3 cuenta.
+    """
+
+    mensaje: str
+    es_error: bool
+
+
+#: Lo que emite `search`: un match (stdout) o un aviso (stderr).
+Evento = Union[Match, Aviso]
+
+
 def parse_location(location: str) -> Tuple[str, str]:
     """Parsea `gs://bucket/prefijo`. Lanza ValueError si el esquema no es gs://.
 
@@ -67,7 +84,7 @@ def search(
     config: SearchConfig,
     list_objects: ListObjects,
     open_text_stream: OpenTextStream,
-) -> Iterator[Match]:
+) -> Iterator[Evento]:
     """Emite cada match de `config.pattern` (substring literal) bajo `prefix`.
 
     Es un **generador**: emite cada `Match` en cuanto lo encuentra, sin
@@ -97,9 +114,15 @@ def search(
             raise errors.TopeExcedido(len(nombres), config.max_objetos)
 
     for object_name in nombres:
-        with open_text_stream(bucket, object_name) as stream:
-            for line_number, raw_line in enumerate(stream, start=1):
-                line = raw_line.rstrip("\n")
-                haystack = line.lower() if config.ignore_case else line
-                if needle in haystack:
-                    yield Match(bucket, object_name, line_number, line)
+        # Un objeto que no se puede leer no aborta la corrida (FR-6, FR-13,
+        # FR-21): los matches que ya salieron quedan, se emite un aviso y se
+        # sigue. No se vuelve a abrir (NFR-2, 0 reintentos).
+        try:
+            with open_text_stream(bucket, object_name) as stream:
+                for line_number, raw_line in enumerate(stream, start=1):
+                    line = raw_line.rstrip("\n")
+                    haystack = line.lower() if config.ignore_case else line
+                    if needle in haystack:
+                        yield Match(bucket, object_name, line_number, line)
+        except errors.ErrorDeObjeto as exc:
+            yield Aviso(str(exc), es_error=True)

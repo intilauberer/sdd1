@@ -142,7 +142,7 @@ class ClienteSoloLectura:
             f"que no es una operación de lectura. Permitido: {sorted(self.PERMITIDO)}"
         )
 
-    def list_blobs(self, bucket, prefix=None):
+    def list_blobs(self, bucket, prefix=None, **kwargs):
         self.invocaciones.append("list_blobs")
 
         class _Blob:
@@ -159,7 +159,7 @@ class ClienteSoloLectura:
             def __init__(self, nombre):
                 self._nombre = nombre
 
-            def open(self, mode: str):
+            def open(self, mode: str, **kwargs):
                 assert mode == "r", f"BR-1: se abrió un blob en modo '{mode}', no 'r'"
                 cliente.invocaciones.append("blob.open(r)")
                 return io.StringIO("contenido\n")

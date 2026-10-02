@@ -82,10 +82,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     # emitidos quedan emitidos (VC-17 de punta a punta) y el fallo posterior
     # decide el exit code.
     found_any = False
+    hubo_error_de_lectura = False
     try:
-        for match in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_text_stream):
+        for evento in core.search(bucket, prefix, config, gcs.list_objects, gcs.open_text_stream):
+            if isinstance(evento, core.Aviso):
+                # Avisos de objetos ilegibles o salteados: stderr, en el momento.
+                print(f"gcsgrep: {evento.mensaje}", file=sys.stderr, flush=True)
+                hubo_error_de_lectura = hubo_error_de_lectura or evento.es_error
+                continue
             found_any = True
-            print(format_match(match, args.line_number), flush=True)
+            print(format_match(evento, args.line_number), flush=True)
     except errors.TopeExcedido as exc:
         # BR-2: no es un error, es la herramienta negándose a hacer algo caro. Sale
         # con 1, no con 2 (ADR-0006). Va antes del genérico porque `TopeExcedido`
@@ -117,6 +123,9 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return 2
 
+    # BR-3: un error de lectura sobre algún objeto gana, aunque haya matches.
+    if hubo_error_de_lectura:
+        return 2
     return 0 if found_any else 1
 
 

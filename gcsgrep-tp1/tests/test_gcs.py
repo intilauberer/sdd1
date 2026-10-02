@@ -23,7 +23,7 @@ class _FakeBlob:
         self._content = content
         self.opened_with_mode = None
 
-    def open(self, mode: str) -> io.StringIO:
+    def open(self, mode: str, **kwargs) -> io.StringIO:
         self.opened_with_mode = mode
         return io.StringIO(self._content)
 
@@ -41,7 +41,7 @@ class _FakeClient:
         self._blobs = list(blobs)
         self.list_blobs_calls = []
 
-    def list_blobs(self, bucket, prefix=None):
+    def list_blobs(self, bucket, prefix=None, **kwargs):
         self.list_blobs_calls.append((bucket, prefix))
         return [b for b in self._blobs if b.name.startswith(prefix or "")]
 
@@ -103,7 +103,7 @@ class _ClientQueExplota:
         self._error = error
         self._al_listar = al_listar
 
-    def list_blobs(self, bucket, prefix=None):
+    def list_blobs(self, bucket, prefix=None, **kwargs):
         if self._al_listar:
             raise self._error
         return [_FakeBlob("logs/a.txt")]
@@ -112,7 +112,7 @@ class _ClientQueExplota:
         error = self._error
 
         class _Blob:
-            def open(self, mode):
+            def open(self, mode, **kwargs):
                 raise error
 
         class _Bucket:
@@ -164,14 +164,16 @@ def test_vc18_los_dos_errores_del_listado_dan_mensajes_distintos(monkeypatch):
     assert str(no_existe.value) != str(denegado.value)
 
 
-def test_vc18_open_text_stream_traduce_forbidden_a_acceso_denegado(monkeypatch):
+def test_vc6_open_text_stream_traduce_forbidden_a_objeto_sin_permiso(monkeypatch):
+    """Hasta la Iteración 1 esto era `AccesoDenegado` (un `ErrorDeAcceso`, que
+    aborta). Desde FR-6 es un error por objeto que no aborta la corrida."""
     monkeypatch.setattr(
         gcs,
         "_get_client",
         lambda: _ClientQueExplota(api_exceptions.Forbidden("403"), al_listar=False),
     )
 
-    with pytest.raises(errors.AccesoDenegado) as exc_info:
+    with pytest.raises(errors.ObjetoSinPermiso) as exc_info:
         gcs.open_text_stream("b", "logs/a.txt")
 
     assert "logs/a.txt" in str(exc_info.value)
