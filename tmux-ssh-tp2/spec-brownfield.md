@@ -9,8 +9,8 @@
 | | |
 |---|---|
 | **Repo** | [`tmux/tmux`](https://github.com/tmux/tmux) · commit base `5a820e63b72f05c121441149c72327aeeb16dfa4` (`next-3.9`) |
-| **Versión** | v1.5 · 2026-10-01 · Grupo 4 |
-| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas sobre v1.0…v1.3: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). v1.4 agrega, después de esa vuelta, tres decisiones que salieron de una revisión externa (D-17 a D-19). v1.5 parte FRs y VCs que verificaban más de una cosa. Ninguna de las dos tiene vuelta del corrector propia (ver Historial). Sin implementación, por consigna |
+| **Versión** | v1.5.1 · 2026-10-01 · Grupo 4 |
+| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas sobre v1.0…v1.3: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). v1.4 agrega, después de esa vuelta, tres decisiones que salieron de una revisión externa (D-17 a D-19). v1.5 parte FRs y VCs que verificaban más de una cosa. La quinta vuelta del corrector, sobre v1.4 y v1.5, dio READY sin Issues ([`r5`](./revisiones/spec-brownfield-2026-10-01-r5.md)), y sus dos Warnings ya están resueltos (ver Historial). Sin implementación, por consigna |
 | **Conteo** | FR: 62 (FR-1…60, con FR-33 y FR-34 partidos en `a`/`b`) · BR: 5 · NFR: 3 · INV: 7 · VC: 80 |
 
 ## 1 · Propósito
@@ -531,20 +531,26 @@ de este FR.
 > `invalid port`, exit 0, y la cantidad de panes aumenta en 1.
 
 **FR-34a · Clave explícita que no existe.**
-**Dado** que `/nonexistent` no existe,
-**cuando** se corre `T ssh-pane -i /nonexistent alice@servidor`,
-**entonces** stderr es `can't read identity file: /nonexistent`.
+**Dado** un `<path>` absoluto que no existe,
+**cuando** se corre `T ssh-pane -i <path> alice@servidor`,
+**entonces** stderr es `can't read identity file: <path>`.
 
-> **VC-34a** — El stderr exacto, exit 1, y la cantidad de panes sin cambio.
+> **VC-34a** — Con `/nonexistent` y con `/tmp/no-such-dir/k` (falta el
+> directorio), que son dos muestras de la misma clase: el stderr exacto de cada
+> uno, exit 1, y la cantidad de panes sin cambio.
 
 **FR-34b · Clave explícita sin permiso de lectura.**
-**Dado** que `/tmp/k000` existe y tiene modo `000`, y que el servidor `tmux`
-corre como `alice`, no como root (§9),
-**cuando** se corre `T ssh-pane -i /tmp/k000 alice@servidor`,
-**entonces** stderr es `can't read identity file: /tmp/k000`, el mismo mensaje
+**Dado** un `<path>` absoluto que existe y que el usuario dueño del servidor
+`tmux` no puede abrir para lectura. En §9 ese usuario es `alice`, no root: root
+puede leer cualquier archivo y el caso no se daría,
+**cuando** se corre `T ssh-pane -i <path> alice@servidor`,
+**entonces** stderr es `can't read identity file: <path>`, el mismo mensaje
 que FR-34a.
 
-> **VC-34b** — El stderr exacto, exit 1, y la cantidad de panes sin cambio.
+> **VC-34b** — Con `/tmp/k000` (modo `000`), `/tmp/k200` (modo `0200`: se puede
+> escribir, pero no leer) y `/etc/shadow` (de root, modo `640` en Ubuntu), que
+> son tres muestras de la misma clase: el stderr exacto de cada uno, exit 1, y la
+> cantidad de panes sin cambio.
 
 **FR-59 · Clave explícita con path relativo.**
 **Dado** un `<path>` que no empieza con `/`,
@@ -554,7 +560,13 @@ el archivo exista. Este chequeo va antes que los de FR-34a y FR-34b.
 
 > **VC-70** — Con `k`, `./k` y `'~/k'` (entre comillas simples, que llega
 > literal), habiendo un `k` legible en el cwd del cliente y en `~`: el stderr
-> exacto de cada uno, exit 1, y la cantidad de panes sin cambio.
+> exacto de cada uno, exit 1, y la cantidad de panes sin cambio. **El orden:** con
+> `nope`, un path relativo que no existe en ningún lado, stderr es
+> `identity file must be an absolute path: nope` y **no**
+> `can't read identity file: nope`. Una implementación que mirara primero si el
+> archivo se puede abrir daría el segundo mensaje. Con `''` (path vacío), stderr
+> es `identity file must be an absolute path: ` (con el espacio final, como en
+> FR-30).
 
 **FR-35 · Target inexistente.**
 **Dado** que `%99` no existe,
@@ -1102,3 +1114,4 @@ solo-Linux sin escribir una línea de SSH.
 | v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban. Después de la cuarta vuelta (READY, [`r4`](./revisiones/spec-brownfield-2026-10-01-r4.md)), FR-56 aclara que el filtrado de líneas mal formadas lo hace el cliente |
 | v1.4 | 2026-10-01 | Revisión externa, posterior al READY. D-17 registra el trade-off de no hacer `exec`: la memoria del servidor queda expuesta en el hijo, y se descarta re-ejecutar `tmux` en un modo helper. D-18 y FR-59/VC-70: `-i` solo acepta paths absolutos. D-19 y FR-60/VC-71: al remoto solo viaja `TERM`. FR-59 y FR-60 llevan VC-70 y VC-71 para no renumerar |
 | v1.5 | 2026-10-01 | Granularidad: un FR describe una situación y un resultado, y un VC verifica una sola cosa. FR-33 (rechazo y bordes aceptados, dos resultados) pasa a FR-33a y FR-33b. FR-34 (archivo que no existe y archivo sin permiso, dos situaciones) pasa a FR-34a y FR-34b, igual que el patrón que la cátedra marcó en el TP1. VC-59 pasa a VC-59a (nunca escribe), VC-59b y VC-59c (los dos pasos del orden). VC-68 pasa a VC-68a…68e, y VC-69 a VC-69a y VC-69b: un VC por invariante y por entorno. No cambia ningún comportamiento, mensaje ni umbral. Conteo: FR 62, VC 80 |
+| v1.5.1 | 2026-10-01 | Los dos Warnings de la quinta revisión ([`r5`](./revisiones/spec-brownfield-2026-10-01-r5.md)). (1) Al partir FR-34, los Dados habían quedado en dos casos puntuales (`/nonexistent` y `/tmp/k000`), así que v1.5 **sí** había achicado FR-34: casos como `-i /etc/shadow` o un archivo en modo `0200` quedaban sin decidir. Ahora FR-34a es "un path absoluto que no existe" y FR-34b es "un path absoluto que existe y no se puede leer", como clases, y los paths quedan como muestras en VC-34a y VC-34b. Con esto, la v1.5 vuelve a no cambiar ningún comportamiento respecto de v1.4. (2) VC-70 prueba el orden de FR-59 contra FR-34: con un path relativo que no existe (`nope`) da el error de path absoluto. También prueba `''`. Conteo sin cambios: FR 62, VC 80 |
