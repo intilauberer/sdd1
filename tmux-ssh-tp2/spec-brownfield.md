@@ -9,9 +9,9 @@
 | | |
 |---|---|
 | **Repo** | [`tmux/tmux`](https://github.com/tmux/tmux) · commit base `5a820e63b72f05c121441149c72327aeeb16dfa4` (`next-3.9`) |
-| **Versión** | v1.4 · 2026-10-01 · Grupo 4 |
-| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). v1.4 agrega, después de esa vuelta, tres decisiones que salieron de una revisión externa (D-17 a D-19, ver Historial). Sin implementación, por consigna |
-| **Conteo** | FR: 60 · BR: 5 · NFR: 3 · INV: 7 · VC: 71 |
+| **Versión** | v1.5 · 2026-10-01 · Grupo 4 |
+| **Estado** | Lista para entregar. El agente corrector hizo cuatro vueltas sobre v1.0…v1.3: las tres primeras dieron NEEDS WORK y la cuarta READY, sin Issues ([`revisiones/`](./revisiones/)). v1.4 agrega, después de esa vuelta, tres decisiones que salieron de una revisión externa (D-17 a D-19). v1.5 parte FRs y VCs que verificaban más de una cosa. Ninguna de las dos tiene vuelta del corrector propia (ver Historial). Sin implementación, por consigna |
+| **Conteo** | FR: 62 (FR-1…60, con FR-33 y FR-34 partidos en `a`/`b`) · BR: 5 · NFR: 3 · INV: 7 · VC: 80 |
 
 ## 1 · Propósito
 
@@ -167,7 +167,7 @@ Qué está verificado y qué no:
 - **Log de `sshd`:** cada instancia escribe en `/var/log/sshd-<puerto>.log`
   (`sshd -E`). Antes de cada VC se trunca, y cada VC abre **una sola** conexión.
   "Esa conexión" es, entonces, todo el log.
-- **Cómo corren los VCs de build** (VC-1 a VC-5, VC-67 a VC-69): no son
+- **Cómo corren los VCs de build** (VC-1 a VC-5, y VC-67 a VC-69b): no son
   `regress/`. Los corren los jobs de §9 sobre el árbol de tmux.
 
 ### 6.1 · Build y plataforma
@@ -511,30 +511,46 @@ La regla es "el destino contiene `:`" (D-9). FR-55 cubre el otro caso.
 
 > **VC-32** — El stderr exacto, exit 1, y la cantidad de panes sin cambio.
 
-**FR-33 · Puerto fuera de rango.**
+**FR-33a · Puerto fuera de rango.**
 **Dado** un valor de `-P` que no es un entero decimal entre 1 y 65535,
 **cuando** se corre `T ssh-pane -P <valor> alice@servidor`,
-**entonces** stderr es `invalid port: <valor>`. Los bordes 1 y 65535 se aceptan.
+**entonces** stderr es `invalid port: <valor>`.
 
-> **VC-33** — Con `0`, `65536` y `abc`: el stderr exacto de cada uno, exit 1, y
-> la cantidad de panes sin cambio. Con `1` y `65535` (los bordes): **no**
-> aparece ese error, el exit es 0 y hay un pane nuevo. Lo que pase después con
-> ese pane (FR-39) no es parte de este VC.
+> **VC-33a** — Con `0` (abajo del rango), `65536` (arriba) y `abc` (no es un
+> número), que son tres muestras de la misma clase de entrada: el stderr exacto
+> de cada uno, exit 1, y la cantidad de panes sin cambio.
 
-**FR-34 · Clave explícita que no se puede abrir.**
-**Dado** un `<path>` que el usuario del servidor `tmux` no puede abrir para
-lectura,
-**cuando** se corre `T ssh-pane -i <path> alice@servidor`,
-**entonces** stderr es `can't read identity file: <path>`.
+**FR-33b · Los bordes del rango se aceptan.**
+**Dado** un valor de `-P` que es un entero decimal entre 1 y 65535,
+**cuando** se corre `T ssh-pane -P <valor> alice@servidor`,
+**entonces** no aparece el error de FR-33a, el cliente `tmux` sale con 0 y hay
+un pane nuevo. Lo que pase después con ese pane (por ejemplo, FR-39) no es parte
+de este FR.
 
-> **VC-34** — Con `/nonexistent` y con un archivo en modo `000`: el stderr
-> exacto, exit 1, y la cantidad de panes sin cambio.
+> **VC-33b** — Con `1` y con `65535` (los bordes): stderr no contiene
+> `invalid port`, exit 0, y la cantidad de panes aumenta en 1.
+
+**FR-34a · Clave explícita que no existe.**
+**Dado** que `/nonexistent` no existe,
+**cuando** se corre `T ssh-pane -i /nonexistent alice@servidor`,
+**entonces** stderr es `can't read identity file: /nonexistent`.
+
+> **VC-34a** — El stderr exacto, exit 1, y la cantidad de panes sin cambio.
+
+**FR-34b · Clave explícita sin permiso de lectura.**
+**Dado** que `/tmp/k000` existe y tiene modo `000`, y que el servidor `tmux`
+corre como `alice`, no como root (§9),
+**cuando** se corre `T ssh-pane -i /tmp/k000 alice@servidor`,
+**entonces** stderr es `can't read identity file: /tmp/k000`, el mismo mensaje
+que FR-34a.
+
+> **VC-34b** — El stderr exacto, exit 1, y la cantidad de panes sin cambio.
 
 **FR-59 · Clave explícita con path relativo.**
 **Dado** un `<path>` que no empieza con `/`,
 **cuando** se corre `T ssh-pane -i <path> alice@servidor`,
 **entonces** stderr es `identity file must be an absolute path: <path>`, aunque
-el archivo exista. Este chequeo va antes que el de FR-34.
+el archivo exista. Este chequeo va antes que los de FR-34a y FR-34b.
 
 > **VC-70** — Con `k`, `./k` y `'~/k'` (entre comillas simples, que llega
 > literal), habiendo un `k` legible en el cwd del cliente y en `~`: el stderr
@@ -768,8 +784,8 @@ ese filtrado lo hace el cliente antes de verificar.
 se puede leer pero no es una clave privada (es una copia de `/etc/hostname`),
 **cuando** se corre `T ssh-pane -i /tmp/notakey alice@servidor`,
 **entonces** la línea es
-`ssh-pane: identity file /tmp/notakey is not a valid private key`. FR-34 solo
-mira si el archivo se puede abrir; el contenido se lee en el hijo.
+`ssh-pane: identity file /tmp/notakey is not a valid private key`. FR-34a y FR-34b solo
+miran si el archivo se puede abrir; el contenido se lee en el hijo.
 
 > **VC-57** — Estado `1 255` y la línea literal.
 
@@ -798,15 +814,18 @@ este orden:
 
 Una línea mal formada se ignora y no cuenta como entrada (FR-56).
 
-> **VC-59** — Dos partes:
->
-> - **Nunca escribe.** En corridas de VC-6, VC-43, VC-44, VC-46 y VC-47, el
->   sha256 de `~/.ssh/known_hosts` y el de `/etc/ssh/ssh_known_hosts` (o el hecho
->   de que no existan) es el mismo antes y después.
-> - **El orden.** Con `~/.ssh/known_hosts` que tiene, para `servidor`, una
->   ed25519 **distinta** y `/etc/ssh/ssh_known_hosts` que tiene la **correcta**, la
->   sesión se abre (paso 2 antes que 3). Con un `~/.ssh/known_hosts` en modo
->   `000` y el global correcto, se da FR-45 (el paso 1 va primero).
+> **VC-59a · Nunca escribe.** En corridas de VC-6, VC-43, VC-44, VC-46 y VC-47,
+> el sha256 de `~/.ssh/known_hosts` y el de `/etc/ssh/ssh_known_hosts` (o el
+> hecho de que no existan) es el mismo antes y después.
+
+> **VC-59b · El paso 2 va antes que el 3.** Con un `~/.ssh/known_hosts` que
+> tiene, para `servidor`, una ed25519 **distinta**, y un
+> `/etc/ssh/ssh_known_hosts` que tiene la **correcta**, la sesión se abre
+> (mismo observable que VC-6).
+
+> **VC-59c · El paso 1 va primero.** Con un `~/.ssh/known_hosts` en modo `000`
+> y el global correcto, el resultado es el de FR-45: estado `1 255` y su línea
+> literal.
 
 **BR-2 · El hijo no ejecuta ningún programa.**
 Desde el `fork` hasta su `_exit`, el proceso del pane no llama a `execve`. Es lo
@@ -904,35 +923,48 @@ su log en stderr, que en el hijo es el PTY del pane.
 
 ### 6.7 · Verificación de las invariantes
 
-| VC | Invariante | Entorno |
-|---|---|---|
-| **VC-67** | INV-1 | macOS arm64, local o en el runner `macos-26` de GitHub Actions |
-| **VC-68** | INV-2, INV-3, INV-4, INV-6 | contenedor `cliente` de §9, con y sin `--enable-ssh` |
-| **VC-69** | INV-5, INV-7 | cualquier clon con `git` y `unifdef` |
+Un VC por invariante y por entorno. El comando de cada uno es el de su fila en §5;
+este cuadro dice dónde corre y en qué build.
+
+| VC | Invariante | Build | Job (§9) |
+|---|---|---|---|
+| **VC-67** | INV-1 (incluye la regla de INV-6 en macOS) | macOS arm64, `--disable-jemalloc`, sin `--enable-ssh` | `macos` |
+| **VC-68a** | INV-2 | Linux **sin** `--enable-ssh` | `linux-sin-ssh` |
+| **VC-68b** | INV-3 | Linux **con** `--enable-ssh` | `linux-ssh` |
+| **VC-68c** | INV-4 | Linux **con** `--enable-ssh` | `linux-ssh` |
+| **VC-68d** | INV-6 | Linux **con** `--enable-ssh` | `linux-ssh` |
+| **VC-68e** | INV-6 | Linux **sin** `--enable-ssh` | `linux-sin-ssh` |
+| **VC-69a** | INV-5 | el diff, en cualquier clon con `git` | `estatico` |
+| **VC-69b** | INV-7 | el diff, en cualquier clon con `git` y `unifdef` | `estatico` |
 
 ## 7 · Trazabilidad
 
-Cada FR-n tiene su VC-n (FR-1 → VC-1, …, FR-58 → VC-58). FR-59 y FR-60, de
-v1.4, tienen VC-70 y VC-71, para no renumerar los VCs de BR, NFR e INV. El VC
-end-to-end es VC-6.
+Cada FR-n tiene su VC-n (FR-1 → VC-1, …, FR-58 → VC-58). FR-33 y FR-34 están
+partidos en `a` y `b`, y cada parte tiene su VC con la misma letra
+(FR-33a → VC-33a). FR-59 y FR-60, de v1.4, tienen VC-70 y VC-71, para no
+renumerar los VCs de BR, NFR e INV. El VC end-to-end es VC-6.
 
 | Req | VC | | Req | VC | | Req | VC |
 |---|---|---|---|---|---|---|---|
-| FR-1 … FR-5 | VC-1 … VC-5 | | BR-1 | VC-59 | | NFR-1 | VC-64 |
+| FR-1 … FR-5 | VC-1 … VC-5 | | BR-1 | VC-59a, VC-59b, VC-59c | | NFR-1 | VC-64 |
 | FR-6 … FR-24 | VC-6 … VC-24 | | BR-2 | VC-60 | | NFR-2 | VC-65 |
-| FR-25 … FR-37 | VC-25 … VC-37 | | BR-3 | VC-61 | | NFR-3 | VC-66 |
-| FR-38 … FR-54 | VC-38 … VC-54 | | BR-4 | VC-62 | | INV-1 | VC-67 |
-| FR-55 … FR-58 | VC-55 … VC-58 | | BR-5 | VC-63 | | INV-2, 3, 4, 6 | VC-68 |
-| FR-59, FR-60 | VC-70, VC-71 | | | | | INV-5, 7 | VC-69 |
+| FR-25 … FR-32 | VC-25 … VC-32 | | BR-3 | VC-61 | | NFR-3 | VC-66 |
+| FR-33a, FR-33b | VC-33a, VC-33b | | BR-4 | VC-62 | | INV-1 | VC-67 |
+| FR-34a, FR-34b | VC-34a, VC-34b | | BR-5 | VC-63 | | INV-2 | VC-68a |
+| FR-35 … FR-37 | VC-35 … VC-37 | | | | | INV-3 | VC-68b |
+| FR-38 … FR-54 | VC-38 … VC-54 | | | | | INV-4 | VC-68c |
+| FR-55 … FR-58 | VC-55 … VC-58 | | | | | INV-6 | VC-68d, VC-68e (y VC-67 en macOS) |
+| FR-59, FR-60 | VC-70, VC-71 | | | | | INV-5 | VC-69a |
+| | | | | | | INV-7 | VC-69b |
 
 Caminos de falla por recurso externo:
 
 | Recurso | No existe | Rechaza / sin permiso | Ilegible / corrupto | Entrada inválida | Se corta |
 |---|---|---|---|---|---|
-| Host / red | FR-38 | FR-39 | — | FR-28 … FR-33, FR-55 | FR-40, FR-41, FR-53 |
+| Host / red | FR-38 | FR-39 | — | FR-28 … FR-32, FR-33a, FR-55 (FR-33b: el borde válido) | FR-40, FR-41, FR-53 |
 | `sshd` | — | FR-48, FR-52 | FR-42 | — | FR-54 |
 | `known_hosts` | FR-43, FR-44 | FR-45 (sin permiso) | FR-56 (línea mal formada) | FR-46, FR-47 (clave que no coincide) | — |
-| Clave | FR-34 | FR-34 (sin permiso), FR-48 | FR-57 (no es una clave) | FR-49, FR-50 (con passphrase), FR-59 (path relativo) | — |
+| Clave | FR-34a | FR-34b (sin permiso), FR-48 | FR-57 (no es una clave) | FR-49, FR-50 (con passphrase), FR-59 (path relativo) | — |
 | Agente | FR-51 (socket muerto) | FR-58 (bloqueado) | — | — | — |
 | Proceso / layout | FR-35 | FR-37 | — | FR-25 … FR-27 | FR-36 |
 
@@ -1015,11 +1047,11 @@ Se corre en jobs de CI **del repo de este TP**, no de upstream:
 
 | Job | Dónde | Qué VCs |
 |---|---|---|
-| `linux-ssh` | `docker compose`, `cliente` con `libssh-dev` y `--enable-ssh` | VC-1, VC-4, VC-6 a VC-66, VC-68 (variante con el flag), VC-70, VC-71 |
-| `linux-sin-ssh` | `cliente` con `libssh-dev`, **sin** el flag | VC-5, VC-68 (variante sin el flag) |
+| `linux-ssh` | `docker compose`, `cliente` con `libssh-dev` y `--enable-ssh` | VC-1, VC-4, VC-6 a VC-66 (con las partes `a`/`b`/`c`), VC-68b, VC-68c, VC-68d, VC-70 y VC-71 |
+| `linux-sin-ssh` | `cliente` con `libssh-dev`, **sin** el flag | VC-5, VC-68a y VC-68e |
 | `linux-sin-libssh` | `cliente` **sin** `libssh-dev`, con el flag | VC-3 |
 | `macos` | runner `macos-26`, Homebrew sin `libssh` | VC-2, VC-67 |
-| `estatico` | cualquiera, con `git` y `unifdef` | VC-69 |
+| `estatico` | cualquiera, con `git` y `unifdef` | VC-69a y VC-69b |
 
 **Saltear no es pasar.** Fuera de este entorno, los `regress/ssh-pane-*.sh` se
 saltean (§3), para no romper el `regress/` de upstream en macOS. Un VC
@@ -1053,9 +1085,9 @@ línea de base.
 
 | Iteración | Alcance | Cierra |
 |---|---|---|
-| **1 · La guarda y el enganche** | `configure.ac`, `Makefile.am`, `cmd.c`, `tmux.h`, `cmd-ssh-pane.c` completo, y el bloque del hijo en `spawn.c`. En esta iteración, `ssh-pane.c` solo escribe `ssh-pane: not implemented` y termina con 255 | VC-1…5, VC-22…37, VC-55, VC-67…69 y VC-70: todas las invariantes **antes** de que exista el cliente. Se ve un pane que muere con `1 255` |
+| **1 · La guarda y el enganche** | `configure.ac`, `Makefile.am`, `cmd.c`, `tmux.h`, `cmd-ssh-pane.c` completo, y el bloque del hijo en `spawn.c`. En esta iteración, `ssh-pane.c` solo escribe `ssh-pane: not implemented` y termina con 255 | VC-1…5, VC-22…37 (con 33a/33b y 34a/34b), VC-55, VC-67…69 (con 68a…68e y 69a/69b) y VC-70: todas las invariantes **antes** de que exista el cliente. Se ve un pane que muere con `1 255` |
 | **2 · El camino feliz** | La conexión, la host key, la autenticación, el canal y el bucle de E/S | VC-6…21, VC-61…63 y VC-71 |
-| **3 · Los caminos de falla y los NFR** | Los mensajes de §6.4, el presupuesto de 10 s y las mediciones | VC-38…54, VC-56…60 (BR-1 y BR-2 usan VC-43) y VC-64…66 |
+| **3 · Los caminos de falla y los NFR** | Los mensajes de §6.4, el presupuesto de 10 s y las mediciones | VC-38…54, VC-56…60 (con 59a, 59b y 59c; BR-1 y BR-2 usan VC-43) y VC-64…66 |
 
 La Iteración 1 es la más angosta que se puede probar sola, y demuestra el límite
 solo-Linux sin escribir una línea de SSH.
@@ -1069,3 +1101,4 @@ solo-Linux sin escribir una línea de SSH.
 | v1.2 | 2026-10-01 | Segunda corrección ([`revisiones/spec-brownfield-2026-10-01-r2.md`](./revisiones/spec-brownfield-2026-10-01-r2.md)) y revisión de PR ([`revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md`](./revisiones/pr-tp2-tmux-ssh-nativo-2026-10-01.md)). FR-20 deja de usar `-n`. NFR-2 usa un marcador que el eco del comando no contiene. §9 fija los hostnames, el tipo de host key, los logs de `sshd` y los cinco jobs. Se agregan FR-55 a FR-58 (IPv6 literal, `known_hosts` mal formado, `-i` que no es una clave, agente bloqueado). BR-1 fija el orden de decisión. Hay una cota común de 12 s para §6.4. Los VCs de BR, NFR e INV pasan a VC-59…69 |
 | v1.3 | 2026-10-01 | Tercera corrección ([`revisiones/spec-brownfield-2026-10-01-r3.md`](./revisiones/spec-brownfield-2026-10-01-r3.md)). Se resuelven los 3 Issues: FR-5 queda solo para Linux (macOS pasa a INV-1), FR-19 tiene un único Dado, y FR-57 dice "sin agente". El fixture de FR-56 discrimina. Se agregan: VC del orden de BR-1, D-11 con `default-command` no vacío, las excepciones de §6.4, los nombres de los logs de `sshd` y los fixtures que faltaban. Después de la cuarta vuelta (READY, [`r4`](./revisiones/spec-brownfield-2026-10-01-r4.md)), FR-56 aclara que el filtrado de líneas mal formadas lo hace el cliente |
 | v1.4 | 2026-10-01 | Revisión externa, posterior al READY. D-17 registra el trade-off de no hacer `exec`: la memoria del servidor queda expuesta en el hijo, y se descarta re-ejecutar `tmux` en un modo helper. D-18 y FR-59/VC-70: `-i` solo acepta paths absolutos. D-19 y FR-60/VC-71: al remoto solo viaja `TERM`. FR-59 y FR-60 llevan VC-70 y VC-71 para no renumerar |
+| v1.5 | 2026-10-01 | Granularidad: un FR describe una situación y un resultado, y un VC verifica una sola cosa. FR-33 (rechazo y bordes aceptados, dos resultados) pasa a FR-33a y FR-33b. FR-34 (archivo que no existe y archivo sin permiso, dos situaciones) pasa a FR-34a y FR-34b, igual que el patrón que la cátedra marcó en el TP1. VC-59 pasa a VC-59a (nunca escribe), VC-59b y VC-59c (los dos pasos del orden). VC-68 pasa a VC-68a…68e, y VC-69 a VC-69a y VC-69b: un VC por invariante y por entorno. No cambia ningún comportamiento, mensaje ni umbral. Conteo: FR 62, VC 80 |

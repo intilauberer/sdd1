@@ -13,7 +13,7 @@ Todo se hizo sobre tmux en el commit `5a820e63b72f05c121441149c72327aeeb16dfa4`.
 |---|---|---|
 | 1 | [`notas-exploracion.md`](./notas-exploracion.md) | Descubrir: el camino de spawn, el event loop, la capa de compat/build y los riesgos, con `archivo:línea` |
 | 2 | [`linea-de-base.md`](./linea-de-base.md) | La suite de tmux y el build en Linux y macOS **antes** de cualquier cambio, con las fallas que ya existen clasificadas |
-| 3 | [`spec-brownfield.md`](./spec-brownfield.md) | Especificar: alcance por path, el límite solo-Linux, 7 invariantes con su chequeo, 60 FR, 5 BR, 3 NFR y 71 VCs |
+| 3 | [`spec-brownfield.md`](./spec-brownfield.md) | Especificar: alcance por path, el límite solo-Linux, 7 invariantes con su chequeo, 62 FR, 5 BR, 3 NFR y 80 VCs |
 | 4 | [`revisiones/`](./revisiones/) | Revisar: lo que encontraron los agentes adversariales y qué se cambió |
 
 ## Verificar las notas vos mismo
