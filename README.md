@@ -6,6 +6,7 @@ Trabajos prácticos del grupo. Cada uno vive en su carpeta y es autocontenido.
 |---|---|---|
 | [`gcsgrep-tp1/`](./gcsgrep-tp1/) | Lección 1 · `gcsgrep` | Greenfield: `grep` sobre objetos de GCS. Spec, ADRs, plan, código y verificación. Incluye [la corrección de la cátedra](./gcsgrep-tp1/docs/correccion-catedra-iteracion-1.md) (5/10) |
 | [`tmux-ssh-tp2/`](./tmux-ssh-tp2/) | Lección 2 · `tmux` con SSH nativo | Brownfield: notas de exploración y spec de `ssh-pane` sobre el `tmux` real. **Sin implementación**, por consigna |
+| [`toolkit-tp3/`](./toolkit-tp3/) | Lección 3 · Toolkit SDD | Skill `write-spec-brownfield`, subagent `revisor-spec` y dos hooks que bloquean, en [`.claude/`](./.claude/), con la evidencia de cada uno corriendo |
 
 ## Agentes adversariales
 
