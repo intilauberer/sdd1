@@ -23,18 +23,21 @@ invariante sin chequeo ejecutable. Lo verifica un script, no la buena voluntad.
    solo lectura (el built-in `Explore`; el toolkit no trae uno propio) que devuelva
    módulos, interfaces y riesgos **con `archivo:línea`** contra ese commit, y guardalo
    en `notas-exploracion.md`; la spec lo enlaza.
-2. **Medí la línea de base** antes de tocar nada: los comandos reales del repo
-   (build, tests) y su resultado, en la spec.
-3. **Alcance por path.** Tabla *Dentro*: cada archivo que cambia y qué cambia.
-   *Fuera*: paths concretos que el implementador no abre. Nunca "no se toca el resto".
-4. **Invariantes con chequeo.** Lo que tiene que seguir siendo verdad (comandos
-   existentes, plataformas, formato) y el comando que lo comprueba.
-5. **Requerimientos** `FR-n`/`BR-n`/`NFR-n` en Dado / Cuando / Entonces, uno por
-   situación, cada uno con su `VC-n` observable: texto literal, exit code, magnitud.
-6. **Decisiones** con lo descartado y por qué, *dentro* de la spec.
-7. **Verificá la cobertura:** `python3 .claude/skills/write-spec-brownfield/scripts/vc-huerfanos.py <spec>`.
+2. **Medí la línea de base** (seguridad ante regresiones) antes de tocar nada: los
+   comandos reales del repo (build, tests) y su resultado, en la spec.
+3. **Alcance por path** (alcance acotado). Tabla *Dentro*: cada archivo que cambia y
+   qué cambia. *Fuera*: paths concretos que el implementador no abre. Nunca "no se
+   toca el resto".
+4. **Invariantes con chequeo** (seguridad ante regresiones). Lo que tiene que seguir
+   siendo verdad (comandos existentes, plataformas, formato) y el comando que lo comprueba.
+5. **Requerimientos** (cobertura de VCs) `FR-n`/`BR-n`/`NFR-n` en Dado / Cuando /
+   Entonces, uno por situación, cada uno con su `VC-n` observable: texto literal,
+   exit code, magnitud.
+6. **Decisiones** (trazabilidad) con lo descartado y por qué, *dentro* de la spec.
+7. **Verificá la cobertura** (cobertura de VCs): `python3 .claude/skills/write-spec-brownfield/scripts/vc-huerfanos.py <spec>`.
    Exit ≠ 0 ⇒ hay huérfanos: completalos antes de seguir.
-8. **Pedí revisión independiente** al subagent `revisor-spec`. No la cierres vos.
+8. **Pedí revisión independiente** (Especificar → Revisar) al subagent `revisor-spec`.
+   No la cierres vos.
 
 ## Plantilla
 
