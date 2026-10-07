@@ -1,6 +1,6 @@
 # 1b · Skill write-spec-brownfield — escribe la spec, verifica cobertura y la manda a revisor-spec hasta READY (misma sesión, --resume)
 
-**Prompt** (sesión nueva, sin nombrar ninguna pieza del toolkit):
+**Prompt** (tres turnos `--resume` sobre la sesión de 1a, sin nombrar ninguna pieza del toolkit):
 
 > Dale, opción 1: usá -u usuario. Escribila en tmux-ssh-tp2/spec-flag-u.md.
 
@@ -131,7 +131,6 @@ A variable in this command can't be checked before it runs
 **← resultado**
 ```
 requerimientos: 5 · VCs distintos: 8 · huérfanos: 0
-
 OK: 35 enlaces relativos verificados, ninguno roto
 ```
 
@@ -518,8 +517,39 @@ No matches found
     - `-u alice a@b@servidor`: puede dar FR-3 o base FR-31.
     - `-u a@b servidor:22`: FR-4 o FR-5. D-3 sugiere FR-4, pero ningún VC lo fija.
   
-    Falta el orden total entre FR-3, FR-4
-… [3752 caracteres más]
+    Falta el orden total entre FR-3, FR-4 y las validaciones del destino, y un VC que lo pruebe.
+  
+  - **Issue (B3)** · `tmux-ssh-tp2/spec-flag-u.md:46-53`: "Valen las INV-1 a INV-7 de la base, sin cambios" y, después, en la tabla, "| INV-1 | Lo que andaba con `user@host`…" y "| INV-2 | Ningún otro comando cambia". Los IDs INV-1 e INV-2 ya existen en la base con otro significado (`spec-brownfield.md:136-137`: no-Linux y Linux sin `--enable-ssh`). `spec-flag-u.md:115` ("en verde **antes** de agregar `-u` (INV-1)") no se puede resolver. Un agente puede chequear la invariante equivocada.
+  
+  - **Warning (2.7 / 3.1)** · `tmux-ssh-tp2/spec-flag-u.md:67`: "Stdout es exactamente esa línea, con exit 0". Esta línea reemplaza a base VC-22, pero base FR-22 (`spec-brownfield.md:419-423`) también exige que el `diff` contra `list-commands-linux.txt` muestre una sola línea agregada. Ese chequeo se pierde, y base FR-22 sigue diciendo "con la sinopsis de §6.2" sin que nada lo actualice.
+  
+  - **Warning (3.4)** · `tmux-ssh-tp2/spec-flag-u.md:86-89`: "Dado un valor de `-u` vacío o que contiene `@`". La spec no dice qué pasa con `-u a -u b`. El parser de tmux acepta el flag repetido, así que se puede quedar con el último en silencio o dar error, y eso choca con el criterio de D-2. Tampoco define qué hacer con otros caracteres en el valor, como `:`, espacios o un `-` inicial. Sin un VC, el comportamiento queda librado al implementador.
+  
+  - **Warning (B6 / 3.1)** · `tmux-ssh-tp2/spec-flag-u.md:30`: "`tmux.1` | En la entrada de `ssh-pane`: la sinopsis nueva y un párrafo sobre `-u`". El cambio en el man no tiene VC ni contenido mínimo definido.
+  
+  - **Suggestion (3.6)** · `tmux-ssh-tp2/spec-flag-u.md:58`: "Los VCs corren en el entorno de base §9". La tabla de perfiles de la base (`spec-brownfield.md:1062`) no incluye VC-1 a VC-5 de esta spec. Tampoco queda claro que VC-2 sea el end-to-end contra el `sshd` real del perfil `linux-ssh`.
+  
+  Lo que miré y está bien:
+  - **Alcance por path:** los archivos de "Dentro" y "Fuera" son consistentes con la base. `tmux.h` ya prevé el usuario en el destino SSH (`spec-brownfield.md:57`), y `regress/ssh-pane-user.sh` entra en el glob de base INV-5 (`spec-brownfield.md:140`).
+  - **Letra `u`:** no está entre las letras que lee el layout (`l p x X y Y`, `notas-exploracion.md:297`) ni entre los flags de la base (`d h i: P: t:`).
+  - **Mensajes:** FR-3 y FR-4 son literales, y VC-4 aclara el espacio final igual que base FR-30. FR-5 copia exacto el texto de base FR-32.
+  - **D-1:** coincide con el hallazgo 8 de las notas (`notas-exploracion.md:288-289`).
+  - **B4 y B5:** se heredan explícitamente de la base (`spec-flag-u.md:41` y `:112-115`).
+  
+  ## Acciones
+  
+  - [MUST] `tmux-ssh-tp2/spec-flag-u.md:32`: declarar que la lista de flags de `spec-brownfield.md:229-231` (y la regla de FR-27 en lo que toca a `u`) queda reemplazada.
+  - [MUST] `tmux-ssh-tp2/spec-flag-u.md:108`: fijar el orden total entre FR-3, FR-4 y base FR-28/31/32, con VCs para `-u '' alice@servidor`, `-u alice @servidor` y `-u a@b servidor:22`.
+  - [MUST] `tmux-ssh-tp2/spec-flag-u.md:50-53` y `:115`: renombrar las invariantes locales para que no choquen con base INV-1 e INV-2.
+  - [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:67`: mantener el chequeo de base VC-22 de "una sola línea agregada" (`spec-brownfield.md:422`), con la sinopsis nueva.
+  - [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:86-91`: decidir el caso `-u` repetido, con su VC.
+  - [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:30`: agregar un VC para el cambio en `tmux.1`.
+  
+  VEREDICTO: NEEDS WORK (3 Issues)
+agentId: a32ca56ff3e0192d7 (use SendMessage with to: 'a32ca56ff3e0192d7', summary: '<5-10 word recap>' to continue this agent)
+<usage>subagent_tokens: 31538
+tool_uses: 8
+duration_ms: 61954</usage>
 ```
 
 **Agente:** El revisor devolvió NEEDS WORK con 3 Issues. Los corrijo, junto con los Warnings que se resuelven rápido:
@@ -625,7 +655,6 @@ The file <repo>/tmux-ssh-tp2\spec-flag-u.md has been updated successfully. (file
 **← resultado**
 ```
 requerimientos: 6 · VCs distintos: 8 · huérfanos: 0
-
 OK: 35 enlaces relativos verificados, ninguno roto
 ```
 
@@ -733,7 +762,7 @@ OK: 35 enlaces relativos verificados, ninguno roto
 ```json
 {
  "pattern": "**/tmux.1",
- "path": "C:\\Users\\Fede\\Downloads\\SDD\\sdd1-demo-skill"
+ "path": "<repo>/"
 }
 ```
 
@@ -766,6 +795,56 @@ No files found
 565	> `identity file must be an absolute path: nope` y **no**
 566	> `can't read identity file: nope`. Una implementación que mirara primero si el
 ```
+
+**Subagent (informe final):**
+
+## Revisión de tmux-ssh-tp2/spec-flag-u.md (segunda pasada)
+
+| Dimensión | PASS / WARN / FAIL |
+|---|---|
+| 1 · Propósito y alcance | PASS |
+| 2 · Completitud y consistencia | FAIL |
+| 3 · Casos borde y verificabilidad | WARN |
+| 4 · NFR | PASS |
+| 5 · Tecnología y fundamento | PASS |
+| 6 · Simplicidad | PASS |
+| B · Brownfield | WARN |
+
+Los 6 hallazgos de la primera pasada quedaron cerrados:
+- **Lista de flags:** el reemplazo ahora es explícito (`:32`).
+- **Orden de las validaciones:** D-3 lo fija (`:131`) y VC-5 cubre cada cruce (`:106-114`).
+- **Invariantes:** se renombraron a INV-U1 e INV-U2 (`:53-54`, `:138`).
+- **Diff de `list-commands`:** VC-1 lo vuelve a chequear (`:68-70`).
+- **`-u` repetido:** está en FR-3 (`:83`).
+- **`tmux.1`:** tiene su FR-6 y VC-6 (`:116-123`).
+- **Perfil y end-to-end:** quedaron declarados (`:138-139`).
+
+Chequeos mecánicos:
+- M1: FR 6 · BR 0 · NFR 0 · VC 6.
+- M3 y M4: sin hits.
+- M6: "siempre" en D-2. No cuenta, porque D-2 es una decisión y VC-3 la acota.
+
+## Hallazgos
+
+- **Issue (2.3)** · `tmux-ssh-tp2/spec-flag-u.md:82-83`: "se da el usuario por `-u` y también por `user@` en un destino válido, o se repite `-u`". El Cuando junta dos situaciones distintas con "o". La rúbrica marca eso como Issue aunque las dos den el mismo resultado.
+
+- **Warning (2.8)** · `tmux-ssh-tp2/spec-flag-u.md:131`: "(1) FR-4, sobre el valor de `-u`". Desde que existe el `-u` repetido no se sabe a qué valor se refiere FR-4. Por ejemplo, `-u '' -u alice servidor` puede dar `invalid user: ` (FR-4 primero) o `user given twice…` (FR-3). D-3 pone FR-4 primero, pero no dice si se valida cada valor o solo el último. VC-5 no tiene este caso.
+
+- **Warning (2.8 / 5.6)** · `tmux-ssh-tp2/spec-flag-u.md:131`: "Después siguen las validaciones de base §6.3 que ya existían (`-P`, `-i`, `-t`), en su orden". La base no define un orden entre esas validaciones y las del destino. El único orden que fija es FR-59 antes que FR-34a/34b (`spec-brownfield.md:559`). Con esta línea, D-3 impone "destino antes que `-P`/`-i`/`-t`" sin decir que agrega una regla a la base. Además pone `-t` al final. Si la entrada de `cmd_table` declara el target, tmux resuelve `-t` antes de ejecutar el comando, y un agente que siga D-3 al pie de la letra no va a poder cumplirlo. Ningún VC cruza `-u` con `-P`, `-i` o `-t` inválidos.
+
+- **Suggestion (3.2)** · `tmux-ssh-tp2/spec-flag-u.md:121-123`: "`grep -c 'Op Fl u Ar user' tmux.1` da `1`". El grep corre sobre todo el archivo y no dentro de la entrada de `ssh-pane`, como pide FR-6 (`:118`). No pude confirmar que el patrón no aparezca ya en otra entrada, porque el árbol de tmux no está en este repo.
+
+## Acciones
+
+- [MUST] `tmux-ssh-tp2/spec-flag-u.md:82-83`: separar FR-3 en dos FRs, uno para `-u` junto con `user@` y otro para `-u` repetido, cada uno con su VC.
+- [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:131`: decidir cómo se aplica FR-4 cuando `-u` se repite y sumar ese caso a VC-5 (`:106-114`).
+- [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:131`: declarar que el orden "destino antes que `-P`/`-i`/`-t`" es una regla nueva respecto de la base, y resolver dónde queda `-t`.
+- [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:121-123`: acotar VC-6 a la entrada de `ssh-pane`.
+
+VEREDICTO: NEEDS WORK (1 Issue)
+
+
+## Turno 2 (`--resume` sobre la misma sesión; el prompt del turno no queda en el stream-json)
 
 - Sesión `d1b95bd8-8645-4595-84a6-1875f3ba8192` · modelo `claude-opus-5-5` · piezas del toolkit cargadas al arrancar: revisor-spec, write-spec-brownfield
 
@@ -855,7 +934,6 @@ The file <repo>/tmux-ssh-tp2\spec-flag-u.md has been updated successfully. (file
 **← resultado**
 ```
 requerimientos: 7 · VCs distintos: 9 · huérfanos: 0
-
 OK: 35 enlaces relativos verificados, ninguno roto
 ```
 
@@ -946,6 +1024,50 @@ OK: 35 enlaces relativos verificados, ninguno roto
 … [1703 caracteres más]
 ```
 
+**Subagent (informe final):**
+
+## Revisión de tmux-ssh-tp2/spec-flag-u.md (tercera pasada)
+
+| Dimensión | PASS / WARN / FAIL |
+|---|---|
+| 1 · Propósito y alcance | PASS |
+| 2 · Completitud y consistencia | PASS |
+| 3 · Casos borde y verificabilidad | PASS |
+| 4 · NFR | PASS |
+| 5 · Tecnología y fundamento | PASS |
+| 6 · Simplicidad | PASS |
+| B · Brownfield | WARN |
+
+Los hallazgos de la segunda pasada quedaron cerrados:
+- **FR-3:** ahora cubre una sola situación (`:80-87`). El `-u` repetido pasó a FR-7 con su VC-7 (`:89-96`).
+- **Orden de las validaciones:** D-3 pone FR-7 antes que FR-4, así que FR-4 tiene un solo valor que mirar (`:139`). VC-7 fija el caso `-u '' -u alice`.
+- **`-P`, `-i` y `-t`:** D-3 declara explícitamente que no fija el orden contra ellos. La base tampoco lo fija, así que no hay contradicción.
+- **VC-6:** quedó acotado a la entrada de `ssh-pane` (`:128-131`).
+
+Chequeos mecánicos:
+- M1: FR 7 · BR 0 · NFR 0 · VC 7, uno por FR.
+- M3 y M4: sin hits.
+- M6: "siempre" en D-2. No cuenta, porque D-2 es una decisión y VC-3 y VC-7 la acotan.
+
+## Hallazgos
+
+- **Warning (B6)** · `tmux-ssh-tp2/spec-flag-u.md:31`: "VC-1 a VC-6". Desde que existe VC-7 (`:95`), la fila de "Dentro" para `regress/ssh-pane-user.sh` quedó desactualizada. Un agente que la lea de forma literal deja VC-7 afuera del script.
+
+- **Suggestion (3.2)** · `tmux-ssh-tp2/spec-flag-u.md:129-131`: "`sed -n '/^\.It Xo Ic ssh-pane/,/^\.It Xo Ic /p' tmux.1`" y "`E | grep -c …`". Hay tres detalles:
+  - **Forma de la entrada:** el VC asume que la entrada de `ssh-pane` usa `.It Xo`, pero ni FR-6 ni §3 lo exigen. Si la escriben de otra forma, el VC da 0 aunque el man esté bien.
+  - **Fin del rango:** si después de `ssh-pane` no hay otra entrada `.It Xo Ic`, el rango llega hasta el final del archivo.
+  - **Sintaxis:** `E | grep` no es un comando de shell válido tal como está escrito.
+
+## Acciones
+
+- [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:31`: actualizar el rango a VC-1 a VC-7.
+- [SHOULD] `tmux-ssh-tp2/spec-flag-u.md:129-131`: decir en FR-6 o en §3 que la entrada de `ssh-pane` usa `.It Xo`, y dejar VC-6 como un comando que se pueda ejecutar.
+
+VEREDICTO: READY
+
+
+## Turno 3 (`--resume` sobre la misma sesión; el prompt del turno no queda en el stream-json)
+
 - Sesión `d1b95bd8-8645-4595-84a6-1875f3ba8192` · modelo `claude-opus-5-5` · piezas del toolkit cargadas al arrancar: revisor-spec, write-spec-brownfield
 
 **→ Grep**
@@ -1007,7 +1129,6 @@ The file <repo>/tmux-ssh-tp2\spec-flag-u.md has been updated successfully. (file
 **← resultado**
 ```
 requerimientos: 7 · VCs distintos: 9 · huérfanos: 0
-
 OK: 35 enlaces relativos verificados, ninguno roto
 ```
 

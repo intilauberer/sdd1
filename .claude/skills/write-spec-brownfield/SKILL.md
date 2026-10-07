@@ -18,9 +18,11 @@ invariante sin chequeo ejecutable. Lo verifica un script, no la buena voluntad.
 
 ## Pasos
 
-1. **Explorá antes de escribir** (higiene de contexto). Lanzá un subagent de solo
-   lectura que devuelva módulos, interfaces y riesgos **con `archivo:línea`** contra
-   un commit fijado. Guardalo en `notas-exploracion.md`; la spec lo enlaza.
+1. **Explorá antes de escribir** (higiene de contexto). Si ya hay un
+   `notas-exploracion.md` para el commit fijado, usalo. Si no, lanzá un subagent de
+   solo lectura (el built-in `Explore`; el toolkit no trae uno propio) que devuelva
+   módulos, interfaces y riesgos **con `archivo:línea`** contra ese commit, y guardalo
+   en `notas-exploracion.md`; la spec lo enlaza.
 2. **Medí la línea de base** antes de tocar nada: los comandos reales del repo
    (build, tests) y su resultado, en la spec.
 3. **Alcance por path.** Tabla *Dentro*: cada archivo que cambia y qué cambia.

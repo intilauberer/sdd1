@@ -13,7 +13,7 @@
 {
  "subagent_type": "revisor-spec",
  "description": "Revisión independiente spec TP2",
- "prompt": "Revisá de forma adversarial e independiente la spec brownfield `tmux-ssh-tp2/spec-brownfield.md` (repo en C:\\Users\\Fede\\Downloads\\SDD\\sdd1) para decidir si está lista para entregar a la cátedra. Leé también el enunciado del TP2 y los artefactos relacionados de esa carpeta (notas, ADRs, revisiones previas del corrector) y la rúbrica en `.kiro/agents/` si aplica. Verificá que las citas archivo:línea existan y digan lo que la spec afirma, alcance Dentro/Fuera por path, invariantes con chequeo, línea de base de regresión y un VC por requerimiento, y consistencia interna (versión, conteos, referencias cruzadas). Devolvé veredicto READY o NEEDS WORK, con hallazgos clasificados por severidad (Blocker/Warning/Nit), cada uno citado por archivo:línea con el porqué.",
+ "prompt": "Revisá de forma adversarial e independiente la spec brownfield `tmux-ssh-tp2/spec-brownfield.md` (repo en <repo>/) para decidir si está lista para entregar a la cátedra. Leé también el enunciado del TP2 y los artefactos relacionados de esa carpeta (notas, ADRs, revisiones previas del corrector) y la rúbrica en `.kiro/agents/` si aplica. Verificá que las citas archivo:línea existan y digan lo que la spec afirma, alcance Dentro/Fuera por path, invariantes con chequeo, línea de base de regresión y un VC por requerimiento, y consistencia interna (versión, conteos, referencias cruzadas). Devolvé veredicto READY o NEEDS WORK, con hallazgos clasificados por severidad (Blocker/Warning/Nit), cada uno citado por archivo:línea con el porqué.",
  "run_in_background": false
 }
 ```
@@ -1095,8 +1095,37 @@ tmux-ssh-tp2\.cache\tmux\names.c:167:	if (*name == '/')
   - 62 FR: FR-1 a FR-60, más FR-33 y FR-34 partidos en `a`/`b`.
   - 80 VC: 60 + 3 + 7 + 8 + 2.
   - La tabla de §7 y el plan de §11 cubren todos los VC.
-  - La lista de 27 comandos que empiezan con `s` (FR-23) coincide 
-… [4304 caracteres más]
+  - La lista de 27 comandos que empiezan con `s` (FR-23) coincide con `cmd.c:186-212`.
+  
+  **Mecánicos.**
+  - M3: sin hits.
+  - M4, M5 y M6: los hits dentro de FRs ("cualquier", "nunca") están acotados por un VC.
+  
+  ## Hallazgos
+  - Warning (2.8) · spec-brownfield.md:59: "obtiene la celda con `layout_get_tiled_cell()` (`layout.c:1640`)". Esa función rechaza un target flotante con `can't split a floating pane` (`layout.c:1649-1651`). Ningún FR decide qué pasa con `T ssh-pane -t <pane flotante>`. La exclusión de `:93` ("Panes flotantes o modales") habla de *crear* panes flotantes, no de apuntar a uno con `-t`. Dos implementaciones pueden divergir: una propaga el error y otra elige `layout_get_floating_cell`. La matriz de fallas (`:981`) tampoco lo lista.
+  - Warning (2, consistencia) · spec-brownfield.md:13: "La quinta vuelta del corrector, sobre v1.4 y v1.5, dio READY sin Issues ([`r5`]…)". Existe `revisiones/spec-brownfield-2026-10-01-r6.md`, que revisa justamente v1.5.1 y da READY, y la cabecera no la menciona. El Estado describe un historial de revisiones que ya no es el vigente.
+  - Warning (3.5) · spec-brownfield.md:747: "**Dado** `SSH_AUTH_SOCK=/tmp/no-agent`". Lo mismo pasa en `:284` ("**sin** `SSH_AUTH_SOCK`") y en `:795`. Las convenciones (`:41`) dicen que el agente se busca "en el entorno del pane". Pero ningún lugar dice cómo arma ese entorno el VC: `T set-environment -g`, `-gu`, el entorno del servidor al arrancar, o `update-environment` de un cliente adjuntado. Al escribir VC-51 tuve que decidirlo. Además, con `T` sin cliente adjuntado, el resultado depende de esa decisión.
+  - Warning (3.2) · spec-brownfield.md:338-339: "el mismo eco en `T split-window 'ssh alice@servidor'` con `ssh -o SendEnv=LC_PRUEBA` da `E=x`". El texto nombra dos comandos distintos y no dice cuál se ejecuta literalmente. Tampoco dice cómo llega `LC_PRUEBA` al entorno de ese `ssh`. El control de VC-71 no es reproducible tal como está escrito.
+  - Warning (B3) · spec-brownfield.md:136: "`nm tmux \| grep -c ' _ssh_'` da `0`". La spec no fija nombres de símbolos. Con el prefijo `_` de macOS, `cmd_ssh_pane_entry` aparece como `_cmd_ssh_pane_entry` y no matchea `' _ssh_'`. Ese subchequeo de INV-1 no detecta una fuga de símbolos; hoy solo la detectaría la línea `unknown command` de la misma celda.
+  - Suggestion (3.4) · spec-brownfield.md:1001: "Si no está vacío, `spawn_pane` guarda ese comando en el pane (`spawn.c:380`) y `respawn-pane` lo corre". Es un comportamiento observable. Lo confirma `spawn.c:379-383`: con `default-command` no vacío, `argc=1`. Solo vive en D-11; FR-21 y VC-21 (`:407-414`) cubren únicamente el caso vacío.
+  - Suggestion (4.1) · spec-brownfield.md:895-896: "la **latencia p95 de `T display -p ok`** … sobre **20 muestras**". No dice qué método de percentil se usa: con 20 muestras, el p95 puede ser la muestra 19 o una interpolación. El borde de los 100 ms puede caer de un lado o del otro según quién lo calcule.
+  - Suggestion (3.4) · spec-brownfield.md:580-582: FR-36 fija el error con `resize-window -y 2`. No hay FR para un target en una ventana con zoom, donde `window_push_zoom` (`layout.c:1686-1689`) desactiva el zoom en silencio. Como `-Z` está excluido (`:93`), el efecto sobre el zoom queda sin declarar.
+  
+  ## Acciones
+  - [SHOULD] spec-brownfield.md:59 y :981: decidir y verificar con un VC el caso `-t` a un pane flotante.
+  - [SHOULD] spec-brownfield.md:13: actualizar el Estado para que incluya r6.
+  - [SHOULD] spec-brownfield.md:41, :284, :747, :795: fijar cómo se pone o se quita `SSH_AUTH_SOCK` en el entorno del pane para los VCs.
+  - [SHOULD] spec-brownfield.md:338-339: dejar un único comando de control para VC-71, con la forma en que llega `LC_PRUEBA`.
+  - [SHOULD] spec-brownfield.md:136: reemplazar o eliminar el chequeo `nm … ' _ssh_'`, que no discrimina.
+  - [SHOULD] spec-brownfield.md:1001: llevar a un FR con VC el caso de `default-command` no vacío, o excluirlo explícitamente.
+  - [SHOULD] spec-brownfield.md:895: fijar cómo se calcula el p95.
+  - [SHOULD] spec-brownfield.md:580: declarar el efecto sobre el zoom cuando el target está en una ventana con zoom.
+  
+  VEREDICTO: READY
+agentId: a99c80eb5e816c445 (use SendMessage with to: 'a99c80eb5e816c445', summary: '<5-10 word recap>' to continue this agent)
+<usage>subagent_tokens: 92950
+tool_uses: 20
+duration_ms: 123754</usage>
 ```
 
 **Agente:** **Sí, se puede entregar: el veredicto es READY.** No encontró nada bloqueante, pero dejó 5 Warnings y 3 Suggestions que valdría la pena cerrar antes. La revisión la hizo el subagente `revisor-spec`, que no participó en la redacción. Yo no volví a comprobar sus hallazgos.
