@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """regresion-antes-de-commit — no entra un commit que rompe lo que ya andaba.
 
-Evento: PreToolUse, matcher "Bash". Solo actúa si el comando contiene `git commit`.
+Evento: PreToolUse, matcher "Bash|PowerShell". Solo actúa si el comando contiene `git commit`.
 Corre la línea de base offline del repo (la misma que CI):
   1. enlaces relativos de los dos TPs (check-doc-links.py);
   2. ningún .c/.h/.y/configure.ac/Makefile.am staged, modificado o sin trackear en
@@ -22,8 +22,8 @@ try:
 except ValueError:
     print("HOOK regresion-antes-de-commit: no pude leer el evento; fallo cerrado.", file=sys.stderr)
     sys.exit(2)
-# `git commit` al inicio o tras ; & |, admitiendo opciones globales (-C dir, -c k=v)
-if not re.search(r"(?:^|[;&|]\s*)git(?:\s+-[cC]\s*\S+)*\s+commit\b", comando):
+# `git commit` al inicio de línea, tras ; & | ( o un prefijo (env X=1 …), con opciones globales (-C dir, -c k=v)
+if not re.search(r"(?:^|[;&|(]\s*|\s)git(?:\s+-[cC]\s*\S+)*\s+commit\b", comando, re.M):
     sys.exit(0)
 
 raiz = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
@@ -41,8 +41,9 @@ estado = subprocess.run(["git", "status", "--porcelain", "-z", "--no-renames", "
 archivos = [e[3:] for e in estado.split("\0") if len(e) > 3 and "D" not in e[:2]]
 codigo = [f for f in archivos if re.search(r"(\.[chy]|/configure\.ac|/Makefile\.am)$", f)]
 if codigo:
-    fallos.append("[sin-implementacion] la consigna del TP2 prohíbe código de tmux:\n  "
-                  + "\n  ".join(codigo))
+    fallos.append("[sin-implementacion] la consigna del TP2 prohíbe código de tmux (staged, "
+                  "modificado o sin trackear):\n  " + "\n  ".join(codigo)
+                  + "\n  Borralo o movelo fuera de tmux-ssh-tp2/ (no alcanza con sacarlo del staging).")
 
 if fallos:
     print("COMMIT BLOQUEADO — la línea de base de regresión está roja.\n\n"

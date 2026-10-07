@@ -21,7 +21,7 @@ siguen siendo nuestra herramienta de corrección; `revisor-spec` usa su rúbrica
 brownfield"), no el título. Ocho pasos que entran en una pantalla, una plantilla y
 anti-patrones sacados de lo que nos marcaron. El paso determinístico —¿cada
 FR/BR/NFR tiene su VC?— no lo hace el modelo: lo hace `vc-huerfanos.py` (exit ≠ 0 ⇒
-hay huérfanos). Sobre la spec real del TP2: `requerimientos: 66 · con VC: 66 ·
+hay huérfanos). Sobre la spec real del TP2: `requerimientos: 70 · con VC: 70 ·
 huérfanos: 0`.
 
 **Subagent.** Brief de un párrafo con las tres cosas en orden: qué puede hacer
@@ -105,6 +105,9 @@ echo '{"tool_input":{"command":"git commit -m x"}}' \
 - **`regresion-antes-de-commit` matchea el texto del comando** (`git commit`). Un
   commit hecho fuera del agente, o con un alias, no pasa por él. CI (`tp2.yml`,
   `tests.yml`) corre los mismos chequeos como segunda red.
+- **El chequeo sin-implementación mira el árbol de trabajo**, no solo el índice: un
+  `.c` sin trackear en `tmux-ssh-tp2/` bloquea cualquier commit hasta que se borre o
+  se mueva fuera de esa carpeta (así `git add &&`, `-a` y `<path>` no lo esquivan).
 - **No corre `pytest` del TP1**: necesita `uv` y tarda; está en CI. La línea de base
   del hook es la offline y rápida (enlaces + sin-implementación).
 - **No corre `check-citas.py`**: la primera vez clona tmux por red. También está en CI.

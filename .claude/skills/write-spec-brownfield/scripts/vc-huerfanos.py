@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """Cobertura de VCs: cada FR-n / BR-n / NFR-n definido en la spec tiene su VC.
 
-Una definición es una línea que empieza con `**FR-6 ·` o `### FR-6 ·` (o BR / NFR).
+Una definición es una línea que empieza con `**FR-6 ·` o `### FR-6 ·` (o BR / NFR;
+se admite sufijo de letra: `FR-33a`).
 Su bloque va hasta la próxima definición; cuenta como cubierta si en el bloque hay
 al menos una línea `> **VC-…`. No se asume numeración compartida.
 
@@ -14,7 +15,7 @@ import re
 import sys
 from pathlib import Path
 
-DEF = re.compile(r"^(?:#+\s*|\*\*)((?:FR|BR|NFR)-\d+)\b")
+DEF = re.compile(r"^(?:#+\s*|\*\*)((?:FR|BR|NFR)-\d+[a-z]?)\b")
 VC = re.compile(r"^>\s*\*\*VC-")
 
 
