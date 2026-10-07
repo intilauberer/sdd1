@@ -21,12 +21,18 @@ sys.stderr.reconfigure(encoding="utf-8")
 SUPERSEDIBLES = re.compile(r"^gcsgrep-tp1/docs/(adr/ADR-\d+|hallazgos/H-\d+)[^/]*\.md$")
 CONGELADOS = re.compile(r"(^|/)(00-requirements-draft|enunciado)\.md$")
 
-evento = json.load(sys.stdin)
+try:
+    evento = json.load(sys.stdin)
+except ValueError:
+    print("HOOK artefactos-inmutables: no pude leer el evento; fallo cerrado.", file=sys.stderr)
+    sys.exit(2)
 entrada = evento.get("tool_input", {})
 ruta = entrada.get("file_path", "")
 if not ruta:
     sys.exit(0)
 
+# Rutas estilo MSYS/Git Bash (/c/Users/...) → C:/Users/...
+ruta = re.sub(r"^/([A-Za-z])/", lambda m: m.group(1).upper() + ":/", ruta)
 raiz = Path(os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())).resolve()
 try:
     rel = Path(ruta).resolve().relative_to(raiz).as_posix()

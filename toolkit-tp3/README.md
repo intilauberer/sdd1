@@ -97,5 +97,9 @@ echo '{"tool_input":{"command":"git commit -m x"}}' \
 - **`artefactos-inmutables` permite un Edit de una línea que contenga "Estado"** a
   ambos lados. Es la excepción para supersedear; un cambio malicioso de una sola línea
   de Estado pasaría.
-- **`vc-huerfanos.py` asume numeración compartida** (el VC de FR-6 es VC-6), que es la
-  convención de nuestras specs.
+- **`artefactos-inmutables` solo ve Edit/Write.** Un `sed -i`, `cat >` o
+  `Set-Content` por Bash/PowerShell sobre un ADR no pasa por el hook; la rule y la
+  revisión de commits son la red para ese caso.
+- **`vc-huerfanos.py` empareja por bloque**: el VC tiene que estar como línea `> **VC-…`
+  debajo de su `**FR-n ·` / `### FR-n ·` y antes del siguiente requerimiento. Un VC
+  citado desde otra sección no cuenta.

@@ -4,8 +4,8 @@
 Evento: PreToolUse, matcher "Bash". Solo actúa si el comando contiene `git commit`.
 Corre la línea de base offline del repo (la misma que CI):
   1. enlaces relativos de los dos TPs (check-doc-links.py);
-  2. ningún .c/.h/.y/configure.ac/Makefile.am staged en tmux-ssh-tp2/ (la consigna
-     del TP2 prohíbe implementar).
+  2. ningún .c/.h/.y/configure.ac/Makefile.am staged, modificado o sin trackear en
+     tmux-ssh-tp2/ (la consigna del TP2 prohíbe implementar; cubre `git add &&`, `-a`, `<path>`).
 Cualquier fallo ⇒ exit 2 con la salida del chequeo en stderr.
 """
 
@@ -17,8 +17,13 @@ import sys
 
 sys.stderr.reconfigure(encoding="utf-8")
 
-comando = json.load(sys.stdin).get("tool_input", {}).get("command", "")
-if not re.search(r"\bgit\s+commit\b", comando):
+try:
+    comando = json.load(sys.stdin).get("tool_input", {}).get("command", "")
+except ValueError:
+    print("HOOK regresion-antes-de-commit: no pude leer el evento; fallo cerrado.", file=sys.stderr)
+    sys.exit(2)
+# `git commit` al inicio o tras ; & |, admitiendo opciones globales (-C dir, -c k=v)
+if not re.search(r"(?:^|[;&|]\s*)git(?:\s+-[cC]\s*\S+)*\s+commit\b", comando):
     sys.exit(0)
 
 raiz = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
@@ -30,10 +35,11 @@ for carpeta in ("gcsgrep-tp1", "tmux-ssh-tp2"):
     if r.returncode != 0:
         fallos.append(f"[enlaces {carpeta}]\n{r.stdout}{r.stderr}".rstrip())
 
-staged = subprocess.run(["git", "diff", "--cached", "--name-only", "--diff-filter=AM"],
-                        cwd=raiz, capture_output=True, text=True).stdout.split()
-codigo = [f for f in staged if f.startswith("tmux-ssh-tp2/")
-          and re.search(r"(\.[chy]|/configure\.ac|/Makefile\.am)$", f)]
+# Todo lo que el commit podría llevarse: staged, modificado o untracked (git add &&, -a, <path>)
+estado = subprocess.run(["git", "status", "--porcelain", "-z", "--no-renames", "--untracked-files=all",
+                         "--", "tmux-ssh-tp2"], cwd=raiz, capture_output=True).stdout.decode("utf-8", "replace")
+archivos = [e[3:] for e in estado.split("\0") if len(e) > 3 and "D" not in e[:2]]
+codigo = [f for f in archivos if re.search(r"(\.[chy]|/configure\.ac|/Makefile\.am)$", f)]
 if codigo:
     fallos.append("[sin-implementacion] la consigna del TP2 prohíbe código de tmux:\n  "
                   + "\n  ".join(codigo))
