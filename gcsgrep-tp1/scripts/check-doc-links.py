@@ -11,6 +11,8 @@ a una ruta relativa dentro del repo.
 Qué ignora: URLs absolutas (http, https, mailto), anclas puras (`#seccion`), y las
 rutas declaradas en ENLACES_EXTERNOS_CONOCIDOS — el enunciado de la tarea vive
 originalmente en el monorepo del curso y sus enlaces apuntan afuera a propósito.
+También ignora las carpetas `evidencia/` (TP3): son transcripciones que citan archivos
+textuales de otras carpetas, así que sus enlaces relativos no resuelven desde ahí.
 
     python scripts/check-doc-links.py            # este TP (gcsgrep-tp1/)
     python scripts/check-doc-links.py ../otra/   # otra carpeta del repo
@@ -42,7 +44,7 @@ def main() -> int:
     revisados = 0
 
     for md in sorted(raiz.rglob("*.md")):
-        if ".venv" in md.parts or ".git" in md.parts or ".cache" in md.parts:
+        if {".venv", ".git", ".cache", "evidencia"} & set(md.parts):
             continue
         texto = md.read_text(encoding="utf-8")
         for destino in PATRON_ENLACE.findall(texto):

@@ -30,7 +30,10 @@ formato (fijo). Es subagent y no skill por dos motivos:
 - **Independencia:** arranca sin la conversación donde se escribió la spec, así que no
   puede completar huecos con lo que "se quiso decir".
 - **Firewall de contexto:** lee la spec de 1100 líneas, la rúbrica y el código de tmux
-  en *su* ventana; a la sesión principal le llega una tabla y un veredicto.
+  en *su* ventana; a la sesión principal le llega una tabla y un veredicto. En la
+  corrida [2](./evidencia/2-subagent-revisor-spec.md) el subagent gastó **92.950
+  tokens en 20 tool calls**; a la sesión principal volvieron **66 líneas (~6,6 KB)**:
+  el informe con el veredicto. Ninguna de esas lecturas ocupa el contexto principal.
 
 `tools: Read, Grep, Glob` es una allowlist: sin Edit/Write/Bash **no tiene con qué**
 modificar nada. El brief persuade; `tools` garantiza. **El trade-off:** sin shell no
