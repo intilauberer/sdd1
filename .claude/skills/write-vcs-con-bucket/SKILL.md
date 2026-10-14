@@ -45,6 +45,14 @@ falta, **el bug es la config**, no el skill.
    `CANNOT REGISTER`), frená (paso 1).
 5. **Escribí** `gcs-mcp-tp4/salida/vcs-bucket.md` con la plantilla de abajo: al menos un
    VC por FR-1 (uno sobre `logs/anidado/`), FR-2, FR-3, FR-9 y FR-10.
+   - La tabla "Líneas con match" del subagent es **completa**: trae todas las líneas que
+     contienen algún patrón (sin distinguir mayúsculas), con su número. Con ella el
+     stdout de `gcsgrep` se deduce exacto: escribí "stdout es exactamente", nunca
+     "incluye". Para un patrón con mayúsculas exactas, filtrá vos las líneas de la tabla.
+   - El VC de FR-3 va sobre `logs/app-2026-10-01.log` entero: **todas** sus líneas con
+     match, en orden, con `-n`. Ahí está la línea con `req=<hex>`, que solo existe en el
+     bucket: tiene que aparecer textual en la salida. Si ningún VC cita una línea que no
+     podías conocer de antemano, la salida es una instalación, no una integración.
 6. **Verificá:**
    `uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/check-generations.py verificar gcs-mcp-tp4/salida/vcs-bucket.md`.
    Si sale ≠ 0, aplicá "La evidencia envejece".
