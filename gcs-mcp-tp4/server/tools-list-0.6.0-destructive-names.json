@@ -1,0 +1,23 @@
+[
+  "check_iam_permissions",
+  "copy_object",
+  "create_bucket",
+  "delete_bucket",
+  "delete_object",
+  "download_object",
+  "execute_insights_query",
+  "get_bucket_location",
+  "get_bucket_metadata",
+  "get_metadata_table_schema",
+  "list_buckets",
+  "list_insights_configs",
+  "list_objects",
+  "move_object",
+  "read_object_content",
+  "read_object_metadata",
+  "update_bucket_labels",
+  "update_object_metadata",
+  "upload_object",
+  "view_iam_policy",
+  "write_object"
+]

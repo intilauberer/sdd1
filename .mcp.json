@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "gcs": {
+      "command": "npx",
+      "args": ["-y", "@google-cloud/storage-mcp@0.6.0"],
+      "env": {
+        "STORAGE_EMULATOR_HOST": "${STORAGE_EMULATOR_HOST}",
+        "GOOGLE_CLOUD_PROJECT": "${GCSGREP_TP4_PROJECT:-itba-sdd}"
+      }
+    }
+  }
+}

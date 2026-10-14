@@ -29,6 +29,8 @@ ENLACES_EXTERNOS_CONOCIDOS = {
     "../../entrega.md",
     "../ejemplo-guiado/README.md",
     "../ejemplo-guiado/",
+    "./criterios.md",
+    "../ejemplo-guiado/nota-seguridad.md",
 }
 
 PATRON_ENLACE = re.compile(r"\[[^\]]*\]\(([^)]+)\)")
@@ -45,6 +47,8 @@ def main() -> int:
 
     for md in sorted(raiz.rglob("*.md")):
         if {".venv", ".git", ".cache", "evidencia"} & set(md.parts):
+            continue
+        if "hidden-content" in md.parts:  # material de la cátedra fuera del repo (TP4, gitignored)
             continue
         texto = md.read_text(encoding="utf-8")
         for destino in PATRON_ENLACE.findall(texto):

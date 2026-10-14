@@ -1,6 +1,34 @@
 {
+  "permissions": {
+    "allow": [
+      "mcp__gcs__list_objects",
+      "mcp__gcs__read_object_metadata",
+      "mcp__gcs__read_object_content",
+      "Bash(uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/check-generations.py:*)",
+      "Edit(gcs-mcp-tp4/salida/**)"
+    ],
+    "deny": [
+      "Read(~/.config/gcloud/**)",
+      "Read(~/.config/gcloud-tp4/**)",
+      "Bash(gcloud storage cat:*)",
+      "Bash(gsutil cat:*)",
+      "Bash(curl:*)",
+      "Bash(wget:*)",
+      "Bash(nc:*)",
+      "WebFetch"
+    ]
+  },
   "hooks": {
     "PreToolUse": [
+      {
+        "matcher": "mcp__gcs__.*",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "GCS_ALLOWED_BUCKET=gcsgrep-test-g4-mcp python3 \"$CLAUDE_PROJECT_DIR/.claude/hooks/gcs-allowlist.py\""
+          }
+        ]
+      },
       {
         "matcher": "Edit|Write",
         "hooks": [
