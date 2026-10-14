@@ -1,8 +1,10 @@
 name: tp4 (gcs-mcp-tp4)
 
-# Chequeos offline del TP4 (spec.md: VC-0, VC-3, VC-8a, VC-11a, VC-13). CI no tiene
-# credencial de GCP: nada de esto habla con GCS ni levanta el server MCP. Lo que pide el
-# bucket real (VC-1, VC-2, VC-5…VC-10, VC-11b) se corre a mano y queda en evidencia/.
+# TP4 (spec.md). Job `offline`: VC-0, VC-3, VC-8a, VC-11a, VC-13, sin red ni Docker.
+# Job `emulator` (D-9): levanta el emulador detrás del gateway de solo lectura y corre
+# VC-1, VC-6a, VC-10a y VC-10b de punta a punta. CI no tiene credencial de GCP: nada de esto
+# habla con el GCS real. Lo que pide una sesión de Claude (VC-4, VC-5, VC-7, VC-8b, VC-9,
+# VC-11b) se corre a mano y queda en evidencia/.
 on:
   push:
     branches: ["**"]
@@ -39,13 +41,14 @@ jobs:
           for f in .mcp.json .claude/settings.json gcs-mcp-tp4/server/*.json \
                    gcs-mcp-tp4/plugin/gcsgrep-toolkit/.claude-plugin/plugin.json \
                    gcs-mcp-tp4/plugin/gcsgrep-toolkit/.mcp.json \
-                   gcs-mcp-tp4/plugin/gcsgrep-toolkit/hooks/hooks.json; do
+                   gcs-mcp-tp4/plugin/gcsgrep-toolkit/hooks/hooks.json \
+                   gcs-mcp-tp4/gcs-real/mcp.json.ejemplo; do
             python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f"; exit 1; }
           done
       - name: Los scripts compilan / parsean
         run: |
-          python3 -m py_compile gcs-mcp-tp4/scripts/*.py .claude/hooks/*.py
-          for f in gcs-mcp-tp4/bucket/*.sh gcs-mcp-tp4/plugin/armar.sh; do bash -n "$f"; done
+          python3 -m py_compile gcs-mcp-tp4/scripts/*.py gcs-mcp-tp4/emulador/gateway.py .claude/hooks/*.py
+          for f in gcs-mcp-tp4/gcs-real/bucket/*.sh gcs-mcp-tp4/emulador/*.sh gcs-mcp-tp4/plugin/armar.sh; do bash -n "$f"; done
       - name: Enlaces relativos (VC-13)
         run: python3 gcsgrep-tp1/scripts/check-doc-links.py gcs-mcp-tp4
       - name: Hook gcs-allowlist, 66 casos (VC-8a)
@@ -67,3 +70,55 @@ jobs:
         run: |
           base="origin/${GITHUB_BASE_REF:-main}"
           python3 gcs-mcp-tp4/scripts/check-alcance.py "$base"
+
+  emulator:
+    name: Emulador + gateway, capa 3 de punta a punta (D-9)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GCSGREP_TP4_GATEWAY: http://127.0.0.1:4443
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - uses: astral-sh/setup-uv@v6
+      - name: Levantar emulador y gateway
+        run: gcs-mcp-tp4/emulador/levantar.sh
+      - name: Armar el bucket (VC-1)
+        run: gcs-mcp-tp4/emulador/armar-bucket.sh
+      - name: Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a)
+        run: gcs-mcp-tp4/emulador/probar-403.sh
+      - name: El server MCP sin hook contra el gateway (VC-10b)
+        env:
+          STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
+        run: python3 gcs-mcp-tp4/scripts/probar-server-sin-hook.py
+      - name: Procedencia y evidencia que envejece (R-5 paso 4, R-6, VC-6a)
+        env:
+          STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
+        run: |
+          set -euo pipefail
+          source gcs-mcp-tp4/emulador/config.sh
+          CG=(uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/check-generations.py)
+          out="$RUNNER_TEMP/vcs-bucket.md"
+          args=()
+          for o in logs/app-2026-10-01.log logs/app-2026-10-02.log; do
+            args+=("gs://$BUCKET/$o@$(object_field "$o" updated)")
+          done
+          "${CG[@]}" registrar "${args[@]}" | tee "$out"
+          "${CG[@]}" verificar "$out"
+          gcs-mcp-tp4/emulador/cambiar-objeto.sh
+          rc=0; "${CG[@]}" verificar "$out" | tee "$RUNNER_TEMP/verificar.txt" || rc=$?
+          [ "$rc" -eq 1 ] && grep -q "^STALE gs://$BUCKET/logs/app-2026-10-02.log recorded=" "$RUNNER_TEMP/verificar.txt" \
+            || { echo "expected exit 1 with a STALE line (got $rc)"; exit 1; }
+      - name: Logs del gateway
+        if: always()
+        run: |
+          source gcs-mcp-tp4/emulador/config.sh
+          compose logs --no-log-prefix gateway || true
+      - name: Bajar
+        if: always()
+        run: gcs-mcp-tp4/emulador/bajar.sh

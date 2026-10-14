@@ -6,7 +6,8 @@ exige 7 subsecciones `### 1.` … `### 7.`, en orden. En cada una tienen que apa
 términos (sin distinguir mayúsculas) y al menos un enlace markdown a `evidencia/`:
   1. storage-mcp, 0.6.0, gcsgrep-test-g4-mcp
   2. --enable-destructive-tools, write_object_safe
-  3. objectViewer, GOOGLE_APPLICATION_CREDENTIALS
+  3. gateway, STORAGE_EMULATOR_HOST, objectViewer (el techo con el emulador, D-9, y su
+     equivalente en el GCS real)
   4. sintético
   5. hook, delete_object, 403 — en ese orden
   6. trifecta, lector-fixtures
@@ -25,7 +26,7 @@ TITULO = "nota de seguridad"
 TERMINOS = {
     1: ["storage-mcp", "0.6.0", "gcsgrep-test-g4-mcp"],
     2: ["--enable-destructive-tools", "write_object_safe"],
-    3: ["objectViewer", "GOOGLE_APPLICATION_CREDENTIALS"],
+    3: ["gateway", "STORAGE_EMULATOR_HOST", "objectViewer"],
     4: ["sintético"],
     5: ["hook", "delete_object", "403"],
     6: ["trifecta", "lector-fixtures"],

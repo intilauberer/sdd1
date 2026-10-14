@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
 """Capa 3 sin Claude ni hook (spec.md: R-10, VC-10b; también R-9 por el tools/list).
 
-Levanta el server fijado (`@google-cloud/storage-mcp@0.6.0`) por stdio con el ADC
-impersonado de la SA y le habla JSON-RPC directo. Comprueba que:
+Levanta el server fijado (`@google-cloud/storage-mcp@0.6.0`) por stdio y le habla
+JSON-RPC directo. Comprueba que:
 - `tools/list` tiene `write_object_safe` y no `delete_object`;
-- `read_object_metadata` sobre `logs/app-2026-10-01.log` devuelve la `generation`
-  (la credencial anda);
-- `write_object_safe` devuelve un error con `403` (el techo es IAM, no el hook).
+- `read_object_metadata` sobre `logs/app-2026-10-01.log` devuelve `updated` y `size`
+  (la identidad lee; la 0.6.0 no devuelve `generation`, Hallazgo 2);
+- `write_object_safe` devuelve un error con `403` (el techo está debajo del server).
 
-Antes de cualquier `tools/call` exige que GOOGLE_APPLICATION_CREDENTIALS sea un ADC de
-tipo `impersonated_service_account` que impersona a gcsgrep-tp4-lector@ (GCSGREP_TP4_SA
-pisa el email); si no, se niega con 2. No imprime el contenido del archivo.
+Dos modos (D-9):
+- **Emulador** (`STORAGE_EMULATOR_HOST` definida): tiene que ser exactamente el gateway de
+  solo lectura (`http://127.0.0.1:4443`; `GCSGREP_TP4_GATEWAY` lo pisa); si no, sale con 2.
+  No hay ADC: al server no le llega `GOOGLE_APPLICATION_CREDENTIALS`. El `403` lo emite
+  `emulador/gateway.py`.
+- **GCS real** (sin `STORAGE_EMULATOR_HOST`): antes de cualquier `tools/call` exige que
+  GOOGLE_APPLICATION_CREDENTIALS sea un ADC de tipo `impersonated_service_account` que
+  impersona a gcsgrep-tp4-lector@ (GCSGREP_TP4_SA pisa el email); si no, se niega con 2.
+  No imprime el contenido del archivo. El `403` es de IAM.
 
 Sale con 0 solo si pasan todas; 1 si falla alguna; 2 si no se pudo correr.
 Solo stdlib.
@@ -36,6 +42,7 @@ BUCKET = os.environ.get("GCSGREP_TP4_BUCKET", "gcsgrep-test-g4-mcp")
 PROJECT = os.environ.get("GCSGREP_TP4_PROJECT", "itba-sdd")
 SA_EMAIL = (os.environ.get("GCSGREP_TP4_SA", "").strip()
             or f"gcsgrep-tp4-lector@{PROJECT}.iam.gserviceaccount.com")
+GATEWAY = os.environ.get("GCSGREP_TP4_GATEWAY", "").strip() or "http://127.0.0.1:4443"
 READ_OBJECT = "logs/app-2026-10-01.log"
 WRITE_OBJECT = "prueba-sin-hook.txt"
 STARTUP_TIMEOUT = 90.0
@@ -182,37 +189,63 @@ def adc_identity_problem(adc: str) -> str | None:
     return None
 
 
-def main() -> int:
+def preflight_gcs() -> tuple[int | None, dict[str, str]]:
+    """Modo GCS real: exige el ADC impersonado de la SA. Devuelve (exit o None, env)."""
     adc = os.environ.get("GOOGLE_APPLICATION_CREDENTIALS")
     if not adc:
         print(
-            "ERROR: GOOGLE_APPLICATION_CREDENTIALS is not set.\n"
-            "Export the impersonated ADC created by gcs-mcp-tp4/bucket/iam.sh, e.g.:\n"
+            "ERROR: neither STORAGE_EMULATOR_HOST nor GOOGLE_APPLICATION_CREDENTIALS is set.\n"
+            "Emulator: export STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 (gcs-mcp-tp4/emulador/levantar.sh).\n"
+            "Real GCS: export the impersonated ADC created by gcs-mcp-tp4/gcs-real/bucket/iam.sh, e.g.:\n"
             "  export GOOGLE_APPLICATION_CREDENTIALS=$HOME/.config/gcloud-tp4/application_default_credentials.json",
             file=sys.stderr,
         )
-        return 2
+        return 2, {}
     if not Path(adc).is_file():
         print(f"ERROR: GOOGLE_APPLICATION_CREDENTIALS points to a missing file: {adc}", file=sys.stderr)
-        return 2
+        return 2, {}
     # Antes de cualquier tools/call: el intento de escritura va solo con la SA de solo
     # lectura. Con otra identidad (p. ej. el ADC personal, que puede escribir) no se corre.
     problem = adc_identity_problem(adc)
     if problem:
         print(f"ERROR: refusing to run: {problem}. Use the ADC created by "
-              "gcs-mcp-tp4/bucket/iam.sh (never attempt write_object_safe with another identity).",
+              "gcs-mcp-tp4/gcs-real/bucket/iam.sh (never attempt write_object_safe with another identity).",
               file=sys.stderr)
-        return 2
-    print(f"ADC identity: impersonated {SA_EMAIL}")
+        return 2, {}
+    print(f"Mode: real GCS · ADC identity: impersonated {SA_EMAIL} · ADC: {adc}")
+    return None, dict(os.environ)
+
+
+def preflight_emulator(host: str) -> tuple[int | None, dict[str, str]]:
+    """Modo emulador: STORAGE_EMULATOR_HOST tiene que ser el gateway. Devuelve (exit o None, env)."""
+    if host.rstrip("/") != GATEWAY.rstrip("/"):
+        print(f"ERROR: refusing to run: STORAGE_EMULATOR_HOST is {host!r}, expected the read-only "
+              f"gateway {GATEWAY!r}. Pointing the server at the emulator directly would bypass layer 3.",
+              file=sys.stderr)
+        return 2, {}
+    env = dict(os.environ)
+    # Sin ADC en este modo: si el server cayera al GCS real, no tendría con qué autenticar.
+    env.pop("GOOGLE_APPLICATION_CREDENTIALS", None)
+    print(f"Mode: emulator · STORAGE_EMULATOR_HOST={host} (gcs-mcp-tp4/emulador/gateway.py, "
+          "identity lector@gateway) · no ADC passed to the server")
+    return None, env
+
+
+def main() -> int:
+    host = os.environ.get("STORAGE_EMULATOR_HOST", "").strip()
+    rc, env = preflight_emulator(host) if host else preflight_gcs()
+    if rc is not None:
+        return rc
 
     cmd = server_command()
     if "--enable-destructive-tools" in cmd:
         print("ERROR: the server command enables destructive tools; refusing to run.", file=sys.stderr)
         return 2
 
-    env = dict(os.environ)
-    env.setdefault("GOOGLE_CLOUD_PROJECT", PROJECT)
-    print(f"Bucket: {BUCKET} · project: {env['GOOGLE_CLOUD_PROJECT']} · ADC: {adc}")
+    # Como .mcp.json: GOOGLE_CLOUD_PROJECT sale de GCSGREP_TP4_PROJECT (por defecto itba-sdd),
+    # no del GOOGLE_CLOUD_PROJECT que haya en el entorno de la persona.
+    env["GOOGLE_CLOUD_PROJECT"] = PROJECT
+    print(f"Bucket: {BUCKET} · project: {env['GOOGLE_CLOUD_PROJECT']}")
 
     results: list[tuple[str, bool]] = []
 
@@ -264,12 +297,19 @@ def main() -> int:
             CALL_TIMEOUT,
         )
         text = result_text(meta)
-        gen = re.search(r'"?generation"?\s*[:=]\s*"?(\d+)', text)
         print(f"read_object_metadata text: {short(text)}")
+        # La 0.6.0 no devuelve generation ni checksums (Hallazgo 2): la lectura anda si
+        # vuelve updated y size, sin campo error (los errores llegan como texto, sin isError).
+        try:
+            data = json.loads(text)
+        except ValueError:
+            data = {}
+        ok = (not is_error(meta) and isinstance(data, dict) and "error" not in data
+              and "updated" in data and "size" in data)
         check(
-            f"read_object_metadata on {READ_OBJECT} succeeds with a generation"
-            + (f" ({gen.group(1)})" if gen else ""),
-            not is_error(meta) and "generation" in text,
+            f"read_object_metadata on {READ_OBJECT} succeeds"
+            + (f" (updated {data.get('updated')}, size {data.get('size')})" if ok else ""),
+            ok,
         )
 
         write = server.request(

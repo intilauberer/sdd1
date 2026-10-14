@@ -1,7 +1,7 @@
 {
   "name": "gcsgrep-toolkit",
   "version": "1.0.0",
-  "description": "Especificar los VCs de gcsgrep contra un bucket de GCS real: skills, subagents, hooks y el server MCP storage-mcp 0.6.0 sin tools destructivas. El bucket se lee solo desde el subagent lector-fixtures, que no tiene Bash ni red.",
+  "description": "Especificar los VCs de gcsgrep contra un bucket de GCS (emulado, detrás de un gateway de solo lectura): skills, subagents, hooks y el server MCP storage-mcp 0.6.0 sin tools destructivas. El bucket se lee solo desde el subagent lector-fixtures, que no tiene Bash ni red.",
   "author": { "name": "SDD 73.31 · Grupo 4" },
   "license": "MIT",
   "keywords": ["gcs", "mcp", "storage-mcp", "sdd", "gcsgrep", "vcs"],
@@ -9,7 +9,7 @@
     "project_id": {
       "type": "string",
       "title": "Proyecto de GCP",
-      "description": "Proyecto que usa el server storage-mcp (GOOGLE_CLOUD_PROJECT). La credencial no va acá: entra por GOOGLE_APPLICATION_CREDENTIALS.",
+      "description": "Proyecto que usa el server storage-mcp (GOOGLE_CLOUD_PROJECT). Ningún secreto va acá: el endpoint entra por STORAGE_EMULATOR_HOST (el gateway del emulador) y, en el GCS real, la credencial por GOOGLE_APPLICATION_CREDENTIALS.",
       "default": "itba-sdd",
       "required": false,
       "sensitive": false

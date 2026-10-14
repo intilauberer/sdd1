@@ -1,0 +1,58 @@
+# Emulador de GCS con un gateway de solo lectura delante (spec.md: D-9, R-1, R-2, R-10).
+#
+#   gcs      fake-gcs-server, SOLO en la red `interna` (internal: true) y sin puertos
+#            publicados: desde el host no hay camino directo hasta él.
+#   gateway  el techo de solo lectura (gateway.py). Es lo único publicado, y solo en
+#            127.0.0.1:4443. storage-mcp, check-generations.py y probar-403.sh hablan con él.
+#   admin    curl en la red `interna`, perfil `admin`: hace de "persona del equipo" para
+#            crear el bucket y subir objetos directo al emulador (armar-bucket.sh,
+#            cambiar-objeto.sh). Monta ADMIN_DIR de solo lectura en /work.
+#
+# Las imágenes van fijadas por tag@digest. Se usa con los scripts de esta carpeta
+# (proyecto `gcs-mcp-tp4`), no a mano.
+name: gcs-mcp-tp4
+
+networks:
+  interna:
+    internal: true
+  default: {}
+
+services:
+  gcs:
+    image: fsouza/fake-gcs-server:1.56.1@sha256:797ce226d62f947c009dc40246b30cfb456b8473d8241407f9d6f2c04e4d69ef
+    command:
+      - -scheme
+      - http
+      - -port
+      - "4443"
+      - -public-host
+      - 127.0.0.1:4443
+      - -external-url
+      - http://127.0.0.1:4443
+      - -backend
+      - memory
+    networks: [interna]
+    restart: unless-stopped
+
+  gateway:
+    image: python:3.12-alpine@sha256:1b668429b3511ab407d8e00648891631b0b1a4d7e15e3ca70f38ab5b91ad4ab4
+    command: ["python", "-u", "/app/gateway.py"]
+    environment:
+      UPSTREAM: http://gcs:4443
+      BUCKET: gcsgrep-test-g4-mcp
+      LISTEN_PORT: "8080"
+    volumes:
+      - ./gateway.py:/app/gateway.py:ro
+    ports:
+      - "127.0.0.1:4443:8080"
+    networks: [interna, default]
+    depends_on: [gcs]
+    restart: unless-stopped
+
+  admin:
+    image: curlimages/curl:8.16.0@sha256:463eaf6072688fe96ac64fa623fe73e1dbe25d8ad6c34404a669ad3ce1f104b6
+    profiles: [admin]
+    entrypoint: ["sh"]
+    volumes:
+      - ${ADMIN_DIR:-.}:/work:ro
+    networks: [interna]

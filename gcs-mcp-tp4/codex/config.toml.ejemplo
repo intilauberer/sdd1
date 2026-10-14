@@ -1,15 +1,16 @@
 # EJEMPLO — para Codex: copialo como .codex/config.toml en un proyecto confiado.
 # Es el mismo server que .mcp.json (spec R-3), fijado en 0.6.0 y sin
 # --enable-destructive-tools. Codex no expande ${VAR}: env_vars reenvía las variables
-# desde tu entorno. Ningún secreto en este archivo: la credencial es el ADC impersonado
-# al que apunta GOOGLE_APPLICATION_CREDENTIALS (fuera del repo).
+# desde tu entorno. Ningún secreto en este archivo. Con el emulador (spec D-9),
+# STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 apunta al gateway de solo lectura; para el
+# GCS real, cambiá esa variable por GOOGLE_APPLICATION_CREDENTIALS (gcs-real/mcp.json.ejemplo).
 # Exportá también GOOGLE_CLOUD_PROJECT=itba-sdd (en Codex no hay default ${VAR:-…}).
 # Extra documentado: no se prueba.
 
 [mcp_servers.gcs]
 command = "npx"
 args = ["-y", "@google-cloud/storage-mcp@0.6.0"]
-env_vars = ["GOOGLE_APPLICATION_CREDENTIALS", "GOOGLE_CLOUD_PROJECT"]
+env_vars = ["STORAGE_EMULATOR_HOST", "GOOGLE_CLOUD_PROJECT"]
 
 # Allowlist de tools: lo más cercano, en Codex, a los pasos 1-2 de gcs-allowlist.py.
 # Cualquier tool que no esté acá —write_object_safe o una nueva de la próxima versión
@@ -24,5 +25,6 @@ required = true
 # las tools en la sesión principal y solo deja leer al subagent lector-fixtures (sin
 # Bash ni red). Acá las 3 tools quedan en la misma sesión que tiene shell y red, así que
 # el corte de la trifecta es más débil: el contenido del bucket y el canal de salida
-# conviven. Tampoco se chequea bucket_name. El techo sigue siendo la credencial
-# (roles/storage.objectViewer sobre gcsgrep-test-g4-mcp).
+# conviven. Tampoco se chequea bucket_name. El techo sigue siendo lo que está debajo del
+# server: el gateway de solo lectura con el emulador (D-9), o la credencial
+# (roles/storage.objectViewer sobre gcsgrep-test-g4-mcp) con el GCS real.

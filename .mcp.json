@@ -4,7 +4,7 @@
       "command": "npx",
       "args": ["-y", "@google-cloud/storage-mcp@0.6.0"],
       "env": {
-        "GOOGLE_APPLICATION_CREDENTIALS": "${GOOGLE_APPLICATION_CREDENTIALS}",
+        "STORAGE_EMULATOR_HOST": "${STORAGE_EMULATOR_HOST}",
         "GOOGLE_CLOUD_PROJECT": "${GCSGREP_TP4_PROJECT:-itba-sdd}"
       }
     }

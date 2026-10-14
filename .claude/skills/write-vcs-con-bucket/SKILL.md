@@ -8,13 +8,14 @@ allowed-tools: Read, Grep, Glob, Agent, Write, Edit, Bash(uv run --no-project --
 
 Paso **Especificar** de `gcsgrep`, anclado a un bucket real. **La vara:** la salida
 tiene que contener algo que solo pudo venir del bucket —la línea con el nonce, la
-`generation` que asignó GCS—. Un VC escrito de memoria no lo tiene.
+`generation` que asignó el almacenamiento—. Un VC escrito de memoria no lo tiene.
 
 ## Precondición
 
 El server MCP `gcs` (`.mcp.json`, `@google-cloud/storage-mcp@0.6.0`) conectado, con
-`GOOGLE_APPLICATION_CREDENTIALS` apuntando al ADC de la SA de solo lectura. El bucket es
-`gcsgrep-test-g4-mcp`. Si algo de eso falta, **el bug es la config**, no el skill.
+`STORAGE_EMULATOR_HOST` apuntando al gateway de solo lectura del emulador
+(`http://127.0.0.1:4443`, spec D-9). El bucket es `gcsgrep-test-g4-mcp`. Si algo de eso
+falta, **el bug es la config**, no el skill.
 
 ## Pasos
 
@@ -24,7 +25,7 @@ El server MCP `gcs` (`.mcp.json`, `@google-cloud/storage-mcp@0.6.0`) conectado, 
    o con un veto; el listado vuelve vacío; o alguna lectura devuelve `401`/`403`.
    Respondé exactamente:
 
-   `STOP: gcs server unavailable — <motivo>. The bug is the config (.mcp.json / GOOGLE_APPLICATION_CREDENTIALS), not the skill.`
+   `STOP: gcs server unavailable — <motivo>. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.`
 2. **Leé los FR** que vas a ejercitar en `gcsgrep-tp1/specs/gcsgrep/02-spec.md`: FR-1,
    FR-2, FR-3, FR-9 y FR-10.
 3. **No leas el bucket en la sesión principal** (tiene Bash y red; el hook te veta
@@ -35,9 +36,10 @@ El server MCP `gcs` (`.mcp.json`, `@google-cloud/storage-mcp@0.6.0`) conectado, 
    `mcp__gcs__read_object_metadata` → `mcp__gcs__read_object_content` →
    `mcp__gcs__read_object_metadata`. Usá solo las tablas que devuelve.
 4. **Registrá la procedencia:**
-   `uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/check-generations.py registrar gs://<bucket>/<objeto>#<generation> …`
-   con **cada** argumento en la forma `gs://<bucket>/<objeto>#<generation>`, con la
-   `generation` de la tabla "Objetos" del subagent: el `#<generation>` es obligatorio y un
+   `uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/check-generations.py registrar gs://<bucket>/<objeto>@<updated> …`
+   con **cada** argumento en la forma `gs://<bucket>/<objeto>@<updated>`, con el `updated`
+   de la tabla "Objetos" del subagent, copiado tal cual (`read_object_metadata` no da la
+   `generation`; el script la lee y la imprime). El `@<updated>` es obligatorio y un
    argumento sin él sale con 2 (`CANNOT REGISTER: invalid argument …`). Si sale ≠ 0
    (`MISMATCH`: el objeto cambió entre las dos lecturas; `MISSING`: ya no existe; o
    `CANNOT REGISTER`), frená (paso 1).
@@ -51,7 +53,7 @@ El server MCP `gcs` (`.mcp.json`, `@google-cloud/storage-mcp@0.6.0`) conectado, 
 
 ```md
 ## VC-B<n> · <FR-k> · <título>
-> Con el objeto `gs://<bucket>/<objeto>` (generation `<g>`), cuya línea <L> es
+> Con el objeto `gs://<bucket>/<objeto>` (generation `<g>`, la del bloque de procedencia), cuya línea <L> es
 > `<texto exacto>`, `gcsgrep <args>` sale con código <c> y stdout es exactamente `<…>`.
 
 <!-- procedencia:inicio -->
