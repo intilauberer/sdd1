@@ -57,6 +57,7 @@ Rutas: las que empiezan con `gcs-mcp-tp4/` o con `.` son relativas a la raíz de
 - `.claude/hooks/regresion-antes-de-commit.py`: `gcs-mcp-tp4` se suma a la tupla de carpetas cuyos enlaces se chequean.
 - `gcsgrep-tp1/scripts/check-doc-links.py`: suma `./criterios.md` y `../ejemplo-guiado/nota-seguridad.md` (enlaces del enunciado inmutable al monorepo del curso) a `ENLACES_EXTERNOS_CONOCIDOS`, e ignora las carpetas `hidden-content/` con dos líneas nuevas. El conjunto es global: la excepción vale para **todas** las carpetas que chequea el script (TP1, TP2, L3, TP4), y un `./criterios.md` roto en otro TP ya no se detectaría. Se acepta: es el patrón de enlaces del monorepo del curso, el mismo que ya seguían `../../entrega.md` y `../ejemplo-guiado/`, y ningún otro TP tiene un `criterios.md` propio. La exclusión de `hidden-content/` tampoco afecta a otros TPs, porque ninguno tiene esa carpeta.
 - `.gitignore`: suma `gcs-mcp-tp4/hidden-content/`, que no se commitea. Ahí hay dos cosas: el material de la cátedra (lección, slides, ejemplo guiado) y los **artefactos crudos de las corridas** (`raw/*.jsonl`, `.err`, `.txt`). Los crudos quedan afuera porque traen rutas absolutas locales, y `raw/01-mcp-list.txt` además los conectores personales del integrante. La evidencia commiteada son los `.md` de `evidencia/`, renderizados desde esos crudos con `scripts/transcripcion.py` y con las rutas reemplazadas por `<repo>`.
+- `README.md` (raíz): una fila para `gcs-mcp-tp4/` en la tabla de TPs y una línea para `tp4.yml` en CI.
 
 **Fuera:**
 - El resto de `gcsgrep-tp1/**` y de `tmux-ssh-tp2/**`.
@@ -77,7 +78,7 @@ Rutas: las que empiezan con `gcs-mcp-tp4/` o con `.` son relativas a la raíz de
 
 > **VC-0 (invariante de alcance)** — `gcs-mcp-tp4/scripts/check-alcance.py` sale con `0`.
 > Compara `git diff --name-only origin/main...HEAD` con las listas Dentro: un archivo
-> modificado fuera de ellas sale con `1` y lo nombra. Para los cuatro archivos del cambio
+> modificado fuera de ellas sale con `1` y lo nombra. Para los cinco archivos del cambio
 > aditivo, solo admite líneas agregadas, salvo la tupla de `regresion-antes-de-commit.py`.
 > **Evidencia:** `evidencia/06-plugin.md`, "Chequeos offline".
 

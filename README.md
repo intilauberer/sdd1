@@ -7,6 +7,7 @@ Trabajos prácticos del grupo. Cada uno vive en su carpeta y es autocontenido.
 | [`gcsgrep-tp1/`](./gcsgrep-tp1/) | Lección 1 · `gcsgrep` | Greenfield: `grep` sobre objetos de GCS. Spec, ADRs, plan, código y verificación. Incluye [la corrección de la cátedra](./gcsgrep-tp1/docs/correccion-catedra-iteracion-1.md) (5/10) |
 | [`tmux-ssh-tp2/`](./tmux-ssh-tp2/) | Lección 2 · `tmux` con SSH nativo | Brownfield: notas de exploración y spec de `ssh-pane` sobre el `tmux` real. **Sin implementación**, por consigna |
 | [`toolkit-tp3/`](./toolkit-tp3/) | Lección 3 · Toolkit SDD | Skill `write-spec-brownfield`, subagent `revisor-spec` y dos hooks que bloquean, en [`.claude/`](./.claude/), con la evidencia de cada uno corriendo |
+| [`gcs-mcp-tp4/`](./gcs-mcp-tp4/) | Lección 4 · MCP y plugins | `gcsgrep` por MCP (`@google-cloud/storage-mcp` 0.6.0): skill `write-vcs-con-bucket` que especifica VCs leyendo el bucket, subagent `lector-fixtures` sin Bash, hook allowlist, plugin `gcsgrep-toolkit` y [nota de seguridad](./gcs-mcp-tp4/README.md#nota-de-seguridad). **Contra un emulador local** detrás de un gateway de solo lectura (desvío D-9: sin facturación de GCP) |
 
 ## Agentes adversariales
 
@@ -40,3 +41,5 @@ por los permisos. No es un sandbox.
   contra GCS real. Es manual.
 - [`tp2.yml`](./.github/workflows/tp2.yml): que cada `archivo:línea` del TP2
   exista en el `tmux` fijado, y que no se haya colado código C.
+- [`tp4.yml`](./.github/workflows/tp4.yml): los chequeos offline del TP4 (allowlist,
+  config sin secretos, plugin armado, alcance, nota) y el muro contra el emulador.

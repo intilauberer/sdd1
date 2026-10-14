@@ -6,7 +6,7 @@ sin commitear no cuentan) con las listas Dentro:
   - se crean: `.mcp.json`, `.claude/hooks/gcs-allowlist.py`, `.claude/skills/write-vcs-con-bucket/`,
     `.claude/agents/lector-fixtures.md`, `gcs-mcp-tp4/**`, `.github/workflows/tp4.yml`;
   - cambio aditivo: `.claude/settings.json`, `.claude/hooks/regresion-antes-de-commit.py`,
-    `gcsgrep-tp1/scripts/check-doc-links.py` y `.gitignore`. En esos cuatro solo se admiten líneas
+    `gcsgrep-tp1/scripts/check-doc-links.py`, `.gitignore` y `README.md` (raíz). En esos cinco solo se admiten líneas
     agregadas, salvo la tupla de carpetas de `regresion-antes-de-commit.py`, que se puede
     reemplazar por otra que siga teniendo `gcsgrep-tp1` y `tmux-ssh-tp2` y sume `gcs-mcp-tp4`.
 
@@ -37,6 +37,7 @@ ADITIVOS = {
     ".claude/hooks/regresion-antes-de-commit.py",
     "gcsgrep-tp1/scripts/check-doc-links.py",
     ".gitignore",
+    "README.md",
 }
 TUPLA_ARCHIVO = ".claude/hooks/regresion-antes-de-commit.py"
 TUPLA_RE = re.compile(r"^\s*for carpeta in \((.*)\):\s*$")
