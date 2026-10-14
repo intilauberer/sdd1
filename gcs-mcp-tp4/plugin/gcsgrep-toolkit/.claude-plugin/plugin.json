@@ -1,0 +1,34 @@
+{
+  "name": "gcsgrep-toolkit",
+  "version": "1.0.0",
+  "description": "Especificar los VCs de gcsgrep contra un bucket de GCS real: skills, subagents, hooks y el server MCP storage-mcp 0.6.0 sin tools destructivas. El bucket se lee solo desde el subagent lector-fixtures, que no tiene Bash ni red.",
+  "author": { "name": "SDD 73.31 · Grupo 4" },
+  "license": "MIT",
+  "keywords": ["gcs", "mcp", "storage-mcp", "sdd", "gcsgrep", "vcs"],
+  "userConfig": {
+    "project_id": {
+      "type": "string",
+      "title": "Proyecto de GCP",
+      "description": "Proyecto que usa el server storage-mcp (GOOGLE_CLOUD_PROJECT). La credencial no va acá: entra por GOOGLE_APPLICATION_CREDENTIALS.",
+      "default": "itba-sdd",
+      "required": false,
+      "sensitive": false
+    },
+    "bucket": {
+      "type": "string",
+      "title": "Bucket de prueba",
+      "description": "Único bucket que el hook gcs-allowlist deja leer, y el que usa el skill write-vcs-con-bucket. Tiene que ser un bucket sintético, nunca uno con datos reales.",
+      "default": "gcsgrep-test-g4-mcp",
+      "required": false,
+      "sensitive": false
+    },
+    "salida": {
+      "type": "string",
+      "title": "Archivo de salida de los VCs",
+      "description": "Ruta, relativa a la raíz del proyecto, donde el skill write-vcs-con-bucket escribe los VCs con su procedencia.",
+      "default": "gcs-mcp-tp4/salida/vcs-bucket.md",
+      "required": false,
+      "sensitive": false
+    }
+  }
+}

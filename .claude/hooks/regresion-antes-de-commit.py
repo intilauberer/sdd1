@@ -29,7 +29,7 @@ if not re.search(r"(?:^|[;&|(]\s*|\s)git(?:\s+-[cC]\s*\S+)*\s+commit\b", comando
 raiz = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
 fallos = []
 
-for carpeta in ("gcsgrep-tp1", "tmux-ssh-tp2"):
+for carpeta in ("gcsgrep-tp1", "tmux-ssh-tp2", "gcs-mcp-tp4"):
     r = subprocess.run([sys.executable, "gcsgrep-tp1/scripts/check-doc-links.py", carpeta],
                        cwd=raiz, capture_output=True, text=True, encoding="utf-8")
     if r.returncode != 0:

@@ -5,3 +5,4 @@ __pycache__/
 .venv/
 tmux-ssh-tp2/.cache/
 brownfield-context/
+gcs-mcp-tp4/hidden-content/
