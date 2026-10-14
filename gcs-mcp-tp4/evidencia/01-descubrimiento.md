@@ -21,14 +21,13 @@ exit=0
 Se omitieron 10 líneas de servers del usuario (conectores `claude.ai …` y plugins
 instalados a nivel usuario), ajenos al repo.
 
-**Resultado: no cumple la letra de VC-4 en este punto.** `claude mcp list` muestra `gcs`
-como `⏸ Pending approval`, no como conectado: el server de `.mcp.json` (alcance proyecto)
-nunca se aprobó en una sesión interactiva en esta máquina (`enabledMcpjsonServers` vacío
-para el proyecto). En `claude -p`, en cambio, el server **sí** conecta: el `init` de la
-corrida de abajo dice `gcs (connected)` con 15 tools. Pendiente manual: abrir `claude`
-en la raíz, aprobar `gcs` y pegar acá la salida nueva de `claude mcp list`.
-
-<!-- pegar acá la salida de `claude mcp list` después de aprobar gcs -->
+**Estado observado: `⏸ Pending approval`.** La spec v1.5 (VC-4) pide registrar el estado
+de `gcs` en `claude mcp list` tal como se observó, y es este. El motivo: `gcs` es un server
+de alcance proyecto (`.mcp.json`), y `claude mcp list` solo lo muestra conectado después de
+aprobarlo en una sesión interactiva de `claude`. En esta máquina no se aprobó
+(`enabledMcpjsonServers` vacío para el proyecto). `claude -p`, en cambio, carga los servers
+del proyecto sin pedir aprobación, según la doc. Así se ve en el `init` de la corrida de
+abajo: `gcs` (connected), `source: project`, 15 tools.
 
 ## El agente listando las tools
 
@@ -102,9 +101,10 @@ server gcs en el init: [{'name': 'gcs', 'status': 'connected', 'source': 'projec
 tool_use en la corrida: 0
 ```
 
-**VC-4 (respuesta): pasa.** Las 15 tools de la 0.6.0 aparecen como `mcp__gcs__<tool>` y
+**VC-4 (spec v1.5): pasa.** Las 15 tools de la 0.6.0 aparecen como `mcp__gcs__<tool>` y
 `delete_object` no aparece. El agente respondió desde la lista de tools de la sesión, sin
-llamar a ninguna (0 `tool_use`).
+llamar a ninguna (0 `tool_use`). El estado de `claude mcp list` quedó registrado como se
+observó, `Pending approval` (sección de arriba).
 
 ## Config
 
@@ -133,3 +133,75 @@ expone `write_object_new`, `upload_object_new` y `copy_object_new`; en la 0.6.0 
 arriba. Una denylist con los nombres del enunciado no vetaría nada; por eso el hook es
 una allowlist, y la prueba de la capa 1 ([`04-muro.md`](./04-muro.md#capa-1)) usa
 `write_object_safe`.
+
+## Sin `STORAGE_EMULATOR_HOST`: falla cerrado
+
+Respalda lo que dice R-3 de la spec: si falta la variable, el server falla cerrado en
+cada llamada, en vez de caer al GCS real. `.mcp.json` le pasa `"${STORAGE_EMULATOR_HOST}"`
+sin default, así que, con la variable sin exportar, el server recibe el texto literal o
+un valor vacío. Nunca le llega una variable ausente. Con el literal falló la corrida 2
+de VC-5a con el plugin (`Only absolute URLs are supported`,
+[06](./06-plugin.md#resultado-de-vc-11b)). Acá se prueban los dos valores contra el
+server fijado, por JSON-RPC directo, sin Claude ni hook.
+
+La prueba reusa la clase `Server` de [`scripts/probar-server-sin-hook.py`](../scripts/probar-server-sin-hook.py).
+El entorno del server es mínimo: `PATH`, `GOOGLE_CLOUD_PROJECT`, sin
+`GOOGLE_APPLICATION_CREDENTIALS`, y `HOME` en un directorio temporal vacío. Así, si el
+server intentara ir al GCS real, no encontraría el ADC personal. La variable ausente del
+todo no se prueba: `.mcp.json` no la produce, y probarla podría usar una credencial real.
+Corrida del 2026-10-14 a las 21:54Z (salida cruda en `hidden-content/raw/01-sin-emulador.txt`):
+
+```python
+import importlib.util, os, sys, tempfile, json
+spec = importlib.util.spec_from_file_location("p", "gcs-mcp-tp4/scripts/probar-server-sin-hook.py")
+p = importlib.util.module_from_spec(spec); spec.loader.exec_module(p)
+cmd = p.server_command()
+home = tempfile.mkdtemp()  # HOME vacío: sin ~/.config/gcloud, así no hay ADC al que caer
+for label, value in (("literal", "${STORAGE_EMULATOR_HOST}"), ("vacío", "")):
+    env = {"PATH": os.environ["PATH"], "HOME": home,
+           "npm_config_cache": os.path.expanduser("~/.npm"),
+           "GOOGLE_CLOUD_PROJECT": "itba-sdd", "STORAGE_EMULATOR_HOST": value}
+    print(f"\n=== STORAGE_EMULATOR_HOST={value!r} ({label}); sin GOOGLE_APPLICATION_CREDENTIALS; HOME vacío ===")
+    s = p.Server(cmd, env)
+    try:
+        s.request("initialize", {"protocolVersion": "2025-06-18", "capabilities": {},
+                                 "clientInfo": {"name": "probe-sin-emulador", "version": "0"}}, p.STARTUP_TIMEOUT)
+        s.notify("notifications/initialized")
+        r = s.request("tools/call", {"name": "list_objects",
+                      "arguments": {"bucket_name": "gcsgrep-test-g4-mcp", "max_results": 5}}, p.CALL_TIMEOUT)
+        print("RESULT TEXT:", p.result_text(r))
+    finally:
+        s.close()
+```
+
+```
+Server command from .mcp.json: npx -y @google-cloud/storage-mcp@0.6.0
+
+=== STORAGE_EMULATOR_HOST='${STORAGE_EMULATOR_HOST}' (literal); sin GOOGLE_APPLICATION_CREDENTIALS; HOME vacío ===
+
+--> request #1 initialize {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "probe-sin-emulador", "version": "0"}}
+<-- response #1 {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": true}}, "serverInfo": {"name": "storage-mcp-server", "version": "0.6.0"}}
+
+--> notification notifications/initialized
+
+--> request #2 tools/call {"name": "list_objects", "arguments": {"bucket_name": "gcsgrep-test-g4-mcp", "max_results": 5}}
+<-- response #2 {"content": [{"type": "text", "text": "{\"error\":\"Error listing objects: Only absolute URLs are supported\",\"error_type\":\"Unknown\"}"}]}
+RESULT TEXT: {"error":"Error listing objects: Only absolute URLs are supported","error_type":"Unknown"}
+
+=== STORAGE_EMULATOR_HOST='' (vacío); sin GOOGLE_APPLICATION_CREDENTIALS; HOME vacío ===
+
+--> request #1 initialize {"protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": {"name": "probe-sin-emulador", "version": "0"}}
+<-- response #1 {"protocolVersion": "2025-06-18", "capabilities": {"tools": {"listChanged": true}}, "serverInfo": {"name": "storage-mcp-server", "version": "0.6.0"}}
+
+--> notification notifications/initialized
+
+--> request #2 tools/call {"name": "list_objects", "arguments": {"bucket_name": "gcsgrep-test-g4-mcp", "max_results": 5}}
+<-- response #2 {"content": [{"type": "text", "text": "{\"error\":\"Error listing objects: request to https://storage/v1/b/gcsgrep-test-g4-mcp/o?maxResults=5 failed, reason: getaddrinfo ENOTFOUND storage\",\"error_type\":\"Unknown\"}"}]}
+RESULT TEXT: {"error":"Error listing objects: request to https://storage/v1/b/gcsgrep-test-g4-mcp/o?maxResults=5 failed, reason: getaddrinfo ENOTFOUND storage","error_type":"Unknown"}
+```
+
+**Resultado:** las dos variantes fallan cerradas en `list_objects`, y ninguna llega a una
+credencial:
+- con el literal: `Error listing objects: Only absolute URLs are supported`;
+- con el vacío: `… request to https://storage/v1/b/gcsgrep-test-g4-mcp/o?maxResults=5 failed, reason: getaddrinfo ENOTFOUND storage`. La librería arma la URL con el host vacío, `storage` queda como nombre de host y no resuelve.
+

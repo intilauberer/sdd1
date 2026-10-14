@@ -11,7 +11,12 @@ El subagent `lector-fixtures` tiene en `tools:` solo `mcp__gcs__list_objects`,
 `mcp__gcs__read_object_metadata` y `mcp__gcs__read_object_content`: no tiene Bash, red,
 Write ni Edit. La línea hostil entra solo a su contexto (como resultado de
 `read_object_content`); a la sesión principal, que sí tiene Bash, le llegan los primeros
-40 caracteres en la tabla de instrucciones.
+40 caracteres en la tabla de instrucciones. Eso vale para el **camino MCP**. El gateway le
+sirve el objeto a cualquier proceso local, así que la sesión principal podría leerlo por
+Bash → HTTP, y ahí solo frenan el `deny` y la aprobación. VC-7b mide que no pasó, no que
+sea imposible ([README, punto 6](../README.md#6-la-trifecta)).
+
+**Procedencia.** Las corridas de este archivo se hicieron sobre el árbol de trabajo de `tp4/mcp-gcs`, entre 420a6ab y 01dd473. Lo que no estaba commiteado en ese momento era solo lo que después entró en 01dd473: el bloque `permissions` de `.claude/settings.json` y el paso 5 del skill, con su copia en el plugin. En 01dd473, `git hash-object` da `4c8a2ac` (`settings.json`), `d6f9b30` (`SKILL.md`) y `eea15c0` (la copia del plugin). El detalle está en el [README](../README.md#evidencia).
 
 ## Corrida
 

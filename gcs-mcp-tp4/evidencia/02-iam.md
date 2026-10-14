@@ -114,9 +114,10 @@ Los `403` reales que emite (subida, borrado) y sus líneas `DENY` en el log est�
 ## Bucket y objetos
 
 El bucket se armó con `gcs-mcp-tp4/emulador/levantar.sh` y
-`gcs-mcp-tp4/emulador/armar-bucket.sh`. Salida guardada de `armar-bucket.sh` (llegó al
-manifiesto y a las instrucciones finales, que con `set -e` solo se imprimen si todo salió
-bien; el exit code no quedó guardado):
+`gcs-mcp-tp4/emulador/armar-bucket.sh`. **El exit code de esa corrida no se guardó.** No
+se vuelve a correr: generaría un nonce nuevo y dejaría inválida la salida del skill
+(`salida/vcs-bucket.md` y la evidencia de 03 y 05). Lo que sí queda es la salida
+guardada:
 
 ```
 Emulator bucket: gcsgrep-test-g4-mcp (via admin container -> http://gcs:4443, internal network)
@@ -149,6 +150,51 @@ raros/blob.bin                            78  1792009896702425  application/octe
 total: 6
 ```
 
+Por qué esa salida implica exit `0`. El script corre con `set -euo pipefail` (línea 7), y
+el chequeo de los 6 objetos sale con `1` **antes** de imprimir la línea "Bucket contains
+exactly…" ([`emulador/armar-bucket.sh`](../emulador/armar-bucket.sh), líneas 104–119):
+
+```bash
+   104	# 4. El bucket tiene solo los 6 objetos de R-1 (leído por el gateway).
+   105	EXPECTED="$(printf '%s\n' "${OBJECTS[@]}" | sort)"
+   106	LISTED="$(list_names | sort)"
+   107	UNEXPECTED="$(comm -13 <(printf '%s\n' "$EXPECTED") <(printf '%s\n' "$LISTED") | sed '/^$/d')"
+   108	MISSING="$(comm -23 <(printf '%s\n' "$EXPECTED") <(printf '%s\n' "$LISTED") | sed '/^$/d')"
+   109	if [[ -n "$MISSING" ]]; then
+   110	  echo "FAIL: missing objects after upload: $(tr '\n' ' ' <<<"$MISSING")" >&2
+   111	  exit 1
+   112	fi
+   113	if [[ -n "$UNEXPECTED" ]]; then
+   114	  echo >&2
+   115	  echo "WARNING: unexpected objects: $(tr '\n' ' ' <<<"$UNEXPECTED")" >&2
+   116	  echo "Remove them (e.g. gcs-mcp-tp4/emulador/bajar.sh && levantar.sh && armar-bucket.sh)." >&2
+   117	  exit 1
+   118	fi
+   119	echo "Bucket contains exactly the ${#OBJECTS[@]} expected objects (listed via the gateway)."
+```
+
+Si faltaba o sobraba un objeto, el script salía con `1` sin imprimir esa línea, y está en
+la salida guardada. Después de esa línea solo quedan el manifiesto y el texto final.
+Esto es una inferencia sobre el código, no un exit code registrado. El job `emulator` de
+CI (`tp4.yml`) corre el script y exige `0`, pero no hay una corrida de CI guardada en el
+repo.
+
+Listado **por el gateway**, de nuevo, el 2026-10-14 a las 21:56Z, al revisar el PR (mismo resultado que una corrida unos minutos antes). La
+`generation` de `logs/app-2026-10-02.log` es otra porque `cambiar-objeto.sh` (VC-6a) volvió
+a subir ese objeto. Las demás coinciden con las de arriba:
+
+```
+$ curl -s http://127.0.0.1:4443/storage/v1/b/gcsgrep-test-g4-mcp/o   # por el gateway; columnas: name, size, generation, contentType
+name                                     size        generation  contentType
+fixtures/hostil/notas.log                 265  1792009896704725  text/plain
+logs/anidado/2026/10/14/worker.log         96  1792009896698207  text/plain
+logs/app-2026-10-01.log                   204  1792009896692382  text/plain
+logs/app-2026-10-02.log                    87  1792011270985367  text/plain
+raros/access.log.gz                        54  1792009896700340  application/gzip
+raros/blob.bin                             78  1792009896702425  application/octet-stream
+total: 6
+```
+
 Exactamente los 6 objetos de R-1, con el `contentType` fijado (`text/plain` los `.log`,
 `application/gzip` el `.gz`, `application/octet-stream` el `.bin`).
 
@@ -162,12 +208,13 @@ $ git grep -F "$(cat ~/.config/gcloud-tp4/nonce.txt)" 420a6ab5b4149497802d3db2f2
 exit=1
 ```
 
-**VC-1: pasa.** 6 objetos exactos por el gateway; `git grep` del nonce en el commit
-anterior a la corrida sale con `1`.
+**VC-1: pasa, con una salvedad.** Hay 6 objetos exactos por el gateway, en los dos
+listados. `git grep` del nonce en el commit anterior a la corrida sale con `1`. El exit
+`0` de `armar-bucket.sh` no se registró: sale del código, como se explica arriba.
 
 ## El equivalente en el GCS real (no ejecutado)
 
-> **No se ejecutó.** Sin facturación no hay bucket real (D-9). Queda listo para correr.
+> **No se ejecutó.** Sin facturación no hay bucket real (D-9). Queda listo para correr, salvo el punto 4 de [`gcs-real/README.md`](../gcs-real/README.md), que pide editar `check-config.py` antes.
 
 En el GCS real, el techo es IAM: [`gcs-real/bucket/iam.sh`](../gcs-real/bucket/iam.sh)
 crea la SA `gcsgrep-tp4-lector@itba-sdd.iam.gserviceaccount.com`, le da

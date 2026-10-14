@@ -6,7 +6,7 @@ allowed-tools: Read, Grep, Glob, Agent, Write, Edit, Bash(uv run --no-project --
 
 # write-vcs-con-bucket
 
-Paso **Especificar** de `gcsgrep`, anclado a un bucket real. **La vara:** la salida
+Paso **Especificar** de `gcsgrep`, anclado a un bucket de verdad (hoy emulado detrás de un gateway de solo lectura, D-9). **La vara:** la salida
 tiene que contener algo que solo pudo venir del bucket —la línea con el nonce, la
 `generation` que asignó el almacenamiento—. Un VC escrito de memoria no lo tiene.
 

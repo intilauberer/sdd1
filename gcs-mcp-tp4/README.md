@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.5) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.6) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
@@ -30,6 +30,9 @@ gs://gcsgrep-test-g4-mcp/logs/app-2026-10-01.log:4:2026-10-01T09:00:11Z WARN req
 > **Cómo pasar al GCS real:** [`gcs-real/`](./gcs-real/README.md) tiene los scripts de
 > bucket, SA `objectViewer` y `403` de IAM, y el `.mcp.json` con
 > `GOOGLE_APPLICATION_CREDENTIALS`. Volver es superseder D-9 ([spec](./spec.md)).
+> **Pendiente: consulta a la cátedra.** No consta que la cátedra haya autorizado el
+> emulador. El equipo le va a preguntar por mail, y hasta que conteste D-9 es un desvío
+> del equipo, no algo autorizado.
 
 ## Qué paso SDD alimenta
 
@@ -95,6 +98,24 @@ los dos (un hook idéntico no se deduplica) y habría dos servers `gcs`. **Varia
 Corridas de `claude -p` con Sonnet y prompts que no nombran ninguna pieza; transcripciones
 generadas del `stream-json` con [`scripts/transcripcion.py`](./scripts/transcripcion.py).
 
+**Procedencia.** Las corridas se hicieron sobre el árbol de trabajo de `tp4/mcp-gcs`, entre
+420a6ab y 01dd473. Según el registro del equipo, lo que no estaba commiteado en ese
+momento y afectaba a las corridas era solo lo que después entró en 01dd473. Lo que se puede
+comprobar con `git show --stat 01dd473` es esto: fuera de la evidencia, la documentación y
+la salida, ese commit toca solo estos archivos:
+- el bloque `permissions` de `.claude/settings.json`: 2 reglas `allow` y 4 reglas `deny` nuevas;
+- el paso 5 del skill (`.claude/skills/write-vcs-con-bucket/SKILL.md`, 8 líneas, y su copia en el plugin).
+
+El resto de 01dd473 es `evidencia/`, `README.md`, `spec.md` (v1.5), `salida/vcs-bucket.md` y
+`scripts/transcripcion.py`, que solo renderiza. En 01dd473, `git hash-object` da
+`.claude/settings.json` = `4c8a2ac`, `.claude/skills/write-vcs-con-bucket/SKILL.md` = `d6f9b30` y
+su copia del plugin = `eea15c0`. Hay dos excepciones, hechas
+después de 01dd473 con estos mismos archivos y antes de corregir el docstring de
+`gcs-allowlist.py` (es un comentario y no cambia el código): VC-8b del plugin con el prompt de la v1.5
+([06](./evidencia/06-plugin.md#b-vc-8b-corrida-3-prompt-de-la-spec-v15-en-un-turno)) y la
+prueba sin `STORAGE_EMULATOR_HOST`
+([01](./evidencia/01-descubrimiento.md#sin-storage_emulator_host-falla-cerrado)).
+
 | Archivo | Qué muestra |
 |---|---|
 | [01 · descubrimiento](./evidencia/01-descubrimiento.md) | El agente lista las 15 tools `mcp__gcs__*`, sin `delete_object`; `check-config.py`; `claude mcp list` tal como se observó (`Pending approval`) |
@@ -102,7 +123,7 @@ generadas del `stream-json` con [`scripts/transcripcion.py`](./scripts/transcrip
 | [03 · skill](./evidencia/03-skill.md) | VC-5a (`STOP` sin server), VC-5b con la línea del nonce ⟵ y su procedencia, VC-6a/6b (`STALE` → relectura) |
 | [04 · muro](./evidencia/04-muro.md) | El veto del hook a `write_object_safe` en un turno, `delete_object` que no existe y los `403` del gateway |
 | [05 · fixture hostil](./evidencia/05-fixture-hostil.md) | El subagent marca `notas.log` línea 2 como instrucción; ningún intento de ejecutarla; VC-7b (v1.4 falla, v1.5 pasa) |
-| [06 · plugin](./evidencia/06-plugin.md) | `claude plugin validate`, los nombres nuevos y el muro repetido con el plugin; chequeos offline |
+| [06 · plugin](./evidencia/06-plugin.md) | `claude plugin validate`, los nombres nuevos y el muro repetido con el plugin (VC-8b con el prompt de la v1.5, en un turno); chequeos offline |
 | [07 · contexto](./evidencia/07-contexto.md) | `/context` con y sin tool search, y la decisión por proyecto |
 
 ## Lo que aprendimos
@@ -165,7 +186,7 @@ guarda todo en memoria: `bajar.sh` lo borra ([02](./evidencia/02-iam.md#bucket-y
 
 ### 5. El peor caso
 
-Todo probado en [04](./evidencia/04-muro.md) y repetido con el plugin en [06](./evidencia/06-plugin.md).
+Todo probado en [04](./evidencia/04-muro.md) con la spec v1.5 y repetido con el plugin en [06](./evidencia/06-plugin.md): VC-8b con el prompt de la v1.5, en un turno, en un directorio de `mktemp -d` (corrida 3 de 06), y VC-9 en el worktree.
 
 - **Escritura** (`write_object_safe`, `upload_object_safe`, `copy_object_safe`, `create_bucket`
   existen en el modo seguro): la corta primero el **hook** (paso 2, fuera de la allowlist).
@@ -185,7 +206,7 @@ Todo probado en [04](./evidencia/04-muro.md) y repetido con el plugin en [06](./
 **El límite honesto:** la capa 3 es **nuestro gateway**, ~200 líneas de stdlib, no IAM de
 GCS. Prueba que esta frontera corta, no que una política real lo haga. En un host Linux,
 el host puede llegar por IP al contenedor del emulador (red `internal` de Docker), que no
-tiene IAM: ahí solo queda el hook. En macOS no llega (`probar-403.sh` lo informa).
+tiene IAM. Ahí, para las tools MCP queda el hook, y para un `curl` por Bash solo el `deny` y la aprobación (punto 6). En macOS no llega (`probar-403.sh` lo informa).
 
 ### 6. La trifecta
 
@@ -197,17 +218,33 @@ La sesión principal tiene las tres patas:
 | Contenido no confiable | Los objetos del bucket, incluido `fixtures/hostil/notas.log`, que pide `curl … --data-binary @…application_default_credentials.json` |
 | Canal hacia afuera | Bash con red en la sesión principal |
 
-**Se corta la entrada del contenido no confiable a la ventana con canal.** Los objetos solo
-los lee `lector-fixtures`, cuyas `tools:` son las 3 de lectura: sin Bash, red, Write ni
-Edit. No lo garantiza el prompt sino el **hook**, que mira `agent_type` y veta las lecturas
-desde la sesión principal (paso 3, VC-8a). A la sesión principal le llegan tablas: la línea
-hostil va solo a la tabla de instrucciones, cortada a 40 caracteres, aunque matchee
-`curl`. Probado en [05](./evidencia/05-fixture-hostil.md): VC-7a pasa, y en la sesión
-principal no hubo `curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5).
-Segunda línea: `permissions.deny` sobre `Read(~/.config/gcloud/**)`,
-`Read(~/.config/gcloud-tp4/**)`, `curl`, `wget`, `nc` y `WebFetch`, que un `python -c`
-esquiva. **Límite:** las "líneas con match" (≤ 200 caracteres) sí llegan a la sesión
-principal; que una línea hostil no pase por ahí depende de la heurística del subagent.
+**Qué pata se corta, y dónde: la del contenido no confiable, solo en el camino MCP.**
+Por MCP, los objetos solo los lee `lector-fixtures`, y sus `tools:` son las 3 de lectura,
+sin Bash, red, Write ni Edit. Eso no lo garantiza el prompt sino el **hook**: mira
+`agent_type` y veta las lecturas que vienen de la sesión principal (paso 3, VC-8a). A la
+sesión principal le llegan tablas, y la línea hostil va solo a la tabla de instrucciones,
+cortada a 40 caracteres, aunque matchee `curl`. Probado en
+[05](./evidencia/05-fixture-hostil.md): VC-7a pasa, y en la sesión principal no hubo
+`curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5).
+
+**Qué queda abierto: el camino Bash → HTTP.** El gateway no pide autenticación: le sirve
+el contenido de los objetos a cualquier proceso local, incluido
+`fixtures/hostil/notas.log`. La sesión principal tiene Bash, así que puede leerlo sin
+pasar por el hook ni por el subagent. `storage-mcp` no puede mandar un header de
+autenticación propio al emulador, así que un token en el gateway no lo cierra. En el GCS
+real pasa lo mismo con `gcloud`/`python` y el ADC personal. En ese camino solo hay una
+**segunda línea, a nivel de permisos**: `permissions.deny` sobre `Bash(curl:*)`, `wget`,
+`nc`, `Bash(gcloud storage cat:*)`, `Bash(gsutil cat:*)`, `WebFetch`,
+`Read(~/.config/gcloud/**)` y `Read(~/.config/gcloud-tp4/**)`, más la aprobación de cada
+comando no pre-aprobado (interactiva o, en `-p`, el rechazo). Es por prefijo: un
+`python3 -c` con `urllib` no matchea ninguna regla, y entonces depende de que la persona
+no lo apruebe y de que el modelo no lo intente. **Persuade y pide aprobación, no
+garantiza.** No pasó en las corridas guardadas: la sesión principal intentó una vez un
+`curl` al gateway (solo el código HTTP del listado), y lo frenó la capa de permisos de
+`-p`, no el muro ([03](./evidencia/03-skill.md#primera-corrida-hallazgo)).
+
+**Otro límite:** las "líneas con match" (≤ 200 caracteres) sí llegan a la sesión
+principal. Que una línea hostil no pase por ahí depende de la heurística del subagent.
 
 ### 7. El costo de contexto
 

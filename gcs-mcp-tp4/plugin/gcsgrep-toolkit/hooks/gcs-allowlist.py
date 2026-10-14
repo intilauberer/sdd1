@@ -12,14 +12,21 @@ enunciado, así que una denylist escrita con esos nombres no vetaba nada.
 Es la primera de tres capas, no la garantía:
   1. este hook (nombre de la tool, agent_type y bucket);
   2. el server corre sin --enable-destructive-tools: delete_object ni existe (R-9);
-  3. la credencial: la SA gcsgrep-tp4-lector solo tiene roles/storage.objectViewer sobre
-     el bucket; lo que se escape de las dos de arriba lo rechaza GCS con 403 (R-10).
+  3. el techo de solo lectura, debajo del agente y del server (R-10):
+     - modo emulador (D-9, el que se usa hoy): el gateway emulador/gateway.py en
+       127.0.0.1:4443 deja pasar solo GET/HEAD sobre el bucket de prueba; lo que se
+       escape de las dos de arriba lo rechaza el gateway con 403 (no IAM de GCS);
+     - modo GCS real (gcs-real/, en espera): la SA gcsgrep-tp4-lector solo tiene
+       roles/storage.objectViewer sobre el bucket, y GCS lo rechaza con 403.
 
 Por qué mira agent_type (la trifecta): el contenido del bucket es externo y puede traer
 instrucciones. La sesión principal tiene Bash y red; si además leyera ese contenido,
 juntaría las tres patas (datos privados, contenido no confiable, canal de salida). Por
 eso solo el subagent lector-fixtures, que no tiene Bash ni red, puede llamar a `gcs`:
 la sesión principal queda vetada aunque `permissions.allow` pre-apruebe las tools.
+Ese corte vale solo para el camino MCP: este hook no ve Bash, y el gateway sirve el
+contenido a cualquier proceso local. Por Bash -> HTTP quedan solo permissions.deny y la
+aprobación (spec R-7, "Límite").
 
 Sirve igual en el repo y en el plugin; el modo sale del prefijo de tool_name:
   - repo:   mcp__gcs__<tool>, agent_type `lector-fixtures`, bucket de GCS_ALLOWED_BUCKET
