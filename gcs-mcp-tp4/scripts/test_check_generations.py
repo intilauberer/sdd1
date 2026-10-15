@@ -113,7 +113,7 @@ def main() -> int:
         env.update(extra or {})
         PEDIDOS.clear()
         p = subprocess.run([sys.executable, str(SCRIPT), *args], capture_output=True,
-                           text=True, encoding="utf-8", env=env, timeout=60)
+                           text=True, encoding="utf-8", errors="replace", env=env, timeout=60)
         return p.returncode, p.stdout, p.stderr, len(PEDIDOS)
 
     def archivo(nombre, filas, *bloques_extra):

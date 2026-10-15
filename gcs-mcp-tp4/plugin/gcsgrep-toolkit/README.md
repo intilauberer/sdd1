@@ -31,9 +31,11 @@ rutas de este repo. Hacen cumplir invariantes del monorepo de SDD, no de cualqui
   `00-requirements-draft.md` existente, y los ADRs/hallazgos de `gcsgrep-tp1/docs/`.
 - `regresion-antes-de-commit.py`, ante un `git commit`, corre
   `gcsgrep-tp1/scripts/check-doc-links.py` sobre las carpetas de los TPs, relativo a
-  `CLAUDE_PROJECT_DIR`. **En un proyecto que no tenga ese script, veta todo `git commit`**
-  (falla cerrado). No depende de dónde esté copiado el hook, así que el plugin no lo rompe;
-  lo que lo hace inútil fuera de este repo es el proyecto, no el empaquetado.
+  `CLAUDE_PROJECT_DIR`. **En un proyecto que no tenga ese script, avisa por stderr y deja
+  pasar** (exit 0; spec v1.8.2 — hasta la v1.8.1 vetaba todo `git commit` ahí, por ausencia
+  del chequeo y no por una regresión). En este repo sigue vetando un enlace roto con exit 2.
+  No depende de dónde esté copiado el hook, así que el plugin no lo rompe; lo que lo hace
+  inútil fuera de este repo es el proyecto, no el empaquetado.
 - `write-spec-brownfield` corre `.claude/skills/write-spec-brownfield/scripts/vc-huerfanos.py`
   y `revisor-spec` lee `.kiro/agents/prompts/corrector-specs.md`: las dos rutas son del repo.
 
@@ -57,8 +59,13 @@ raíz, spec R-11b), en un comando:
 /plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1
 ```
 
-o por shell, con el bucket propio:
-`claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project --config bucket=<bucket>`.
+o por shell:
+`claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project`.
+Está validado solo con el bucket del TP (`gcsgrep-test-g4-mcp`, el `default` de
+`userConfig.bucket`) contra el gateway del emulador: `--config bucket=<otro>` cambia lo que
+el hook deja leer y lo que el skill pide, pero no el `BUCKET` del gateway ni el
+`GCSGREP_TP4_BUCKET` de `check-generations.py`, que el skill no exporta (ver el README del TP,
+"Cómo se instala").
 
 Para probarlo (VC-11b), cargalo **desde un directorio temporal sin `.claude/` ni
 `.mcp.json`**. Si lo cargás dentro del repo, los hooks del proyecto y los del plugin corren

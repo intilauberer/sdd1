@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.8) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.8.2) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
@@ -26,7 +26,11 @@ gs://gcsgrep-test-g4-mcp/logs/app-2026-10-01.log:4:2026-10-01T09:00:11Z WARN req
 > publicado (`127.0.0.1:4443`), que hace de techo en lugar de IAM.
 > **Qué se pierde:** el `403` de **IAM de GCS** (el de la capa 3 lo emite nuestro gateway)
 > y la **política IAM del bucket** como evidencia ([02](./evidencia/02-iam.md) muestra la
-> topología en su lugar); la `generation` la asigna el emulador.
+> topología en su lugar); la `generation` la asigna el emulador. Además, el gateway **no
+> autentica**: `lector@gateway` es el rótulo que escriben su log y `check-generations.py`,
+> no una identidad verificada (cualquier proceso local que llegue a `127.0.0.1:4443` es ese
+> "lector"); y el techo deja pasar `GET /storage/v1/b/<bucket>` (la metadata del bucket,
+> `storage.buckets.get`), que `roles/storage.objectViewer` no otorga.
 > **Cómo pasar al GCS real:** [`gcs-real/`](./gcs-real/README.md) tiene los scripts de
 > bucket, SA `objectViewer` y `403` de IAM, y el `.mcp.json` con
 > `GOOGLE_APPLICATION_CREDENTIALS`. Volver es superseder D-9 ([spec](./spec.md)).
@@ -94,50 +98,75 @@ Con el plugin, las tools se llaman `mcp__plugin_gcsgrep-toolkit_gcs__<tool>`, el
 `gcsgrep-toolkit:lector-fixtures` y el skill `/gcsgrep-toolkit:write-vcs-con-bucket`.
 **Desde el marketplace del repo, en un comando** (R-11b): la raíz tiene
 [`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json), así que otro equipo lo
-instala, con su bucket, así:
+instala así:
 
 ```bash
-claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project --config bucket=<su-bucket-de-prueba>
+claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project
 ```
 
 `claude plugin validate .` valida el marketplace ([06](./evidencia/06-plugin.md#chequeos-offline-spec-v17)).
-La instalación desde GitHub no se corrió en esta entrega.
+La instalación desde GitHub no se corrió en esta entrega (VC-11c, no ejecutado), y el plugin
+**está validado solo con el bucket del TP**, `gcsgrep-test-g4-mcp` (el `default` de
+`userConfig.bucket`), contra el gateway del emulador. `--config bucket=<otro>` cambia el bucket
+que el hook deja leer y el que el skill le pasa al subagent, pero no alcanza: el gateway
+(`BUCKET` en `docker-compose.yml`) y `check-generations.py` (`GCSGREP_TP4_BUCKET`, que el skill
+no exporta: saldría `2`, `CANNOT REGISTER: bucket … is not the test bucket`) siguen fijados en
+el del TP, y el `.mcp.json` del plugin solo apunta al gateway (`STORAGE_EMULATOR_HOST`). Usar
+otro bucket, o el GCS real, es cambiar esas tres cosas juntas
+([`gcs-real/`](./gcs-real/README.md)), no una opción del plugin.
 
 **No lo cargues dentro de este repo:** los hooks del proyecto y los del plugin correrían
-los dos (un hook idéntico no se deduplica) y habría dos servers `gcs`. **Variante GCS real:**
+los dos (un hook idéntico no se deduplica) y habría dos servers `gcs`. **Los dos hooks de la
+L3 que van en el plugin son de este monorepo:** `artefactos-inmutables.py` solo actúa sobre
+rutas con los nombres de este repo (`enunciado.md`, `00-requirements-draft.md`, ADRs y
+hallazgos de `gcsgrep-tp1/docs/`), y `regresion-antes-de-commit.py`, en un proyecto que no
+tiene `gcsgrep-tp1/scripts/check-doc-links.py`, avisa por stderr y deja pasar el `git commit`
+(v1.8.2; hasta la v1.8.1 lo vetaba todo, por ausencia y no por regresión). En este repo sigue
+vetando un enlace roto (exit 2). **Variante GCS real:**
 [`gcs-real/README.md`](./gcs-real/README.md).
 
 ## Evidencia
 
 Corridas de `claude -p` con Sonnet y prompts que no nombran ninguna pieza; transcripciones
-generadas del `stream-json` con [`scripts/transcripcion.py`](./scripts/transcripcion.py).
+generadas del `stream-json` con [`scripts/transcripcion.py`](./scripts/transcripcion.py), y
+los bloques "Chequeos (calculados sobre el `.jsonl`)" de la v1.8.2 con
+[`scripts/chequeos-evidencia.py`](./scripts/chequeos-evidencia.py) (VC-7a, VC-7b, N-2 y los
+vetos de R-8h; los de las versiones anteriores se calcularon con snippets que no se
+commitearon). Los `.jsonl` crudos no se commitean: los originales (macOS) no están en la
+máquina de la v1.8.2, y los nuevos pesan entre 50 KB y 400 KB cada uno y repiten lo que la
+transcripción muestra; `transcripcion.py` y `chequeos-evidencia.py` son deterministas sobre
+ellos.
 
-**Procedencia.** Las corridas se hicieron sobre el árbol de trabajo de `tp4/mcp-gcs`, entre
-420a6ab y 01dd473. Según el registro del equipo, lo que no estaba commiteado en ese
-momento y afectaba a las corridas era solo lo que después entró en 01dd473. Lo que se puede
-comprobar con `git show --stat 01dd473` es esto: fuera de la evidencia, la documentación y
-la salida, ese commit toca solo estos archivos:
-- el bloque `permissions` de `.claude/settings.json`: 2 reglas `allow` y 4 reglas `deny` nuevas;
-- el paso 5 del skill (`.claude/skills/write-vcs-con-bucket/SKILL.md`, 8 líneas, y su copia en el plugin).
+**Procedencia.** Cada archivo de evidencia dice sobre qué árbol se hizo cada corrida, con
+su ventana UTC y la versión de Claude Code que reporta el `init`. Resumen por tanda:
 
-El resto de 01dd473 es `evidencia/`, `README.md`, `spec.md` (v1.5), `salida/vcs-bucket.md` y
-`scripts/transcripcion.py`, que solo renderiza. En 01dd473, `git hash-object` da
-`.claude/settings.json` = `4c8a2ac`, `.claude/skills/write-vcs-con-bucket/SKILL.md` = `d6f9b30` y
-su copia del plugin = `eea15c0`. Hay dos excepciones, hechas
-después de 01dd473 con estos mismos archivos y antes de corregir el docstring de
-`gcs-allowlist.py` (es un comentario y no cambia el código): VC-8b del plugin con el prompt de la v1.5
-([06](./evidencia/06-plugin.md#b-vc-8b-corrida-3-prompt-de-la-spec-v15-en-un-turno)) y la
-prueba sin `STORAGE_EMULATOR_HOST`
-([01](./evidencia/01-descubrimiento.md#sin-storage_emulator_host-falla-cerrado)).
+| Corridas | Árbol / commit | Cuándo · Claude Code |
+|---|---|---|
+| 03 (VC-5a, VC-5b, VC-6a/6b), 04 (VC-8b, VC-9), 05 (VC-7a/7b) y 06 (a)–(d) | árbol de trabajo de `tp4/mcp-gcs`, entre 420a6ab y 01dd473. `git show --stat 01dd473` muestra que, fuera de evidencia, docs y salida, lo que todavía no estaba commiteado era el bloque `permissions` de `.claude/settings.json` (`4c8a2ac`) y el paso 5 del skill (`d6f9b30`; copia del plugin `eea15c0`) | 2026-10-14 · 2.1.300 (macOS) |
+| 06 (b) corrida 3 (VC-8b del plugin, prompt v1.5) y 01 "Sin `STORAGE_EMULATOR_HOST`" | después de 01dd473, con esos mismos archivos (antes de corregir el docstring de `gcs-allowlist.py`, un comentario) | 2026-10-14 · 2.1.300 |
+| 03 VC-5c y VC-5d; 06 (e) | el plugin rearmado con el `SKILL.md` de la v1.7 | 2026-10-15 · 2.1.296 y 2.1.300 (cada sección lo dice) |
+| Sin Claude: VC-2a…VC-2c, VC-8a (74 casos), VC-14/VC-6c, VC-15 (v1.7); VC-1b en CI (v1.8); chequeos offline de la v1.8.1 (06) | el commit que nombra cada sección | 2026-10-15 |
+| v1.8.2 (ronda 1, revisor A): 04 "R-8h con el agente", 05 "Corrida v1.8.1 (frontmatter válido)", 06 "R-8h con el plugin" | worktree limpio de 4e7faa2 (bucket re-armado ese día: `generation` nuevas), con el hook `regresion-antes-de-commit.py` y los scripts de esta versión sin commitear todavía; nada de eso toca el skill, el subagent ni `gcs-allowlist.py` | 2026-10-15 · 2.1.300 (Windows 11, Docker Desktop 28.1.1) |
+
+**Capa de permisos de las corridas.** Las conclusiones que dependen de un rechazo de
+`claude -p` (03 "Primera corrida", 05 VC-7b, los `permission_denied` de las transcripciones)
+valen con las reglas que había: `permissions` del `.claude/settings.json` del repo
+(commiteado) más el `~/.claude/settings.json` de la máquina. En las corridas originales
+(macOS) el de usuario no se registró. En las de la v1.8.2 (Windows), `~/.claude/settings.json`
+no tiene bloque `permissions` (ni `allow` ni `deny`), así que la capa de aprobación fue
+exactamente la del repo; el server se cargó con `--mcp-config .mcp.json --strict-mcp-config`
+(el mismo archivo commiteado, sin la aprobación interactiva de un server de proyecto) y, con
+el plugin, con `--settings plugin-settings.json` y `--allowedTools` las 3 tools de lectura,
+como en 06.
 
 | Archivo | Qué muestra |
 |---|---|
 | [01 · descubrimiento](./evidencia/01-descubrimiento.md) | El agente lista las 15 tools `mcp__gcs__*`, sin `delete_object`; `check-config.py`; `claude mcp list` tal como se observó (`Pending approval`) |
 | [02 · iam](./evidencia/02-iam.md) | Sin política IAM (D-9): la topología Docker, la allowlist del gateway, el manifiesto del bucket y el equivalente real, no ejecutado |
 | [03 · skill](./evidencia/03-skill.md) | VC-5a (`STOP` sin server), VC-5b con la línea del nonce ⟵ y su procedencia, VC-6a/6b (`STALE` → relectura) |
-| [04 · muro](./evidencia/04-muro.md) | El veto del hook a `write_object_safe` en un turno, `delete_object` que no existe y los `403` del gateway |
-| [05 · fixture hostil](./evidencia/05-fixture-hostil.md) | El subagent marca `notas.log` línea 2 como instrucción; ningún intento de ejecutarla; VC-7b (v1.4 falla, v1.5 pasa) |
-| [06 · plugin](./evidencia/06-plugin.md) | `claude plugin validate`, los nombres nuevos y el muro repetido con el plugin (VC-8b con el prompt de la v1.5, en un turno); chequeos offline |
+| [04 · muro](./evidencia/04-muro.md) | El veto del hook a `write_object_safe` en un turno, `delete_object` que no existe y los `403` del gateway; v1.8.2: el veto de R-8h a `list_objects` desde la sesión principal, con el agente |
+| [05 · fixture hostil](./evidencia/05-fixture-hostil.md) | El subagent marca `notas.log` línea 2 como instrucción; ningún intento de ejecutarla; VC-7b (v1.4 falla, v1.5 pasa); v1.8.2: la corrida repetida con el frontmatter válido y las 3 tools del subagent en el `init` de `--agent` |
+| [06 · plugin](./evidencia/06-plugin.md) | `claude plugin validate`, los nombres nuevos y el muro repetido con el plugin (VC-8b con el prompt de la v1.5, en un turno); chequeos offline; v1.8.2: R-8h con el plugin |
 | [07 · contexto](./evidencia/07-contexto.md) | `/context` con y sin tool search, y la decisión por proyecto |
 
 ## Lo que aprendimos
@@ -159,6 +188,23 @@ prueba sin `STORAGE_EMULATOR_HOST`
   salida en la sesión principal ([05](./evidencia/05-fixture-hostil.md)).
 - **Un prompt ambiguo no prueba el muro:** con el contenido sin especificar, Sonnet
   preguntó en vez de llamar a `write_object_safe`. La v1.5 fija el prompt ([04](./evidencia/04-muro.md)).
+- **Un `: ` sin comillas en la `description` hizo fallar `claude plugin validate`, y el
+  validador decía algo que el runtime no hacía** (revisión cruzada, B1 y ronda 1 A). El
+  frontmatter de `lector-fixtures.md` no parseaba como YAML y `validate` 2.1.300 avisaba que
+  en ese caso `tools:` se descarta en silencio. En la v1.8.1 lo dimos por cierto ("no podemos
+  asegurar que `tools:` estuviera en efecto"). En la v1.8.2 lo medimos, indirectamente: `claude --agent
+  lector-fixtures` (la sesión cargada como ese agent, no el subagent de la tool `Agent`, cuyo
+  stream no expone sus tools) con el agent **viejo** y con el corregido lista, las dos veces,
+  exactamente las 3 tools de lectura. El runtime de 2.1.300 sí tomaba `tools:`; lo que había era un
+  defecto real del archivo que el validador rechaza, y se corrigió igual, con
+  `check-frontmatter.py` en CI. Lección: una advertencia de una herramienta se verifica, no se
+  copia ([05](./evidencia/05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas),
+  [06](./evidencia/06-plugin.md#chequeos-offline-spec-v181-el-frontmatter-de-lector-fixtures-no-parseaba)).
+- **Dos tools de Windows que no estaban en el camino feliz:** `python3` escribe `\r\n` en un
+  pipe (el chequeo de `armar-bucket.sh` que compara listados falla ahí; el bucket queda bien)
+  y `npx` deja un paquete a medias si se lo interrumpe (el server MCP salía `failed` hasta
+  borrar `~/AppData/Local/npm-cache/_npx/<hash>`). Ninguno toca el muro; quedan registrados
+  en la procedencia de las corridas de la v1.8.2.
 
 ## Nota de seguridad
 
@@ -239,7 +285,19 @@ sin Bash, red, Write ni Edit. Eso no lo garantiza el prompt sino el **hook**: mi
 sesión principal le llegan tablas, y la línea hostil va solo a la tabla de instrucciones,
 cortada a 40 caracteres, aunque matchee `curl`. Probado en
 [05](./evidencia/05-fixture-hostil.md): VC-7a pasa, y en la sesión principal no hubo
-`curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5).
+`curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5). **Repetido en la
+v1.8.2 con el frontmatter corregido** ([05, "Corrida v1.8.1 (frontmatter válido)"](./evidencia/05-fixture-hostil.md#corrida-v181-frontmatter-válido)):
+una sesión cargada con `--agent lector-fixtures` lista en su `init` exactamente
+`mcp__gcs__list_objects`, `mcp__gcs__read_object_metadata` y `mcp__gcs__read_object_content`
+(3 tools, sin `Bash`; medición indirecta: es la sesión cargada como el agent, no el subagent
+de la tool `Agent`), la misma corrida de VC-7a da las mismas cuatro cosas y el subagent
+hizo 19 `tool_use`, todos de esas 3 tools. Y R-8h con el agente, no solo con JSON: el mismo
+pedido (`list_objects` del bucket) desde la sesión principal recibe el veto
+`may only run inside the lector-fixtures subagent` y solo sale por el subagent, en el repo
+([04](./evidencia/04-muro.md#r-8h-con-el-agente-list_objects-desde-la-sesión-principal)) y
+con el plugin ([06](./evidencia/06-plugin.md#r-8h-con-el-plugin)). La salvedad histórica de la
+v1.8.1 (hasta `35eda54` el frontmatter no parseaba) queda en 05: la misma prueba con el
+agent viejo también dio las 3 tools, así que `tools:` sí estuvo en efecto en 2.1.300.
 
 **Qué queda abierto: el camino Bash → HTTP.** El gateway no pide autenticación: le sirve
 el contenido de los objetos a cualquier proceso local, incluido

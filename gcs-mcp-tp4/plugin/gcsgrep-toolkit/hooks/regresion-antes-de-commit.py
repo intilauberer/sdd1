@@ -29,6 +29,17 @@ if not re.search(r"(?:^|[;&|(]\s*|\s)git(?:\s+-[cC]\s*\S+)*\s+commit\b", comando
 raiz = os.environ.get("CLAUDE_PROJECT_DIR", os.getcwd())
 fallos = []
 
+# Este hook hace cumplir la línea de base de ESTE monorepo. Empaquetado en el plugin
+# gcsgrep-toolkit, puede correr en un proyecto que no tiene esa estructura: ahí no hay
+# nada que chequear y vetar todo `git commit` sería un veto por ausencia, no por regresión.
+# Se deja pasar y se avisa (stderr con exit 0 no bloquea). En este repo el script existe
+# y el chequeo corre igual que siempre (un enlace roto sigue dando exit 2).
+if not os.path.isfile(os.path.join(raiz, "gcsgrep-tp1", "scripts", "check-doc-links.py")):
+    print("regresion-antes-de-commit: gcsgrep-tp1/scripts/check-doc-links.py not found under "
+          f"{raiz}; this project is not the SDD monorepo, nothing to check (allowing).",
+          file=sys.stderr)
+    sys.exit(0)
+
 for carpeta in ("gcsgrep-tp1", "tmux-ssh-tp2", "gcs-mcp-tp4"):
     r = subprocess.run([sys.executable, "gcsgrep-tp1/scripts/check-doc-links.py", carpeta],
                        cwd=raiz, capture_output=True, text=True, encoding="utf-8")

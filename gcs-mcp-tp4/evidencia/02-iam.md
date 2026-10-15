@@ -55,6 +55,19 @@ Esto sale de [`emulador/docker-compose.yml`](../emulador/docker-compose.yml): l�
 
 ## La allowlist del gateway
 
+Dos cosas que una política IAM real daría y este techo no (revisión cruzada, A7; el
+recuadro D-9 del [README](../README.md#qué-hace) las lista):
+
+- **No autentica.** El gateway no pide credencial: `lector@gateway`, la "cuenta" que
+  aparece en su log y en las filas de procedencia de `check-generations.py`, es un rótulo,
+  no una identidad verificada. Cualquier proceso local que llegue a `127.0.0.1:4443` es ese
+  lector. Con `objectViewer` sobre el bucket, en cambio, GCS sabe *quién* lee.
+- **Deja pasar la metadata del bucket.** `GET /storage/v1/b/<bucket>` (línea 56 de abajo)
+  está en la allowlist porque `storage-mcp` lo pide antes de listar; en IAM eso es
+  `storage.buckets.get`, que `roles/storage.objectViewer` **no** otorga (lo tienen
+  `legacyBucketReader`/`storage.admin`). Es un permiso de más respecto del rol real, de solo
+  lectura igual.
+
 [`emulador/gateway.py`](../emulador/gateway.py), con números de línea:
 
 ```python
