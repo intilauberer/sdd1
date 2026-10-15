@@ -122,6 +122,12 @@ jobs:
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: python3 gcs-mcp-tp4/scripts/probar-server-sin-hook.py
+      - name: Las lecturas del skill por MCP (spike floci)
+        id: lecturas-mcp
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
+        env:
+          STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
+        run: python3 gcs-mcp-tp4/scripts/probar-lecturas-mcp.py
       - name: Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a)
         id: procedencia-y-evidencia-que-envejece-de-
         continue-on-error: ${{ matrix.emulator == 'floci' }}
@@ -183,6 +189,7 @@ jobs:
             echo "| Armar el bucket (VC-1) | ${{ steps.armar-el-bucket-vc-1.outcome }} |"
             echo "| Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a) | ${{ steps.escribir-y-borrar-por-el-gateway-dan-403.outcome }} |"
             echo "| El server MCP sin hook contra el gateway (VC-10b) | ${{ steps.el-server-mcp-sin-hook-contra-el-gateway.outcome }} |"
+            echo "| Las lecturas del skill por MCP | ${{ steps.lecturas-mcp.outcome }} |"
             echo "| Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a) | ${{ steps.procedencia-y-evidencia-que-envejece-de-.outcome }} |"
             echo "| Objetos de más (VC-1b) | ${{ steps.objetos-de-m-s-vc-1b.outcome }} |"
           } | tee -a "$GITHUB_STEP_SUMMARY"
