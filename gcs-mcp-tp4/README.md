@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.8.1) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.8.2) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
