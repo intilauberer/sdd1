@@ -116,8 +116,15 @@ def main() -> int:
 
         for obj, lineas in TEXTOS.items():
             _, text = call("read_object_content", bucket_name=BUCKET, object_name=obj)
-            faltan = [l for l in (x.format(nonce=nonce) for x in lineas) if l not in text.splitlines()]
-            check(f"read_object_content {obj}: all {len(lineas)} expected lines present", not faltan and "error" not in text[:40])
+            # La 0.6.0 devuelve un JSON con la metadata y el texto en el campo `content`.
+            try:
+                data = json.loads(text)
+                leidas = data["content"].splitlines()
+            except (ValueError, KeyError, TypeError, AttributeError):
+                data, leidas = {}, []
+            faltan = [l for l in (x.format(nonce=nonce) for x in lineas) if l not in leidas]
+            check(f"read_object_content {obj}: all {len(lineas)} expected lines present "
+                  f"({len(leidas)} line(s), content_type {data.get('content_type')})", not faltan)
             if faltan:
                 print(f"  missing: {faltan}")
         check("the nonce line came back through MCP", f"req={nonce}" in call(
