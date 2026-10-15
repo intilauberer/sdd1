@@ -230,7 +230,13 @@ está en CI.
 **VC-1b (spec v1.7):** lo corre el job `emulator` de CI, en el paso "Objetos de más
 (VC-1b)", al final del job: sube `extra/sobra.log` desde `admin`, vuelve a correr
 `armar-bucket.sh` y exige exit `1`, la línea `WARNING: unexpected objects: extra/sobra.log`
-y ningún manifiesto. Su resultado está en la corrida de CI del PR de la v1.7.
+y ningún manifiesto.
+
+Corridas registradas:
+- PR 12 (spec v1.7), commit `f7b24c6`, run 38660689321, job 116180943626, con `fake-gcs-server`: el paso "Objetos de más (VC-1b)" terminó `success`.
+- PR 13 (spec v1.8), commit `e274c6d`, run 38738071306: con `fake-gcs-server` (job 116432360145) y con `floci-gcp` (job 116432360159), el mismo paso terminó `success`. En este PR el job ya no tiene `continue-on-error`, así que `success` es exit `0` del paso, que a su vez exige el exit `1` de `armar-bucket.sh`, el `WARNING` y ningún manifiesto.
+
+**VC-1b: pasa.**
 
 ## El equivalente en el GCS real (no ejecutado)
 
