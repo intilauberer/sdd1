@@ -16,6 +16,28 @@ sirve el objeto a cualquier proceso local, así que la sesión principal podría
 Bash → HTTP, y ahí solo frenan el `deny` y la aprobación. VC-7b mide que no pasó, no que
 sea imposible ([README, punto 6](../README.md#6-la-trifecta)).
 
+### Qué garantizaba `tools:` en estas corridas
+
+Hallazgo B1 de la revisión cruzada (ronda 1, spec v1.8.1; detalle y salidas en
+[`06-plugin.md`](./06-plugin.md#chequeos-offline-spec-v181-el-frontmatter-de-lector-fixtures-no-parseaba)):
+hasta `35eda54`, la `description` del frontmatter de `lector-fixtures.md` no parseaba como
+YAML (un `: ` sin comillas), y `claude plugin validate` 2.1.300 lo dice así: *"At runtime
+this agent loads with its name taken from the filename and every other frontmatter field
+silently dropped"*. Es decir: en una sesión que no parsea ese frontmatter, **`tools:` se
+descarta y el subagent hereda las tools de la sesión**, Bash y red incluidos. Las corridas
+de este archivo, de 03 y de 06 se hicieron con Claude Code 2.1.300 (lo dice cada `init`),
+la misma versión que acá falla, y el stream no registra qué tools tenía el subagent. **No
+se puede asegurar** que en esas corridas `tools:` estuviera en efecto; lo más probable es
+que no. Lo que sí muestran las transcripciones: el subagent hizo solo llamadas a las 3 tools
+de lectura de `gcs` (4 `tool_use` acá, 19 en la corrida de VC-5b de 03, 1 en la corrida 2 de VC-5a de 06), ningún `Bash`, `Read`, `Write` ni
+`WebFetch`, y la línea hostil quedó en la tabla de instrucciones. O sea, el "sin Bash ni
+red" de esas corridas lo sostuvieron el prompt del subagent y la conducta del modelo, no
+`tools:`; el hook (capa 1) y el gateway (capa 3) no dependen de eso y corrieron igual. El
+frontmatter está corregido en la v1.8.1, `validate` pasa, y `check-frontmatter.py` lo
+vigila en CI. Las corridas de 03, 05 y 06 **no se repitieron** con el agent corregido: el
+cambio es de una `description`, y repetirlas regeneraría el nonce y las `generation` de la
+salida.
+
 **Procedencia.** Las corridas de este archivo se hicieron sobre el árbol de trabajo de `tp4/mcp-gcs`, entre 420a6ab y 01dd473. Lo que no estaba commiteado en ese momento era solo lo que después entró en 01dd473: el bloque `permissions` de `.claude/settings.json` y el paso 5 del skill, con su copia en el plugin. En 01dd473, `git hash-object` da `4c8a2ac` (`settings.json`), `d6f9b30` (`SKILL.md`) y `eea15c0` (la copia del plugin). El detalle está en el [README](../README.md#evidencia).
 
 ## Corrida

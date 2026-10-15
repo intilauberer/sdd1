@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.8) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.8.1) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
@@ -159,6 +159,15 @@ prueba sin `STORAGE_EMULATOR_HOST`
   salida en la sesión principal ([05](./evidencia/05-fixture-hostil.md)).
 - **Un prompt ambiguo no prueba el muro:** con el contenido sin especificar, Sonnet
   preguntó en vez de llamar a `write_object_safe`. La v1.5 fija el prompt ([04](./evidencia/04-muro.md)).
+- **Un `: ` sin comillas en la `description` tiró el `tools:` del subagent** (revisión
+  cruzada, B1). El frontmatter de `lector-fixtures.md` no parseaba como YAML y, según
+  `claude plugin validate` 2.1.300, en ese caso el agent carga con el nombre del archivo y
+  todo lo demás descartado en silencio: `tools:` incluido. Las corridas de 03, 05 y 06 se
+  hicieron con esa versión, así que **no podemos asegurar que `tools:` estuviera en efecto**;
+  el subagent igual usó solo las 3 tools de lectura, pero eso lo sostuvo el prompt, no la
+  restricción. Corregido en la v1.8.1, con `check-frontmatter.py` en CI
+  ([05](./evidencia/05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas),
+  [06](./evidencia/06-plugin.md#chequeos-offline-spec-v181-el-frontmatter-de-lector-fixtures-no-parseaba)).
 
 ## Nota de seguridad
 
@@ -239,7 +248,10 @@ sin Bash, red, Write ni Edit. Eso no lo garantiza el prompt sino el **hook**: mi
 sesión principal le llegan tablas, y la línea hostil va solo a la tabla de instrucciones,
 cortada a 40 caracteres, aunque matchee `curl`. Probado en
 [05](./evidencia/05-fixture-hostil.md): VC-7a pasa, y en la sesión principal no hubo
-`curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5).
+`curl`, URL, `WebFetch` ni lectura de `~/.config/gcloud*` (VC-7b v1.5). **Salvedad (v1.8.1):**
+hasta `35eda54` el frontmatter del subagent no parseaba y `tools:` pudo haberse descartado en
+esas corridas; el subagent solo llamó a las 3 tools de lectura, pero la restricción no está
+demostrada ahí ([05](./evidencia/05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas)).
 
 **Qué queda abierto: el camino Bash → HTTP.** El gateway no pide autenticación: le sirve
 el contenido de los objetos a cualquier proceso local, incluido

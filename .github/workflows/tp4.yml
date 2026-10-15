@@ -74,6 +74,10 @@ jobs:
           if grep -rn 'mcp__gcs__' gcs-mcp-tp4/plugin/gcsgrep-toolkit/skills gcs-mcp-tp4/plugin/gcsgrep-toolkit/agents; then
             echo "plugin skills/agents still reference the repo tool names"; exit 1
           fi
+      - name: El frontmatter de agents y skills parsea; lector-fixtures conserva tools (VC-11a)
+        run: |
+          python3 -m pip install --quiet pyyaml
+          python3 gcs-mcp-tp4/scripts/check-frontmatter.py
       - name: Nota de seguridad (VC-13)
         run: python3 gcs-mcp-tp4/scripts/check-nota.py
       - name: Alcance (VC-0)

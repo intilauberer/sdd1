@@ -104,6 +104,106 @@ exit=0
 - **VC-13: pasa** (`check-nota.py` y 88 enlaces).
 - **VC-15: pasa.** p95 13,5 ms contra un umbral de 100 ms (N-3). El job `offline` de CI lo corre en `ubuntu-latest`.
 
+## Chequeos offline (spec v1.8.1): el frontmatter de `lector-fixtures` no parseaba
+
+Hallazgo B1 de la revisión cruzada (ronda 1), corrido el 2026-10-15 en Windows con
+**Claude Code 2.1.300**, la misma versión con la que se hicieron todas las corridas de
+01–07. Sobre el plugin commiteado en `35eda54` (spec v1.8), `claude plugin validate`
+**falla**:
+
+```
+$ claude --version
+2.1.300 (Claude Code)
+$ claude plugin validate gcs-mcp-tp4/plugin/gcsgrep-toolkit
+Validating plugin manifest: <repo>\gcs-mcp-tp4\plugin\gcsgrep-toolkit\.claude-plugin\plugin.json
+
+Validating agent: <repo>\gcs-mcp-tp4\plugin\gcsgrep-toolkit\agents\lector-fixtures.md
+
+✘ Found 1 error:
+
+  ❯ frontmatter: YAML frontmatter failed to parse: YAML Parse error: Unexpected token. At runtime this agent loads with its name taken from the filename and every other frontmatter field silently dropped.
+
+✘ Validation failed
+exit=1
+```
+
+La causa: la `description` del agent era un escalar YAML sin comillas con `: ` adentro
+("…ni Write ni Edit: lo que lea…"). Los dos `validate` de arriba que salían con `0` se
+corrieron en macOS con 2.1.296 (sección v1.7) y 2.1.300 (sección v1.6), y no revisaban el
+frontmatter de los agents; esta 2.1.300 de Windows sí. **Lo que significa:** en una sesión
+que no parsea ese frontmatter, `tools:` se descarta y `lector-fixtures` hereda las tools de
+la sesión (Bash, red, Write). Qué pasó con eso en las corridas de 03 y 05 está dicho en
+[`05-fixture-hostil.md`](./05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas).
+
+Corrección (spec v1.8.1): la `description` va entre comillas simples en
+`.claude/agents/lector-fixtures.md`; el plugin se rearmó con `armar.sh`. De nuevo, misma
+máquina y misma versión:
+
+```
+$ bash gcs-mcp-tp4/plugin/armar.sh --check
+armar.sh --check: OK, the committed plugin matches what armar.sh builds.
+exit=0
+
+$ claude plugin validate gcs-mcp-tp4/plugin/gcsgrep-toolkit
+Validating plugin manifest: <repo>\gcs-mcp-tp4\plugin\gcsgrep-toolkit\.claude-plugin\plugin.json
+
+✔ Validation passed
+exit=0
+
+$ claude plugin validate .
+Validating marketplace manifest: <repo>\.claude-plugin\marketplace.json
+
+✔ Validation passed
+exit=0
+```
+
+Para que no vuelva en silencio, [`scripts/check-frontmatter.py`](../scripts/check-frontmatter.py)
+parsea el frontmatter de todos los agents y skills (del repo y del plugin) y exige que
+`lector-fixtures` tenga `tools:` con exactamente las 3 de lectura; lo corre el job
+`offline` de CI (VC-11a). Sobre el agent viejo falla, sobre el corregido pasa:
+
+```
+$ git stash && python gcs-mcp-tp4/scripts/check-frontmatter.py     # el agent de 35eda54
+FAIL .claude/agents/lector-fixtures.md: mapping values are not allowed here
+FAIL gcs-mcp-tp4/plugin/gcsgrep-toolkit/agents/lector-fixtures.md: mapping values are not allowed here
+check-frontmatter: 2 file(s) with unparseable or wrong frontmatter
+exit=1
+
+$ git stash pop && python gcs-mcp-tp4/scripts/check-frontmatter.py  # corregido
+OK   .claude/agents/lector-fixtures.md
+OK   .claude/agents/revisor-spec.md
+OK   .claude/skills/write-spec-brownfield/SKILL.md
+OK   .claude/skills/write-vcs-con-bucket/SKILL.md
+OK   gcs-mcp-tp4/plugin/gcsgrep-toolkit/agents/lector-fixtures.md
+OK   gcs-mcp-tp4/plugin/gcsgrep-toolkit/agents/revisor-spec.md
+OK   gcs-mcp-tp4/plugin/gcsgrep-toolkit/skills/write-spec-brownfield/SKILL.md
+OK   gcs-mcp-tp4/plugin/gcsgrep-toolkit/skills/write-vcs-con-bucket/SKILL.md
+check-frontmatter: OK, every agent and skill frontmatter parses
+exit=0
+```
+
+En la misma ronda (B2, B3): `check-generations.py` fija stdout/stderr en UTF-8 (en Windows
+con consola cp1252, `registrar` reventaba con `UnicodeEncodeError` por la `→` de la cuenta)
+y `test_check_generations.py` decodifica la salida del subproceso con `errors="replace"`.
+Reproducción y resultado, misma máquina, Python 3.13.4, `google-cloud-storage` 3.14.1:
+
+```
+$ python gcs-mcp-tp4/scripts/test_check_generations.py            # antes, sin PYTHONUTF8
+FAIL [R-14a] all match -> block on stdout: exit 1 (expected 0)
+  stderr: '…  File "…check-generations.py", line 304, in cmd_registrar\n    print(row)\n … UnicodeEncodeError: \'charmap\' codec can\'t encode character \'\\u2192\' in position 154: character maps to <undefined>\n'
+
+$ python gcs-mcp-tp4/scripts/test_check_generations.py            # después, sin PYTHONUTF8
+26 cases, 26 passed
+$ PYTHONUTF8=1 python gcs-mcp-tp4/scripts/test_check_generations.py
+26 cases, 26 passed
+$ python gcs-mcp-tp4/scripts/test_gateway.py | tail -1
+34 cases, 34 passed
+$ python gcs-mcp-tp4/scripts/test_gcs_allowlist.py
+74 cases, 74 passed
+```
+
+**VC-11a (v1.8.1): pasa** con 2.1.300 en Windows (`validate` de plugin y marketplace, `armar.sh --check`, `check-frontmatter.py`).
+
 ### Marketplace
 
 ```

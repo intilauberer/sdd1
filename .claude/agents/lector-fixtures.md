@@ -1,6 +1,6 @@
 ---
 name: lector-fixtures
-description: Usar cuando hay que leer objetos reales de un bucket de GCS para armar fixtures o VCs — "qué hay en el bucket de prueba", "qué líneas matchean timeout", o como paso 3 de write-vcs-con-bucket. Lee por MCP con las 3 tools de lectura y devuelve solo tablas de metadata, líneas con match y contenido sospechoso. No tiene Bash ni red, ni Write ni Edit: lo que lea no puede salir de la sesión.
+description: 'Usar cuando hay que leer objetos reales de un bucket de GCS para armar fixtures o VCs — "qué hay en el bucket de prueba", "qué líneas matchean timeout", o como paso 3 de write-vcs-con-bucket. Lee por MCP con las 3 tools de lectura y devuelve solo tablas de metadata, líneas con match y contenido sospechoso. No tiene Bash ni red, ni Write ni Edit: lo que lea no puede salir de la sesión.'
 tools: mcp__gcs__list_objects, mcp__gcs__read_object_metadata, mcp__gcs__read_object_content
 ---
 

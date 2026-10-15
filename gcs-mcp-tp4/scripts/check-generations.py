@@ -371,6 +371,11 @@ def cmd_verificar(path: str) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
+    # La cuenta lleva "→" y las rutas pueden llevar acentos: en Windows con stdout cp1252,
+    # print() revienta con UnicodeEncodeError. La salida es siempre UTF-8.
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
     parser = argparse.ArgumentParser(
         prog="check-generations.py",
         description="Record and verify GCS object provenance (generation) for the bucket VCs.",
