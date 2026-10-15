@@ -1,0 +1,9 @@
+# Spike tp4/eval-floci: el mismo `gcs` (red interna, sin puertos) con floci-gcp en lugar
+# de fake-gcs-server. Lo suma config.sh cuando GCSGREP_TP4_EMULATOR=floci; el gateway y
+# admin no cambian, salvo el puerto del upstream (EMU_PORT=4588).
+# Fijado por tag: 0.9.0 es la versión que corrió el TP1 (ADR-0014). El job de CI imprime
+# el digest que resolvió.
+services:
+  gcs:
+    image: floci/floci-gcp:0.9.0
+    command: !reset null   # la imagen trae su propio arranque; los flags de fake-gcs-server no aplican

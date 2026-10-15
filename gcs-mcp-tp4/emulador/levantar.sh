@@ -7,7 +7,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # shellcheck source=config.sh
 source "${SCRIPT_DIR}/config.sh"
 
-echo "Starting gcs (fake-gcs-server, internal network only) and gateway ($GATEWAY) ..."
+echo "Starting gcs ($EMULATOR, internal network only) and gateway ($GATEWAY) ..."
 compose up -d gcs gateway
 
 echo "Waiting for the gateway to reach the emulator ..."
@@ -32,9 +32,9 @@ compose ps
 echo
 echo "Published ports:"
 echo "  gateway 8080 -> $(compose port gateway 8080)"
-gcs_port="$(compose port gcs 4443 2>/dev/null || true)"
+gcs_port="$(compose port gcs $EMU_PORT 2>/dev/null || true)"
 [[ "$gcs_port" == *":0" ]] && gcs_port=""   # compose imprime "invalid IP:0" si no está publicado
-echo "  gcs     4443 -> ${gcs_port:-(not published)}"
+echo "  gcs     $EMU_PORT -> ${gcs_port:-(not published)}"
 cat <<EOF
 
 Next:

@@ -83,11 +83,18 @@ jobs:
           python3 gcs-mcp-tp4/scripts/check-alcance.py "$base"
 
   emulator:
-    name: Emulador + gateway, capa 3 de punta a punta (D-9)
+    # Spike tp4/eval-floci: el mismo job contra floci-gcp. En la fila floci cada paso sigue
+    # aunque falle el anterior, para ver todo lo que no anda; el resumen lo lista.
+    strategy:
+      fail-fast: false
+      matrix:
+        emulator: [fake-gcs-server, floci]
+    name: Emulador + gateway, capa 3 de punta a punta (D-9) · ${{ matrix.emulator }}
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
       GCSGREP_TP4_GATEWAY: http://127.0.0.1:4443
+      GCSGREP_TP4_EMULATOR: ${{ matrix.emulator }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -98,16 +105,26 @@ jobs:
           node-version: "20"
       - uses: astral-sh/setup-uv@v6
       - name: Levantar emulador y gateway
+        id: levantar-emulador-y-gateway
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/levantar.sh
       - name: Armar el bucket (VC-1)
+        id: armar-el-bucket-vc-1
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/armar-bucket.sh
       - name: Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a)
+        id: escribir-y-borrar-por-el-gateway-dan-403
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/probar-403.sh
       - name: El server MCP sin hook contra el gateway (VC-10b)
+        id: el-server-mcp-sin-hook-contra-el-gateway
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: python3 gcs-mcp-tp4/scripts/probar-server-sin-hook.py
       - name: Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a)
+        id: procedencia-y-evidencia-que-envejece-de-
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: |
@@ -126,6 +143,8 @@ jobs:
           [ "$rc" -eq 1 ] && grep -q "^STALE gs://$BUCKET/logs/app-2026-10-02.log recorded=" "$RUNNER_TEMP/verificar.txt" \
             || { echo "expected exit 1 with a STALE line (got $rc)"; exit 1; }
       - name: Objetos de más (VC-1b)
+        id: objetos-de-m-s-vc-1b
+        continue-on-error: ${{ matrix.emulator == 'floci' }}
         # Al final: deja un objeto extra y re-arma el bucket (generations nuevas).
         run: |
           set -uo pipefail
@@ -133,7 +152,7 @@ jobs:
           d="$(mktemp -d)"
           printf 'sobra\n' > "$d/sobra.log"
           printf '%s\n' 'set -eu' \
-            'curl -sS -f -o /dev/null -X POST -H "Content-Type: text/plain" --data-binary @/work/sobra.log "http://gcs:4443/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=extra%2Fsobra.log"' \
+            'curl -sS -f -o /dev/null -X POST -H "Content-Type: text/plain" --data-binary @/work/sobra.log "http://gcs:$EMU_PORT/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=extra%2Fsobra.log"' \
             > "$d/up.sh"
           admin_run "$d" /work/up.sh
           rc=0
@@ -150,6 +169,28 @@ jobs:
         run: |
           source gcs-mcp-tp4/emulador/config.sh
           compose logs --no-log-prefix gateway || true
+      - name: Imagen del emulador y resumen
+        if: always()
+        run: |
+          source gcs-mcp-tp4/emulador/config.sh
+          echo "gcs image: $(docker inspect --format '{{index .RepoDigests 0}}' "$(compose ps -q gcs)" 2>/dev/null || docker image inspect --format '{{index .RepoDigests 0}}' floci/floci-gcp:0.9.0 2>/dev/null || echo '?')"
+          {
+            echo "### Emulador: $GCSGREP_TP4_EMULATOR"
+            echo
+            echo "| paso | resultado |"
+            echo "|---|---|"
+            echo "| Levantar emulador y gateway | ${{ steps.levantar-emulador-y-gateway.outcome }} |"
+            echo "| Armar el bucket (VC-1) | ${{ steps.armar-el-bucket-vc-1.outcome }} |"
+            echo "| Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a) | ${{ steps.escribir-y-borrar-por-el-gateway-dan-403.outcome }} |"
+            echo "| El server MCP sin hook contra el gateway (VC-10b) | ${{ steps.el-server-mcp-sin-hook-contra-el-gateway.outcome }} |"
+            echo "| Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a) | ${{ steps.procedencia-y-evidencia-que-envejece-de-.outcome }} |"
+            echo "| Objetos de más (VC-1b) | ${{ steps.objetos-de-m-s-vc-1b.outcome }} |"
+          } | tee -a "$GITHUB_STEP_SUMMARY"
+      - name: Logs del emulador
+        if: always()
+        run: |
+          source gcs-mcp-tp4/emulador/config.sh
+          compose logs --no-log-prefix --tail 200 gcs || true
       - name: Bajar
         if: always()
         run: gcs-mcp-tp4/emulador/bajar.sh

@@ -28,7 +28,7 @@ content_type_for() {
   esac
 }
 
-echo "Emulator bucket: $BUCKET (via admin container -> http://gcs:4443, internal network)"
+echo "Emulator bucket: $BUCKET (via admin container -> http://gcs:$EMU_PORT, internal network)"
 echo "Gateway:         $GATEWAY"
 echo "Nonce to:        $NONCE_FILE"
 require_gateway
@@ -84,7 +84,7 @@ printf '%s\n' \
 {
   echo 'set -eu'
   echo 'code="$(curl -sS -o /tmp/out -w "%{http_code}" -X POST -H "Content-Type: application/json" \'
-  echo '  --data "{\"name\":\"$BUCKET\"}" "http://gcs:4443/storage/v1/b?project=test")"'
+  echo '  --data "{\"name\":\"$BUCKET\"}" "http://gcs:$EMU_PORT/storage/v1/b?project=test")"'
   echo 'case "$code" in'
   echo '  200) echo "Created bucket $BUCKET" ;;'
   echo '  409) echo "Bucket $BUCKET already exists" ;;'
@@ -93,7 +93,7 @@ printf '%s\n' \
   echo 'up() {'
   echo '  echo "Uploading $1 ($2)"'
   echo '  curl -sS -f -o /dev/null -X POST -H "Content-Type: $2" --data-binary "@/work/$1" \'
-  echo '    "http://gcs:4443/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=$3"'
+  echo '    "http://gcs:$EMU_PORT/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=$3"'
   echo '}'
   for obj in "${OBJECTS[@]}"; do
     printf 'up %q %q %q\n' "$obj" "$(content_type_for "$obj")" "$(urlencode "$obj")"
