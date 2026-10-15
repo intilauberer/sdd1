@@ -35,6 +35,13 @@ REPO = str(Path(__file__).resolve().parents[2])
 HOME = str(Path.home())
 USUARIO = getpass.getuser()
 
+def _posix(p: str) -> str:
+    """`C:\\Users\\x` → `/c/Users/x` (la forma de Git Bash en Windows)."""
+    if re.match(r"^[A-Za-z]:\\", p):
+        return "/" + p[0].lower() + p[2:].replace("\\", "/")
+    return p
+
+
 REDACCIONES = [
     (re.compile(r"/private/tmp/claude-\d+/[^/\s\"'`]+"), "<tmp>"),
     (re.compile(r"/tmp/claude-\d+/[^/\s\"'`]+"), "<tmp>"),
@@ -42,6 +49,15 @@ REDACCIONES = [
     (re.compile(re.escape(REPO)), "<repo>"),
     (re.compile(re.escape(REPO.replace("/", "-"))), "-<repo>"),
     (re.compile(re.escape(HOME)), "~"),
+    # Windows: la misma raíz y el home con `/` o como los escribe Git Bash (`/c/Users/…`).
+    (re.compile(re.escape(REPO.replace("\\", "/"))), "<repo>"),
+    (re.compile(re.escape(_posix(REPO))), "<repo>"),
+    (re.compile(re.escape(HOME.replace("\\", "/"))), "~"),
+    (re.compile(re.escape(_posix(HOME))), "~"),
+    # …y con la barra duplicada, como quedan dentro de un JSON renderizado (`C:\\Users\\…`).
+    (re.compile(re.escape(REPO.replace("\\", "\\\\"))), "<repo>"),
+    (re.compile(re.escape(HOME.replace("\\", "\\\\"))), "~"),
+    (re.compile(r"~(?:\\\\|\\|/)AppData(?:\\\\|\\|/)Local(?:\\\\|\\|/)Temp(?:\\\\|\\|/)[^\s\"'`]+"), "<tmp>"),  # scratch de Windows
     (re.compile(rf"\b{re.escape(USUARIO)}\b"), "<user>"),  # dueño en salidas de `ls -l`
 ]
 
@@ -208,7 +224,9 @@ def main(argv: list[str]) -> int:
     for ev in eventos:
         tipo = ev.get("type")
         pid = ev.get("parent_tool_use_id")
-        if pid:
+        # Solo es "del subagent" si el padre es un tool_use de Agent/Task ya visto: en
+        # 2.1.300 algún evento de la sesión principal trae parent_tool_use_id de un Bash.
+        if pid and pid in agentes:
             sub_buf.setdefault(pid, []).append(ev)
             continue
         if tipo == "system":
@@ -231,7 +249,7 @@ def main(argv: list[str]) -> int:
                 out.add(bloque((ev.get("stderr") or ev.get("output") or "").strip()) + "\n")
             elif st == "task_notification":
                 tid = ev.get("tool_use_id")
-                if tid:
+                if tid and tid in agentes:  # un Bash en segundo plano también notifica
                     informe[tid] = ev.get("summary") or ""
                     emitir_subagent(tid)
             continue
