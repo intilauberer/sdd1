@@ -7,6 +7,14 @@ EMU_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 BUCKET="${GCSGREP_TP4_BUCKET:-gcsgrep-test-g4-mcp}"
 GATEWAY="${GCSGREP_TP4_GATEWAY:-http://127.0.0.1:4443}"
 COMPOSE_PROJECT="gcs-mcp-tp4"
+# Emulador detrás del gateway: fake-gcs-server (default, puerto 4443) o floci-gcp (4588).
+EMULATOR="${GCSGREP_TP4_EMULATOR:-fake-gcs-server}"
+case "$EMULATOR" in
+  fake-gcs-server) EMU_PORT=4443; COMPOSE_FILES=(-f "$EMU_DIR/docker-compose.yml") ;;
+  floci) EMU_PORT=4588; COMPOSE_FILES=(-f "$EMU_DIR/docker-compose.yml" -f "$EMU_DIR/docker-compose.floci.yml") ;;
+  *) echo "config.sh: GCSGREP_TP4_EMULATOR must be fake-gcs-server or floci (got '$EMULATOR')." >&2; exit 2 ;;
+esac
+export EMU_PORT
 TP4_CONFIG_DIR="${GCSGREP_TP4_CONFIG_DIR:-$HOME/.config/gcloud-tp4}"
 NONCE_FILE="${TP4_CONFIG_DIR}/nonce.txt"
 
@@ -41,14 +49,14 @@ else
 fi
 
 compose() {
-  "${COMPOSE_CMD[@]}" -p "$COMPOSE_PROJECT" -f "$EMU_DIR/docker-compose.yml" "$@"
+  "${COMPOSE_CMD[@]}" -p "$COMPOSE_PROJECT" "${COMPOSE_FILES[@]}" "$@"
 }
 
 # Corre un script de sh dentro del contenedor admin (red interna), con DIR montado en /work.
 admin_run() {
   local dir="$1"; shift
   ADMIN_DIR="$dir" compose --profile admin run --rm -T --user "$(id -u):$(id -g)" \
-    -e BUCKET="$BUCKET" admin "$@"
+    -e BUCKET="$BUCKET" -e EMU_PORT="$EMU_PORT" admin "$@"
 }
 
 # Código HTTP de un GET al gateway (000 si no contesta).

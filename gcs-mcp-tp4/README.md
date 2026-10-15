@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.7) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.8) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
@@ -32,8 +32,10 @@ gs://gcsgrep-test-g4-mcp/logs/app-2026-10-01.log:4:2026-10-01T09:00:11Z WARN req
 > `GOOGLE_APPLICATION_CREDENTIALS`. Volver es superseder D-9 ([spec](./spec.md)).
 > **Autorización:** en la primera entrega el equipo le consultó a la cátedra y la cátedra
 > habilitó emular GCS; [ADR-0014](../gcsgrep-tp1/docs/adr/ADR-0014-emulacion-local-floci.md)
-> registra que nombró LocalStack o Floci. El TP4 aplica ese criterio con `fake-gcs-server`
-> (spec D-9, "Precedente y autorización", y la alternativa `floci-gcp` en Decisiones).
+> registra que nombró LocalStack o Floci. El TP4 usa `fake-gcs-server`: la elección inicial
+> no fue deliberada, y la justifica después un [spike](./revisiones/spike-floci-gcp-2026-10-15.md),
+> que muestra que `floci-gcp` da lo mismo detrás del gateway. CI corre el job del emulador
+> con los dos (spec D-9).
 
 ## Qué paso SDD alimenta
 

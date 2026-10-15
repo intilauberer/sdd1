@@ -70,9 +70,9 @@ echo "\$ docker compose -p $COMPOSE_PROJECT ps --format '{{.Service}}  {{.Ports}
 compose ps --format '{{.Service}}  {{.Ports}}' | sed 's/^/  | /'
 
 echo
-echo "\$ docker compose -p $COMPOSE_PROJECT port gcs 4443"
+echo "\$ docker compose -p $COMPOSE_PROJECT port gcs $EMU_PORT"
 rc=0
-gcs_port="$(compose port gcs 4443 2>&1)" || rc=$?
+gcs_port="$(compose port gcs $EMU_PORT 2>&1)" || rc=$?
 sed 's/^/  | /' <<<"${gcs_port:-(empty)}"
 if [[ $rc -ne 0 || -z "$gcs_port" || "$gcs_port" == *":0" ]]; then
   pass "gcs (the emulator) has no published port"
@@ -113,8 +113,8 @@ fi
 # no se cuenta: es un límite declarado en D-9.
 gcs_ip="$(docker inspect -f '{{range .NetworkSettings.Networks}}{{.IPAddress}}{{end}}' "$gcs_id")"
 echo
-echo "\$ curl http://${gcs_ip}:4443/storage/v1/b/${BUCKET}/o   # the emulator's container IP, from the host"
-code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://${gcs_ip}:4443/storage/v1/b/${BUCKET}/o" || true)"
+echo "\$ curl http://${gcs_ip}:${EMU_PORT}/storage/v1/b/${BUCKET}/o   # the emulator's container IP, from the host"
+code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 3 "http://${gcs_ip}:${EMU_PORT}/storage/v1/b/${BUCKET}/o" || true)"
 echo "  HTTP $code"
 if [[ "$code" == "000" ]]; then
   echo "INFO: the emulator's container IP is not reachable from the host"

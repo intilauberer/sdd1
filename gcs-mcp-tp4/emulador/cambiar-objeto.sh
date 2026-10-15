@@ -28,7 +28,7 @@ printf '%s\n' \
 {
   echo 'set -eu'
   echo 'curl -sS -f -o /dev/null -X POST -H "Content-Type: text/plain" --data-binary @/work/app-2026-10-02.log \'
-  printf '  "http://gcs:4443/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=%s"\n' "$(urlencode "$OBJ")"
+  printf '  "http://gcs:$EMU_PORT/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=%s"\n' "$(urlencode "$OBJ")"
 } > "$WORKDIR/upload.sh"
 echo "Re-uploading $URI (same content) via the admin container ..."
 admin_run "$WORKDIR" /work/upload.sh
