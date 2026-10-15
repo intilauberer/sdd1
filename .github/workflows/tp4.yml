@@ -1,10 +1,12 @@
 name: tp4 (gcs-mcp-tp4)
 
-# TP4 (spec.md). Job `offline`: VC-0, VC-3, VC-8a, VC-11a, VC-13, sin red ni Docker.
-# Job `emulator` (D-9): levanta el emulador detrás del gateway de solo lectura y corre
-# VC-1, VC-6a, VC-10a y VC-10b de punta a punta. CI no tiene credencial de GCP: nada de esto
-# habla con el GCS real. Lo que pide una sesión de Claude (VC-4, VC-5, VC-7, VC-8b, VC-9,
-# VC-11b) se corre a mano y queda en evidencia/.
+# TP4 (spec.md). Job `offline`: VC-0, VC-2a…VC-2c, VC-3, VC-6c, VC-8a, VC-11a, VC-13, VC-14 y
+# VC-15, sin Docker ni GCS (los tests del gateway y de check-generations usan un GCS de
+# mentira en el mismo proceso). Job `emulator` (D-9): levanta el emulador detrás del gateway
+# de solo lectura y corre VC-1, VC-10a (con VC-2d), VC-10b, VC-6a y VC-1b de punta a punta.
+# CI no tiene credencial de GCP: nada de esto habla con el GCS real. Lo que pide una sesión
+# de Claude (VC-4, VC-5a…VC-5d, VC-6b, VC-7, VC-8b, VC-9, VC-11b) se corre a mano y queda
+# en evidencia/.
 on:
   push:
     branches: ["**"]
@@ -14,6 +16,7 @@ on:
       - ".claude/**"
       - "gcsgrep-tp1/scripts/check-doc-links.py"
       - ".github/workflows/tp4.yml"
+      - ".claude-plugin/**"
   pull_request:
     paths:
       - "gcs-mcp-tp4/**"
@@ -21,6 +24,7 @@ on:
       - ".claude/**"
       - "gcsgrep-tp1/scripts/check-doc-links.py"
       - ".github/workflows/tp4.yml"
+      - ".claude-plugin/**"
 
 permissions:
   contents: read
@@ -42,7 +46,7 @@ jobs:
                    gcs-mcp-tp4/plugin/gcsgrep-toolkit/.claude-plugin/plugin.json \
                    gcs-mcp-tp4/plugin/gcsgrep-toolkit/.mcp.json \
                    gcs-mcp-tp4/plugin/gcsgrep-toolkit/hooks/hooks.json \
-                   gcs-mcp-tp4/gcs-real/mcp.json.ejemplo; do
+                   gcs-mcp-tp4/gcs-real/mcp.json.ejemplo .claude-plugin/marketplace.json; do
             python3 -m json.tool "$f" > /dev/null || { echo "invalid JSON: $f"; exit 1; }
           done
       - name: Los scripts compilan / parsean
@@ -51,8 +55,15 @@ jobs:
           for f in gcs-mcp-tp4/gcs-real/bucket/*.sh gcs-mcp-tp4/emulador/*.sh gcs-mcp-tp4/plugin/armar.sh; do bash -n "$f"; done
       - name: Enlaces relativos (VC-13)
         run: python3 gcsgrep-tp1/scripts/check-doc-links.py gcs-mcp-tp4
-      - name: Hook gcs-allowlist, 66 casos (VC-8a)
+      - name: Hook gcs-allowlist, 74 casos (VC-8a)
         run: python3 gcs-mcp-tp4/scripts/test_gcs_allowlist.py
+      - name: Latencia del hook, p95 <= 100 ms (VC-15)
+        run: python3 gcs-mcp-tp4/scripts/medir-hook.py
+      - name: Gateway caso por caso, sin Docker (VC-2a, VC-2b, VC-2c)
+        run: python3 gcs-mcp-tp4/scripts/test_gateway.py
+      - uses: astral-sh/setup-uv@v6
+      - name: check-generations contra un GCS de mentira (VC-14, VC-6c)
+        run: uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/test_check_generations.py
       - name: Config de MCP fijada y sin secretos (VC-3)
         run: python3 gcs-mcp-tp4/scripts/check-config.py
       - name: El plugin commiteado es lo que arma armar.sh (VC-11a)
@@ -96,7 +107,7 @@ jobs:
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: python3 gcs-mcp-tp4/scripts/probar-server-sin-hook.py
-      - name: Procedencia y evidencia que envejece (R-5 paso 4, R-6, VC-6a)
+      - name: Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a)
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: |
@@ -114,6 +125,26 @@ jobs:
           rc=0; "${CG[@]}" verificar "$out" | tee "$RUNNER_TEMP/verificar.txt" || rc=$?
           [ "$rc" -eq 1 ] && grep -q "^STALE gs://$BUCKET/logs/app-2026-10-02.log recorded=" "$RUNNER_TEMP/verificar.txt" \
             || { echo "expected exit 1 with a STALE line (got $rc)"; exit 1; }
+      - name: Objetos de más (VC-1b)
+        # Al final: deja un objeto extra y re-arma el bucket (generations nuevas).
+        run: |
+          set -uo pipefail
+          source gcs-mcp-tp4/emulador/config.sh
+          d="$(mktemp -d)"
+          printf 'sobra\n' > "$d/sobra.log"
+          printf '%s\n' 'set -eu' \
+            'curl -sS -f -o /dev/null -X POST -H "Content-Type: text/plain" --data-binary @/work/sobra.log "http://gcs:4443/upload/storage/v1/b/$BUCKET/o?uploadType=media&name=extra%2Fsobra.log"' \
+            > "$d/up.sh"
+          admin_run "$d" /work/up.sh
+          rc=0
+          gcs-mcp-tp4/emulador/armar-bucket.sh > "$RUNNER_TEMP/armar2.out" 2> "$RUNNER_TEMP/armar2.err" || rc=$?
+          cat "$RUNNER_TEMP/armar2.err"
+          if [ "$rc" -eq 1 ] && grep -q "WARNING: unexpected objects: extra/sobra.log" "$RUNNER_TEMP/armar2.err" \
+             && ! grep -q "Manifest" "$RUNNER_TEMP/armar2.out"; then
+            echo "VC-1b: PASS (exit 1, WARNING, no manifest)"
+          else
+            echo "VC-1b: FAIL (exit $rc)"; cat "$RUNNER_TEMP/armar2.out"; exit 1
+          fi
       - name: Logs del gateway
         if: always()
         run: |

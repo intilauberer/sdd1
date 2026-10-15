@@ -50,6 +50,9 @@ HOP_BY_HOP = {
     "connection", "keep-alive", "proxy-authenticate", "proxy-authorization",
     "te", "trailers", "transfer-encoding", "upgrade",
 }
+# Headers que le cambian el método a un upstream que los honre: el gateway decide sobre el
+# método de la línea de pedido, así que no pasan (spec R-2a).
+METHOD_OVERRIDE = {"x-http-method-override", "x-http-method", "x-method-override"}
 
 B = re.escape(BUCKET)
 ALLOWED = [
@@ -195,7 +198,8 @@ class Handler(BaseHTTPRequestHandler):
         body = self._read_body()
         query = urlsplit(raw_path).query
         target = path + (f"?{query}" if query else "")
-        headers = {k: v for k, v in self.headers.items() if k.lower() not in HOP_BY_HOP}
+        headers = {k: v for k, v in self.headers.items()
+                   if k.lower() not in HOP_BY_HOP and k.lower() not in METHOD_OVERRIDE}
         try:
             conn = http.client.HTTPConnection(UPSTREAM.hostname, UPSTREAM.port or 80, timeout=TIMEOUT)
             conn.request(method, target, body=body or None, headers=headers)

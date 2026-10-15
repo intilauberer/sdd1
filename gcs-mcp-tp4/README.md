@@ -1,6 +1,6 @@
 # TP4 · Lección 4 — `gcsgrep` contra un bucket, por MCP
 
-Spec: [`spec.md`](./spec.md) (v1.6) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
+Spec: [`spec.md`](./spec.md) (v1.7) · Enunciado: [`enunciado.md`](./enunciado.md) · Plugin: [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md)
 
 ## Qué hace
 
@@ -30,9 +30,10 @@ gs://gcsgrep-test-g4-mcp/logs/app-2026-10-01.log:4:2026-10-01T09:00:11Z WARN req
 > **Cómo pasar al GCS real:** [`gcs-real/`](./gcs-real/README.md) tiene los scripts de
 > bucket, SA `objectViewer` y `403` de IAM, y el `.mcp.json` con
 > `GOOGLE_APPLICATION_CREDENTIALS`. Volver es superseder D-9 ([spec](./spec.md)).
-> **Pendiente: consulta a la cátedra.** No consta que la cátedra haya autorizado el
-> emulador. El equipo le va a preguntar por mail, y hasta que conteste D-9 es un desvío
-> del equipo, no algo autorizado.
+> **Autorización:** en la primera entrega el equipo le consultó a la cátedra y la cátedra
+> habilitó emular GCS; [ADR-0014](../gcsgrep-tp1/docs/adr/ADR-0014-emulacion-local-floci.md)
+> registra que nombró LocalStack o Floci. El TP4 aplica ese criterio con `fake-gcs-server`
+> (spec D-9, "Precedente y autorización", y la alternativa `floci-gcp` en Decisiones).
 
 ## Qué paso SDD alimenta
 
@@ -54,7 +55,7 @@ server, frena con `STOP: gcs server unavailable`; si la `generation` cambió,
 | ⚙️ Settings | [`../.claude/settings.json`](../.claude/settings.json) | Registra el hook; `permissions.allow` (3 tools, el script, `Edit` de la salida) y `permissions.deny` (gcloud, `curl`, `wget`, `nc`, `WebFetch`) como segunda línea | [05](./evidencia/05-fixture-hostil.md) |
 | 📦 Plugin | [`plugin/gcsgrep-toolkit/`](./plugin/gcsgrep-toolkit/README.md) · [`plugin/armar.sh`](./plugin/armar.sh) | El toolkit de la L3 y la L4 con nombres `mcp__plugin_gcsgrep-toolkit_gcs__*` y `userConfig` | [06](./evidencia/06-plugin.md) |
 | 🐳 Emulador + gateway | [`emulador/`](./emulador/docker-compose.yml) · [`gateway.py`](./emulador/gateway.py) | `fake-gcs-server` sin puertos; el gateway deja pasar solo `GET`/`HEAD` sobre el bucket y responde `403` al resto | [02](./evidencia/02-iam.md) · [04](./evidencia/04-muro.md#capa-3) |
-| 📜 Scripts | [`scripts/`](./scripts/check-generations.py) | `check-generations.py` (procedencia y envejecimiento), `check-config.py`, `check-nota.py`, `check-alcance.py`, `test_gcs_allowlist.py`, `probar-server-sin-hook.py`, `transcripcion.py` | [03](./evidencia/03-skill.md) · [06](./evidencia/06-plugin.md#chequeos-offline) |
+| 📜 Scripts | [`scripts/`](./scripts/check-generations.py) | `check-generations.py` (procedencia y envejecimiento), `check-config.py`, `check-nota.py`, `check-alcance.py`, `test_gcs_allowlist.py`, `test_gateway.py`, `test_check_generations.py`, `medir-hook.py`, `probar-server-sin-hook.py`, `transcripcion.py` | [03](./evidencia/03-skill.md) · [06](./evidencia/06-plugin.md#chequeos-offline) |
 
 ## Cómo se instala
 
@@ -89,6 +90,17 @@ Con `--plugin-dir`, los `default` de `userConfig` **no llegan al hook**: sin
 
 Con el plugin, las tools se llaman `mcp__plugin_gcsgrep-toolkit_gcs__<tool>`, el subagent
 `gcsgrep-toolkit:lector-fixtures` y el skill `/gcsgrep-toolkit:write-vcs-con-bucket`.
+**Desde el marketplace del repo, en un comando** (R-11b): la raíz tiene
+[`.claude-plugin/marketplace.json`](../.claude-plugin/marketplace.json), así que otro equipo lo
+instala, con su bucket, así:
+
+```bash
+claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project --config bucket=<su-bucket-de-prueba>
+```
+
+`claude plugin validate .` valida el marketplace ([06](./evidencia/06-plugin.md#chequeos-offline-spec-v17)).
+La instalación desde GitHub no se corrió en esta entrega.
+
 **No lo cargues dentro de este repo:** los hooks del proyecto y los del plugin correrían
 los dos (un hook idéntico no se deduplica) y habría dos servers `gcs`. **Variante GCS real:**
 [`gcs-real/README.md`](./gcs-real/README.md).
@@ -189,9 +201,9 @@ guarda todo en memoria: `bajar.sh` lo borra ([02](./evidencia/02-iam.md#bucket-y
 Todo probado en [04](./evidencia/04-muro.md) con la spec v1.5 y repetido con el plugin en [06](./evidencia/06-plugin.md): VC-8b con el prompt de la v1.5, en un turno, en un directorio de `mktemp -d` (corrida 3 de 06), y VC-9 en el worktree.
 
 - **Escritura** (`write_object_safe`, `upload_object_safe`, `copy_object_safe`, `create_bucket`
-  existen en el modo seguro): la corta primero el **hook** (paso 2, fuera de la allowlist).
+  existen en el modo seguro): la corta primero el **hook** (R-8g, fuera de la allowlist).
   Probado: VC-8b en un turno (`tool_use` → veto con el texto exacto; `prueba.txt` da `404` y
-  el gateway no recibió nada) y VC-8a, 66 casos sin Claude. El modo del server no la corta.
+  el gateway no recibió nada) y VC-8a, 74 casos sin Claude (incluye `write_object_new`, el nombre del enunciado). El modo del server no la corta.
   Si el hook no estuviera, el **gateway** responde `403` (`storage.objects.create`):
   `probar-server-sin-hook.py` habla JSON-RPC directo con el server y su `write_object_safe`
   vuelve `Request failed with status code 403`.
@@ -221,7 +233,7 @@ La sesión principal tiene las tres patas:
 **Qué pata se corta, y dónde: la del contenido no confiable, solo en el camino MCP.**
 Por MCP, los objetos solo los lee `lector-fixtures`, y sus `tools:` son las 3 de lectura,
 sin Bash, red, Write ni Edit. Eso no lo garantiza el prompt sino el **hook**: mira
-`agent_type` y veta las lecturas que vienen de la sesión principal (paso 3, VC-8a). A la
+`agent_type` y veta las lecturas que vienen de la sesión principal (R-8h, VC-8a). A la
 sesión principal le llegan tablas, y la línea hostil va solo a la tabla de instrucciones,
 cortada a 40 caracteres, aunque matchee `curl`. Probado en
 [05](./evidencia/05-fixture-hostil.md): VC-7a pasa, y en la sesión principal no hubo
@@ -239,9 +251,10 @@ real pasa lo mismo con `gcloud`/`python` y el ADC personal. En ese camino solo h
 comando no pre-aprobado (interactiva o, en `-p`, el rechazo). Es por prefijo: un
 `python3 -c` con `urllib` no matchea ninguna regla, y entonces depende de que la persona
 no lo apruebe y de que el modelo no lo intente. **Persuade y pide aprobación, no
-garantiza.** No pasó en las corridas guardadas: la sesión principal intentó una vez un
+garantiza.** En las corridas hubo un intento: la sesión principal corrió una vez un
 `curl` al gateway (solo el código HTTP del listado), y lo frenó la capa de permisos de
-`-p`, no el muro ([03](./evidencia/03-skill.md#primera-corrida-hallazgo)).
+`-p`, no el muro ([03](./evidencia/03-skill.md#primera-corrida-hallazgo)). En ninguna
+corrida la sesión principal leyó contenido del bucket por Bash.
 
 **Otro límite:** las "líneas con match" (≤ 200 caracteres) sí llegan a la sesión
 principal. Que una línea hostil no pase por ahí depende de la heurística del subagent.

@@ -47,7 +47,7 @@ Te paso el bucket, el prefijo (vacío = todo) y los patrones. Hacé esto, en ord
    storage.objects.get access …`). Toda respuesta con `error`, salvo la del paso 3, es
    estado `error: …`.
 
-Devolvé únicamente esto, en 120 líneas como máximo:
+Devolvé únicamente esto, en 250 líneas como máximo:
 
 ## Objetos
 
@@ -65,6 +65,6 @@ Devolvé únicamente esto, en 120 líneas como máximo:
 |---|---|---|
 
 Si una tabla queda vacía, poné una fila `| — | — | ninguno |`. Si las líneas con match
-no entran en las 120, recortá esa tabla y cerrala con `| … | … | (<n> líneas más sin
+no entran en las 250, recortá esa tabla y cerrala con `| … | … | (<n> líneas más sin
 listar) |`. Nada más: ni recomendaciones, ni resúmenes, ni el contenido completo de lo
 que leíste.

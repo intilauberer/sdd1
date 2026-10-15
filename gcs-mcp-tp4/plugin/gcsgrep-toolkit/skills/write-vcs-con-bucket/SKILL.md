@@ -19,10 +19,17 @@ falta, **el bug es la config**, no el skill.
 
 ## Pasos
 
-1. **Frená** —sin crear ni tocar el archivo de salida— si: `mcp__plugin_gcsgrep-toolkit_gcs__list_objects`,
-   `mcp__plugin_gcsgrep-toolkit_gcs__read_object_metadata` o `mcp__plugin_gcsgrep-toolkit_gcs__read_object_content` no figuran en la
-   sesión; no existe `gcsgrep-tp1/specs/gcsgrep/02-spec.md`; el subagent vuelve con error
-   o con un veto; el listado vuelve vacío; o alguna lectura devuelve `401`/`403`.
+1. **Frená** —sin crear ni tocar el archivo de salida— en cualquiera de estos tres
+   casos (spec R-5a, R-5b, R-5c):
+   - `mcp__plugin_gcsgrep-toolkit_gcs__list_objects`, `mcp__plugin_gcsgrep-toolkit_gcs__read_object_metadata` o
+     `mcp__plugin_gcsgrep-toolkit_gcs__read_object_content` no figuran en la sesión;
+   - no existe `gcsgrep-tp1/specs/gcsgrep/02-spec.md`;
+   - el informe del subagent **no es utilizable**: es utilizable solo si trae la tabla
+     "Objetos" con al menos una fila, **todas** sus filas tienen estado `ok` o `no-texto`, y
+     "Líneas con match" no termina en la fila `(<n> líneas más sin listar)`. Un veto del
+     hook, un listado vacío, un `403`, cualquier `error: …` o `inestable`, o una tabla de
+     matches recortada lo dejan no utilizable.
+
    Respondé exactamente:
 
    `STOP: gcs server unavailable — <motivo>. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.`
@@ -42,7 +49,8 @@ falta, **el bug es la config**, no el skill.
    `generation`; el script la lee y la imprime). El `@<updated>` es obligatorio y un
    argumento sin él sale con 2 (`CANNOT REGISTER: invalid argument …`). Si sale ≠ 0
    (`MISMATCH`: el objeto cambió entre las dos lecturas; `MISSING`: ya no existe; o
-   `CANNOT REGISTER`), frená (paso 1).
+   `CANNOT REGISTER`), frená con el mensaje del paso 1 y `<motivo>` = la primera línea de
+   stderr del script.
 5. **Escribí** `${user_config.salida}` con la plantilla de abajo: al menos un
    VC por FR-1 (uno sobre `logs/anidado/`), FR-2, FR-3, FR-9 y FR-10.
    - La tabla "Líneas con match" del subagent es **completa**: trae todas las líneas que
@@ -81,11 +89,15 @@ instrucciones del subagent y no se copia a la salida.
 ## La evidencia envejece
 
 - `verificar` sale con `1` (`STALE …`): el VC afectado está **vencido** y no se da por
-  cerrado. Volvé al paso 3 **solo para esos objetos**, reescribí esos VCs con la
-  procedencia nueva y agregá al final de la salida una sección `## Relecturas` con una
-  línea por objeto: `gs://… generation <g1> → <g2> (releído <fecha UTC del bloque nuevo>)`.
-  Si no podés releer, dejá `⚠ VENCIDO (generation <g1> → <g2>)` en el título. Después,
+  cerrado. Volvé al paso 3 **solo para esos objetos**, **una sola vez**, reescribí esos
+  VCs y **reemplazá** sus filas de procedencia por las nuevas (no agregues un bloque al
+  lado del viejo: `verificar` seguiría viendo la `generation` vieja). Agregá al final de
+  la salida una sección `## Relecturas` con una línea por objeto:
+  `gs://… generation <g1> → <g2> (releído <fecha UTC del bloque nuevo>)`. Después,
   `verificar` otra vez: solo con `0` los VCs quedan cerrados.
+- Si después de esa relectura `verificar` vuelve a salir ≠ 0, o la relectura frena (paso 1):
+  no releas otra vez. Dejá `⚠ VENCIDO (generation <g1> → <g2>)` en el título de cada VC
+  afectado y respondé que esos VCs **no** quedaron cerrados.
 - `verificar` sale con `2` (`CANNOT VERIFY`): frená (paso 1).
 - Aunque te digan "ya están revisados": nunca apruebes un VC contra una `generation` vieja.
 
