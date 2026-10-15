@@ -1,7 +1,9 @@
 # 02 · Política de acceso: el gateway en lugar de IAM (D-9)
 
-Spec: [R-1/VC-1 y R-2/VC-2](../spec.md#r-2--techo-de-solo-lectura-el-gateway), desvío
-[D-9](../spec.md#d-9--el-bucket-en-un-emulador-con-un-gateway-de-techo).
+Spec: [R-1/VC-1](../spec.md#r-1--bucket-de-prueba-sintético), R-1b/VC-1b y
+[R-2d/VC-2d](../spec.md#r-2d--el-emulador-solo-se-alcanza-por-el-gateway-docker-desktop) (spec v1.7), desvío
+[D-9](../spec.md#d-9--el-bucket-en-un-emulador-con-un-gateway-de-techo). R-2a…R-2c (lo que el gateway deja
+pasar y lo que rechaza) se prueban caso por caso en [`04-muro.md`](./04-muro.md#capa-3).
 
 El enunciado pide acá `gcloud storage buckets get-iam-policy` con el rol de la cuenta.
 **Con el emulador no hay política IAM que mostrar:** `fake-gcs-server` no implementa IAM
@@ -9,7 +11,9 @@ El enunciado pide acá `gcloud storage buckets get-iam-policy` con el rol de la 
 facturación en GCP, así que el bucket vive en el emulador y el techo de solo lectura lo
 pone un gateway propio, [`emulador/gateway.py`](../emulador/gateway.py), que es lo único
 que el server MCP y los scripts ven. Lo de abajo muestra ese techo, no una política de
-GCS: prueba que *esta* frontera corta, no que una política IAM real lo haga.
+GCS: prueba que *esta* frontera corta, no que una política IAM real lo haga. En la primera
+entrega la cátedra habilitó emular GCS, y el TP4 aplica ese criterio (D-9, "Precedente y
+autorización").
 
 Ninguna corrida de `claude` hizo falta para este archivo (son comandos de Docker y `curl`).
 
@@ -87,6 +91,10 @@ Esto sale de [`emulador/docker-compose.yml`](../emulador/docker-compose.yml): l�
    242	            self._deny(method, path)
 ```
 
+Las líneas citadas son las de `gateway.py` en `ef6a274` (spec v1.6). La v1.7 agregó 3 líneas
+antes de `ALLOWED` (los headers de override de método, R-2a) y 2 en `_proxy`, así que hoy
+están 3 líneas más abajo desde la 55, y 5 desde `_proxy`.
+
 Solo `GET`/`HEAD` (línea 82) y solo las cuatro rutas del bucket de prueba (líneas 55–60);
 `/b/…` se reescribe a `/storage/v1/b/…` antes de decidir (líneas 69–73), y una ruta con
 `.`, `..`, `%2e` o `//` se niega (línea 80). Todo lo demás cae en `_deny`:
@@ -108,14 +116,16 @@ Solo `GET`/`HEAD` (línea 82) y solo las cuatro rutas del bucket de prueba (lín
 Los `403` reales que emite (subida, borrado) y sus líneas `DENY` en el log están en
 [`04-muro.md`](./04-muro.md#capa-3) (VC-10a).
 
-**VC-2: pasa** (las tres partes: allowlist en el código, topología de arriba, y las líneas
-`DENY` de VC-10a en `04-muro.md`).
+**VC-2d (spec v1.7; era la segunda parte de VC-2 en la v1.6): pasa.** La topología de
+arriba: el gateway publicado solo en `127.0.0.1:4443`, `gcs` sin puertos y solo en la red
+interna. La allowlist del código y las líneas `DENY`, que eran las otras dos partes de VC-2,
+ahora son VC-2a…VC-2c ([`04-muro.md`](./04-muro.md#capa-3)).
 
 ## Bucket y objetos
 
 El bucket se armó con `gcs-mcp-tp4/emulador/levantar.sh` y
-`gcs-mcp-tp4/emulador/armar-bucket.sh`. **El exit code de esa corrida no se guardó.** No
-se vuelve a correr: generaría un nonce nuevo y dejaría inválida la salida del skill
+`gcs-mcp-tp4/emulador/armar-bucket.sh`. **El exit code de esa corrida no se guardó**; el
+`0` quedó registrado en CI (abajo). No se vuelve a correr a mano: generaría un nonce nuevo y dejaría inválida la salida del skill
 (`salida/vcs-bucket.md` y la evidencia de 03 y 05). Lo que sí queda es la salida
 guardada:
 
@@ -208,13 +218,23 @@ $ git grep -F "$(cat ~/.config/gcloud-tp4/nonce.txt)" 420a6ab5b4149497802d3db2f2
 exit=1
 ```
 
-**VC-1: pasa, con una salvedad.** Hay 6 objetos exactos por el gateway, en los dos
-listados. `git grep` del nonce en el commit anterior a la corrida sale con `1`. El exit
-`0` de `armar-bucket.sh` no se registró: sale del código, como se explica arriba.
+El exit `0` de `armar-bucket.sh` lo registra el job `emulator` de CI: en la corrida del PR 11
+sobre `ef6a274` (run 38645916143, job 116132606280), el paso "Armar el bucket (VC-1)"
+terminó `success`, que en GitHub Actions es exit `0`. Corre el mismo script contra un
+emulador nuevo, así que el nonce y las `generation` de esa corrida son otros.
+
+**VC-1: pasa.** Hay 6 objetos exactos por el gateway, en los dos listados. `git grep` del
+nonce en el commit anterior a la corrida sale con `1`. El exit `0` de `armar-bucket.sh`
+está en CI.
+
+**VC-1b (spec v1.7):** lo corre el job `emulator` de CI, en el paso "Objetos de más
+(VC-1b)", al final del job: sube `extra/sobra.log` desde `admin`, vuelve a correr
+`armar-bucket.sh` y exige exit `1`, la línea `WARNING: unexpected objects: extra/sobra.log`
+y ningún manifiesto. Su resultado está en la corrida de CI del PR de la v1.7.
 
 ## El equivalente en el GCS real (no ejecutado)
 
-> **No se ejecutó.** Sin facturación no hay bucket real (D-9). Queda listo para correr, salvo el punto 4 de [`gcs-real/README.md`](../gcs-real/README.md), que pide editar `check-config.py` antes.
+> **No se ejecutó.** Sin facturación no hay bucket real (D-9). Queda listo para correr, salvo el paso 4 de [`gcs-real/README.md`](../gcs-real/README.md), que pide editar `check-config.py` antes.
 
 En el GCS real, el techo es IAM: [`gcs-real/bucket/iam.sh`](../gcs-real/bucket/iam.sh)
 crea la SA `gcsgrep-tp4-lector@itba-sdd.iam.gserviceaccount.com`, le da

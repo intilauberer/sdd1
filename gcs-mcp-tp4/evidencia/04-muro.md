@@ -1,6 +1,6 @@
 # 04 · El muro: veto del hook, la tool que no existe y el `403`
 
-Spec: [R-8/VC-8a/VC-8b, R-9/VC-9, R-10/VC-10a/VC-10b](../spec.md#r-8--hook-gcs-allowlist-capa-1).
+Spec v1.7: [R-8a…R-8j/VC-8a/VC-8b](../spec.md#r-8--hook-gcs-allowlist-capa-1), R-9/VC-9, R-10/VC-10a/VC-10b, R-2a…R-2c/VC-2a…VC-2c, R-2d/VC-2d.
 Bucket emulado (D-9): el `403` de la capa 3 lo emite
 [`emulador/gateway.py`](../emulador/gateway.py), no IAM de GCS. Todas las corridas de
 `claude -p` usaron **Sonnet** (`--model sonnet`, `--output-format stream-json --verbose --max-turns 60`),
@@ -10,22 +10,28 @@ desde la raíz del repo con `STORAGE_EMULATOR_HOST=http://127.0.0.1:4443`.
 
 | Acción que el agente no debería poder hacer | Capa que la corta | Prueba |
 |---|---|---|
-| Escribir un objeto con `mcp__gcs__write_object_safe` desde la sesión | 1 · hook `gcs-allowlist` (paso 2: fuera de la allowlist) | [Capa 1](#corrida-en-un-turno-prompt-de-spec-v15): `tool_use` + `PreToolUse … hook error` en un turno (prompt v1.5); `prueba.txt` da `404` |
-| Llamar las 3 tools de lectura desde la sesión principal, otro bucket, una tool inventada | 1 · hook (pasos 3, 4 y 2) | [VC-8a](#capa-1): 66/66 casos, texto exacto de stderr |
+| Escribir un objeto con `mcp__gcs__write_object_safe` desde la sesión | 1 · hook `gcs-allowlist` (R-8g: fuera de la allowlist) | [Capa 1](#corrida-en-un-turno-prompt-de-spec-v15): `tool_use` + `PreToolUse … hook error` en un turno (prompt v1.5); `prueba.txt` da `404` |
+| Llamar las 3 tools de lectura desde la sesión principal, otro bucket, una tool inventada | 1 · hook (R-8h, R-8i y R-8g) | [VC-8a](#capa-1): 74/74 casos, texto exacto de stderr (incluye `write_object_new`) |
 | Borrar un objeto con `delete_object` | 2 · modo del server (sin `--enable-destructive-tools` la tool no existe) | [Capa 2](#capa-2): 0 `tool_use`, la tool no está en el `init` ni en el `tools/list` |
-| Subir o borrar por HTTP con la identidad del server, sin hook | 3 · gateway (`403`) | [Capa 3](#capa-3): `probar-403.sh` y `probar-server-sin-hook.py`, líneas `DENY` |
+| Subir o borrar por HTTP con la identidad del server, sin hook | 3 · gateway (`403`) | [Capa 3](#capa-3): `probar-403.sh` y `probar-server-sin-hook.py`, líneas `DENY`; `test_gateway.py`, caso por caso |
 | Llegar al emulador sin pasar por el gateway | 3 · topología Docker (red `internal`, sin puertos) | [Capa 3](#capa-3) y [`02-iam.md`](./02-iam.md) |
 
 ## Capa 1
 
 ### VC-8a · el hook, sin Claude
 
-`python3 gcs-mcp-tp4/scripts/test_gcs_allowlist.py` (33 casos por modo, repo y plugin):
+`python3 gcs-mcp-tp4/scripts/test_gcs_allowlist.py`. Con la spec v1.7 son 37 casos por modo
+(repo y plugin): se suman `write_object_new` (el nombre que usa el enunciado; la 0.6.0 no
+lo tiene y el hook lo veta por R-8g), un JSON que no es objeto (R-8b), un evento sin
+`tool_name` (R-8c) y una excepción imprevista (R-8f: un JSON anidado 100.000 niveles da
+`RecursionError`). Corrida del 2026-10-15:
 
 ```
-66 cases, 66 passed
+74 cases, 74 passed
 exit=0
 ```
+
+La corrida de la v1.6 daba `66 cases, 66 passed` (33 por modo).
 
 **VC-8a: pasa.**
 
@@ -535,6 +541,59 @@ El `tools/list` real tampoco la tiene. Sin el flag:
 **VC-9: pasa.**
 
 ## Capa 3
+
+### VC-2a, VC-2b y VC-2c · el gateway, caso por caso y sin Docker (spec v1.7)
+
+`python3 gcs-mcp-tp4/scripts/test_gateway.py` levanta `gateway.py` como proceso, con
+`UPSTREAM` apuntado a un GCS de mentira que registra cada pedido que le llega. Corrida del
+2026-10-15:
+
+```
+PASS [VC-2a] GET /storage/v1/b/gcsgrep-test-g4-mcp
+PASS [VC-2a] GET /storage/v1/b/gcsgrep-test-g4-mcp/o?prefix=logs/&maxResults=100
+PASS [VC-2a] GET /storage/v1/b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log
+PASS [VC-2a] HEAD /storage/v1/b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log
+PASS [VC-2a] GET /download/storage/v1/b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log?alt=media
+PASS [VC-2a] GET /b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log
+PASS [VC-2b] POST /upload/storage/v1/b/gcsgrep-test-g4-mcp/o?uploadType=media&name=prueba.txt
+PASS [VC-2b] PUT /upload/storage/v1/b/gcsgrep-test-g4-mcp/o?uploadType=resumable
+PASS [VC-2b] POST /storage/v1/b/gcsgrep-test-g4-mcp/o/a.log/copyTo/b/gcsgrep-test-g4-mcp/o/b.log
+PASS [VC-2b] POST /storage/v1/b/gcsgrep-test-g4-mcp/o
+PASS [VC-2b] DELETE /storage/v1/b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log
+PASS [VC-2b] PATCH /storage/v1/b/gcsgrep-test-g4-mcp/o/logs%2Fapp-2026-10-01.log
+PASS [VC-2b] GET /storage/v1/b/otro-bucket/o
+PASS [VC-2b] GET /storage/v1/b/otro-bucket/o/a.log
+PASS [VC-2b] POST /storage/v1/b?project=itba-sdd
+PASS [VC-2b] GET /storage/v1/b?project=itba-sdd
+PASS [VC-2b] GET /storage/v1/b/otro-bucket
+PASS [VC-2b] DELETE /storage/v1/b/gcsgrep-test-g4-mcp
+PASS [VC-2b] PATCH /storage/v1/b/gcsgrep-test-g4-mcp
+PASS [VC-2b] GET /storage/v1/b/gcsgrep-test-g4-mcp/iam
+PASS [VC-2b] PUT /storage/v1/b/gcsgrep-test-g4-mcp/iam
+PASS [VC-2b] GET /storage/v1/b/gcsgrep-test-g4-mcp/acl
+PASS [VC-2b] GET /otra/cosa
+PASS [VC-2b] DELETE /storage/v1/b
+PASS [VC-2b] POST /storage/v1/b/gcsgrep-test-g4-mcp/o/a.log
+PASS [VC-2b] OPTIONS /storage/v1/b/gcsgrep-test-g4-mcp/o/a.log
+PASS [VC-2b] DELETE /storage/v1/b/gcsgrep-test-g4-mcp/o
+PASS [VC-2b] POST /storage/v1/b/gcsgrep-test-g4-mcp
+PASS [VC-2c] GET /storage/v1/b/gcsgrep-test-g4-mcp/o/../../otro-bucket/o
+PASS [VC-2c] GET /storage/v1/b/gcsgrep-test-g4-mcp/./o
+PASS [VC-2c] GET /storage/v1/b/gcsgrep-test-g4-mcp/o/logs//app.log
+PASS [VC-2c] GET /storage/v1/b/gcsgrep-test-g4-mcp/o/%2e%2e/x
+PASS [VC-2c] GET /storage/v1/b/gcsgrep-test-g4-mcp/o/%2E/x
+34 cases, 34 passed
+exit=0
+```
+
+El test encontró un hueco: `gateway.py` le reenviaba al emulador `X-HTTP-Method-Override`
+(y los parecidos). Contra la versión anterior, fallan los 6 casos de VC-2a (`28 passed` de 34): los tres
+headers aparecen entre lo que llegó al upstream. Como solo deja pasar
+`GET`/`HEAD`, un upstream que honrara el header podría convertir una lectura permitida en
+un `DELETE`. No se probó si `fake-gcs-server` lo honra, y no hace falta saberlo: la v1.7 los
+descarta (R-2a).
+
+**VC-2a: pasa. VC-2b: pasa. VC-2c: pasa.**
 
 ### VC-10a · `gcs-mcp-tp4/emulador/probar-403.sh`
 

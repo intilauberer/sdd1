@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """gcs-allowlist — capa 1 del muro: qué tools de `gcs` corren, quién las corre y sobre qué bucket.
 
-Evento: PreToolUse. Spec: gcs-mcp-tp4/spec.md, R-8 (VC-8a lo prueba con 66 casos).
+Evento: PreToolUse. Spec: gcs-mcp-tp4/spec.md, R-8a…R-8j (VC-8a lo prueba con 74 casos).
 
 Allowlist, no denylist: deja pasar las 3 tools de lectura que conocemos
 (list_objects, read_object_metadata, read_object_content) y veta todo lo demás,

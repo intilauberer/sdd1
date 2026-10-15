@@ -1,11 +1,15 @@
 # 03 · El skill `write-vcs-con-bucket` usando lo que leyó
 
-Spec: [R-5/VC-5a/VC-5b, R-6/VC-6a/VC-6b, N-2/VC-13n](../spec.md#r-5--skill-write-vcs-con-bucket-especificar).
+Spec v1.7: [R-5/VC-5b, R-5a/VC-5a, R-5b/VC-5c, R-5c/VC-5d](../spec.md#r-5--skill-write-vcs-con-bucket-especificar-camino-feliz),
+R-14/VC-14, R-6/VC-6a/VC-6b/VC-6c, N-2a y N-2b/VC-13n. Las corridas de VC-5a, VC-5b, VC-6a y VC-6b
+son de la spec v1.5; esos VCs no cambiaron de fondo en la v1.6 ni en la v1.7 (la v1.7 le
+suma a VC-5b un chequeo, hecho abajo sobre la misma transcripción).
 Salida: [`salida/vcs-bucket.md`](../salida/vcs-bucket.md). Bucket emulado (D-9): la
 `generation` la asigna `fake-gcs-server` 1.56.1 y la cuenta es el gateway, no una SA de
 GCS. Todas las corridas de `claude -p` usaron **Sonnet** (`--model sonnet`,
 `--output-format stream-json --verbose --max-turns 60`), desde la raíz del repo con
-`STORAGE_EMULATOR_HOST=http://127.0.0.1:4443` (salvo VC-5a). Ningún prompt nombra el
+`STORAGE_EMULATOR_HOST=http://127.0.0.1:4443` (salvo VC-5a). VC-5c y VC-5d (v1.7) se
+corrieron con el plugin desde un directorio de `mktemp -d`, como dice cada sección. Ningún prompt nombra el
 skill, el subagent ni el hook.
 
 **Nota sobre cómo se cargó el skill.** En las tres corridas, el modelo eligió el skill
@@ -1028,6 +1032,20 @@ N-2 (VC-13n), sobre esta corrida y la de VC-6b:
 FR-9 y FR-10; el nonce en la salida; `generation`/cuenta/hora de las 6 filas; ningún
 `tool_use` con `nonce.txt` ni `gcloud-tp4`; `verificar` con `0`). **VC-13n (03): pasa.**
 
+**Chequeo agregado con la spec v1.7** (VC-5b pide además que cada fila de procedencia de la
+salida sea idéntica a una que imprimió `registrar`). Se comparó, sobre este archivo y
+`05-fixture-hostil.md`, cada fila `| gs://…` de `salida/vcs-bucket.md` (la commiteada) con
+las filas de los resultados de `registrar` en las transcripciones:
+
+```
+filas que imprimió registrar (03 y 05): 8
+filas en salida/vcs-bucket.md: 7
+filas de la salida que no son idénticas a una de registrar: 0
+```
+
+Con la v1.7, VC-5b tiene seis cosas y las seis pasan.
+
+
 Observación: el primer `Bash` de la sesión (`registrar … ; echo "exit=$?"`) volvió
 denegado por la capa de permisos de `-p` (el `echo` no está pre-aprobado); el modelo lo
 repitió sin el `echo`.
@@ -1183,6 +1201,542 @@ Revisá que el server `gcs` (`@google-cloud/storage-mcp@0.6.0`) esté conectado 
 **VC-5a: pasa.** La respuesta empieza con `STOP: gcs server unavailable` (el `init`
 muestra 0 tools de `gcs`) y la salida tiene el mismo hash antes y después; la sesión no
 hizo ningún `Write` ni `Edit`.
+
+## Sin la spec del TP1
+
+VC-5c (spec v1.7, R-5b). Corrida del 2026-10-15, con el plugin (rearmado con el `SKILL.md`
+de la v1.7), desde un directorio de `mktemp -d` que tiene una copia de `gcs-mcp-tp4/` y
+**no** tiene `gcsgrep-tp1/`. Mismo `--settings` con `pluginConfigs."gcsgrep-toolkit@inline"`
+y mismo `--allowedTools` (con `Skill`) que [`06-plugin.md`](./06-plugin.md), Sonnet,
+`STORAGE_EMULATOR_HOST=http://127.0.0.1:4443`. Ventana 2026-10-15T00:12:27Z … 2026-10-15T00:12:49Z.
+
+```
+claude -p "Escribí los VCs de gcsgrep contra el bucket de prueba gcsgrep-test-g4-mcp" \
+  --plugin-dir <repo>/gcs-mcp-tp4/plugin/gcsgrep-toolkit --settings plugin-settings.json \
+  --allowedTools "<la lista de 06, con Skill>" \
+  --model sonnet --output-format stream-json --verbose --max-turns 60 < /dev/null
+```
+
+`git hash-object gcs-mcp-tp4/salida/vcs-bucket.md` (la copia del directorio temporal):
+
+```
+antes:   ac2bf116596742193b785314a4b5d2327b02c35b
+después: ac2bf116596742193b785314a4b5d2327b02c35b
+```
+
+Chequeo calculado sobre el `.jsonl`:
+
+```
+tool_use de Agent: 0
+tool_use de mcp__plugin_gcsgrep-toolkit_gcs__*: 0
+Bash con 'check-generations.py registrar': 0
+respuesta final contiene 'STOP: gcs server unavailable': True
+```
+
+En el `init` el server del plugin figura `pending` (el `npx` todavía arrancaba). Las tools
+llegaron después: el agente las buscó con `ToolSearch`, las encontró, y frenó por la spec
+que falta, no por el server (lo dice en la respuesta).
+
+**VC-5c: pasa.**
+
+**Procedencia de VC-5c y VC-5d.** Se corrieron sobre el árbol de trabajo del borrador de la
+v1.7, antes del commit, con el plugin ya rearmado: `git hash-object` daba `eccb8ba` para
+`plugin/gcsgrep-toolkit/skills/write-vcs-con-bucket/SKILL.md`, `e4c871e` para
+`agents/lector-fixtures.md` y `934c3b5` para `hooks/gcs-allowlist.py`. Después de la
+[revisión del borrador](../revisiones/revision-spec-v1.7.md) cambiaron dos cosas que estas
+corridas no ejercitan: el paso 1 del skill suma "una tabla de matches recortada" a lo que deja
+el informe no utilizable, y el subagent pasa de 120 a 250 líneas (N-2a). El hook no cambió.
+Los caminos de VC-5c (falta la spec) y de VC-5d (estado `error`) son los mismos en las dos
+versiones.
+
+### Transcripción (sin la spec del TP1)
+
+**Prompt** (sesión nueva con el plugin, desde un directorio de mktemp -d sin gcsgrep-tp1/):
+
+> Escribí los VCs de gcsgrep contra el bucket de prueba gcsgrep-test-g4-mcp
+
+- Inicio de la sesión: sesión `028e363e-03d7-4f56-be25-5e334fbe6be8` · modelo `claude-sonnet-5-5` · Claude Code 2.1.296 · servers MCP de gcs: `plugin:gcsgrep-toolkit:gcs` (pending) · tools de gcs en la sesión: 0
+
+**→ Skill**
+
+```json
+{
+ "skill": "gcsgrep-toolkit:write-vcs-con-bucket"
+}
+```
+
+**← resultado**
+
+```
+Launching skill: gcsgrep-toolkit:write-vcs-con-bucket
+```
+
+**→ ToolSearch**
+
+```json
+{
+ "query": "gcs list_objects read_object_metadata",
+ "max_results": 10
+}
+```
+
+**→ Bash**
+
+```json
+{
+ "command": "ls gcsgrep-tp1/specs/gcsgrep/02-spec.md <repo>/gcsgrep-tp1/specs/gcsgrep/02-spec.md <repo>/gcs-mcp-tp4/ 2>&1; pwd",
+ "description": "Check spec file existence"
+}
+```
+
+**⊘ permiso denegado** (capa de aprobación de `-p`, no un hook): `Bash` — ls in '<repo>/gcsgrep-tp1/specs/gcsgrep/02-spec.md' was blocked. For security, Claude Code may only list files in the allowed working directories for this session: '/private<tmp>/tmp.qfzHH5x0N1', '<tmp>/tmp.qfzHH5x0N1'.
+
+**← resultado** ⛔ (error / bloqueado)
+
+```
+ls in '<repo>/gcsgrep-tp1/specs/gcsgrep/02-spec.md' was blocked. For security, Claude Code may only list files in the allowed working directories for this session: '/private<tmp>/tmp.qfzHH5x0N1', '<tmp>/tmp.qfzHH5x0N1'.
+```
+
+**← resultado**
+
+```
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__list_objects
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__read_object_metadata
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__get_metadata_table_schema
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__list_buckets
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__upload_object_safe
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__check_iam_permissions
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__copy_object_safe
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__create_bucket
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__execute_insights_query
+[tool_reference] mcp__plugin_gcsgrep-toolkit_gcs__get_bucket_location
+```
+
+**→ Bash**
+
+```json
+{
+ "command": "ls -la gcsgrep-tp1/specs/gcsgrep/02-spec.md; pwd; ls",
+ "description": "Check spec file in working directory"
+}
+```
+
+**← resultado**
+
+```
+ls: gcsgrep-tp1/specs/gcsgrep/02-spec.md: No such file or directory
+<tmp>/tmp.qfzHH5x0N1
+gcs-mcp-tp4
+plugin-settings.json
+```
+
+**Agente:** Según el paso 1 del skill, me detengo sin crear ni tocar el archivo de salida.
+
+STOP: gcs server unavailable — no existe `gcsgrep-tp1/specs/gcsgrep/02-spec.md` en el directorio de trabajo (`<tmp>/tmp.qfzHH5x0N1`). Ahí solo hay `gcs-mcp-tp4` y `plugin-settings.json`. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.
+
+Las tres tools de lectura (`list_objects`, `read_object_metadata`, `read_object_content`) sí figuran en la sesión, así que el server `gcs` está conectado. Lo que falta es la spec, que el paso 2 necesita para leer FR-1, FR-2, FR-3, FR-9 y FR-10. No lancé el subagent ni leí el bucket.
+
+Para seguir, necesito una de estas dos cosas:
+- La ruta correcta a `gcsgrep-tp1/` (por ejemplo, el worktree `<repo>`). Ese directorio está fuera de los directorios permitidos de esta sesión, así que tendrías que abrir la sesión desde ahí o agregarlo como directorio adicional.
+- Que confirmes que querés continuar sin la spec. No lo haría por mi cuenta, porque el skill lo trata como motivo de frenado.
+
+---
+**Resultado final** · turnos: 6 · duración: 18s · is_error: False
+
+Según el paso 1 del skill, me detengo sin crear ni tocar el archivo de salida.
+
+STOP: gcs server unavailable — no existe `gcsgrep-tp1/specs/gcsgrep/02-spec.md` en el directorio de trabajo (`<tmp>/tmp.qfzHH5x0N1`). Ahí solo hay `gcs-mcp-tp4` y `plugin-settings.json`. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.
+
+Las tres tools de lectura (`list_objects`, `read_object_metadata`, `read_object_content`) sí figuran en la sesión, así que el server `gcs` está conectado. Lo que falta es la spec, que el paso 2 necesita para leer FR-1, FR-2, FR-3, FR-9 y FR-10. No lancé el subagent ni leí el bucket.
+
+Para seguir, necesito una de estas dos cosas:
+- La ruta correcta a `gcsgrep-tp1/` (por ejemplo, el worktree `<repo>`). Ese directorio está fuera de los directorios permitidos de esta sesión, así que tendrías que abrir la sesión desde ahí o agregarlo como directorio adicional.
+- Que confirmes que querés continuar sin la spec. No lo haría por mi cuenta, porque el skill lo trata como motivo de frenado.
+
+## Informe no utilizable
+
+VC-5d (spec v1.7, R-5c). Misma forma de correr que VC-5c, pero el directorio temporal
+**sí** tiene una copia de `gcsgrep-tp1/specs/`, y en `127.0.0.1:4443` no escucha nada: ni
+emulador ni gateway. Así el subagent recibe un error en cada llamada. Ventana
+2026-10-15T00:13:02Z … 2026-10-15T00:13:40Z.
+
+`git hash-object gcs-mcp-tp4/salida/vcs-bucket.md`:
+
+```
+antes:   ac2bf116596742193b785314a4b5d2327b02c35b
+después: ac2bf116596742193b785314a4b5d2327b02c35b
+```
+
+Chequeo calculado sobre el `.jsonl`:
+
+```
+tool_use de Agent: 1
+tool_use de mcp__plugin_gcsgrep-toolkit_gcs__* (todos del subagent): 1, list_objects con prefix "" y max_results 100
+resultado de list_objects: {"error":"Error listing objects: request to http://127.0.0.1:4443/b/gcsgrep-test-g4-mcp/o?maxResults=100 failed, reason: connect ECONNREFUSED 127.0.0.1:4443", …}
+informe del subagent: la tabla "Objetos" trae una fila con estado error
+Bash con 'check-generations.py registrar': 0
+respuesta final contiene 'STOP: gcs server unavailable': True
+```
+
+El subagent corrió en segundo plano: la sesión cerró un primer turno esperando el informe y
+frenó cuando llegó (por eso hay dos resultados al final).
+
+**VC-5d: pasa.**
+
+### Transcripción (informe no utilizable)
+
+**Prompt** (sesión nueva con el plugin, STORAGE_EMULATOR_HOST=http://127.0.0.1:4443 sin nada escuchando):
+
+> Escribí los VCs de gcsgrep contra el bucket de prueba gcsgrep-test-g4-mcp
+
+- Inicio de la sesión: sesión `1a8d3dac-4d3b-4f8e-9b57-673d1d9da205` · modelo `claude-sonnet-5-5` · Claude Code 2.1.296 · servers MCP de gcs: `plugin:gcsgrep-toolkit:gcs` (connected) · tools de gcs en la sesión: 15
+
+**→ Skill**
+
+```json
+{
+ "skill": "gcsgrep-toolkit:write-vcs-con-bucket"
+}
+```
+
+**← resultado**
+
+```
+Launching skill: gcsgrep-toolkit:write-vcs-con-bucket
+```
+
+**→ Bash**
+
+```json
+{
+ "command": "ls gcsgrep-tp1/specs/gcsgrep/02-spec.md gcs-mcp-tp4 2>&1; pwd",
+ "description": "Check spec file exists"
+}
+```
+
+**← resultado**
+
+```
+gcsgrep-tp1/specs/gcsgrep/02-spec.md
+
+gcs-mcp-tp4:
+README.md
+codex
+emulador
+enunciado.md
+evidencia
+gcs-real
+plugin
+revisiones
+salida
+scripts
+server
+spec.md
+<tmp>/tmp.1arU3DJi8Z
+```
+
+**→ Bash**
+
+```json
+{
+ "command": "grep -n -E \"^#+ .*FR-(1|2|3|9|10)\\b|FR-(1|2|3|9|10)[ :.]\" gcsgrep-tp1/specs/gcsgrep/02-spec.md | head -50",
+ "description": "Locate FR sections in spec"
+}
+```
+
+**← resultado**
+
+```
+146:### FR-1 · Búsqueda literal sobre un prefijo
+165:### FR-2 · Búsqueda sin distinguir mayúsculas (`-i`)
+191:### FR-3 · Formato de salida con número de línea (`-n`)
+303:### FR-9 · Salteo de objetos binarios
+319:contradice NFR-3: es una línea de match
+351:### FR-10 · Salteo de objetos `.gz`
+413:seguir; y NFR-2 habla de fallos de **red**, que un 404 no es — la red funcionó y
+490:Hasta la v1.3 este caso caía en el caso genérico de NFR-3 (exit `2` sin traceback,
+529:Hasta la v1.4 este caso caía en el genérico de NFR-3 (exit `2`, sin traceback, con el
+691:el caso genérico de NFR-3 y abortaba la corrida
+923:### NFR-1 · Memoria acotada por streaming
+938:que se mide, porque lo que NFR-1 protege —no cargar el objeto ni acumular matches—
+967:### NFR-2 · Política ante fallos de red: sin reintentos
+983:fallo se reporta según NFR-3 (sin traceback). Hay dos condiciones, cada una con su
+1003:### NFR-3 · Salida apta para scripting
+1038:**Por qué VC-16 tiene tres partes.** NFR-3 está cuantificado universalmente
+1116:> exit code. Cubre FR-1, FR-3, FR-5, FR-12, BR-1 y NFR-3.
+1130:| FR-1 | VC-1, VC-19, VC-31 | feliz · borde (metacaracteres) · punta a punta real |
+1131:| FR-2 | VC-2, VC-43 | feliz · borde (no ASCII) |
+1132:| FR-3 | VC-3, VC-31 | feliz · punta a punta real |
+1138:| FR-9 | VC-9, VC-20 | borde (binario) · límite exacto |
+1139:| FR-10 | VC-10 | borde (.gz) |
+1163:| NFR-1 | VC-14 (a), VC-14 (b), VC-14 (c) | medición (doble · lector real) |
+1164:| NFR-2 | VC-15 (al listar), VC-29 (al leer), VC-33 (al abrir) | falla |
+1165:| NFR-3 | VC-16 (a), (b), (c), VC-31 | invariante |
+1180:| FR-a · patrón + ubicación, busca dentro de los objetos | FR-1 (literal), FR-16 (orden), FR-17…FR-20, FR-22, FR-27 (bordes de contenido y ubicación), FR-23 (corte de stdout), FR-24 (patrón vacío), FR-25 (invocación mal formada), FR-30 (ayuda) | Iteración 1 (comportamiento) · Iteración 2 (VCs nuevos de v1.4 y v1.5) |
+1182:| FR-c · salida deja claro el objeto, y la línea si se puede | FR-4 (sin `-n`) + FR-3 (con `-n`) | Iteración 1 |
+1183:| FR-d · búsqueda sin distinguir mayúsculas | FR-2 | Iteración 1 |
+1190:| BR-d? · saltear lo que no es texto | FR-9, FR-10 (es comportamiento observable, no regla de negocio) + [ADR-0021](../../docs/adr/ADR-0021-avisos-de-salteo-por-objeto.md) (supersede a ADR-0005), [ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md) | Iteración 2 |
+1193:| NFR-c · comportamiento ante fallos de red | NFR-2 (0 reintentos, también en la librería; [ADR-0028](.
+… [8201 caracteres más]
+```
+
+**→ Agent**
+
+```json
+{
+ "description": "Read bucket fixtures",
+ "subagent_type": "gcsgrep-toolkit:lector-fixtures",
+ "prompt": "Bucket: gcsgrep-test-g4-mcp. Prefijo: vacío (todo). Patrones: timeout. Devolveme la tabla \"Objetos\" (con updated, contentType, tamaño, estado), la tabla \"Líneas con match\" completa con números de línea, y el contenido sospechoso."
+}
+```
+
+**← resultado** (el `Agent` arrancó en segundo plano; el informe llega por `system/task_notification`)
+
+**Agente:** Mientras el lector trabaja, leo los FR que voy a ejercitar.
+
+**→ Read**
+
+```json
+{
+ "file_path": "/private<tmp>/tmp.1arU3DJi8Z/gcsgrep-tp1/specs/gcsgrep/02-spec.md",
+ "offset": 146,
+ "limit": 70
+}
+```
+
+**← resultado**
+
+```
+146	### FR-1 · Búsqueda literal sobre un prefijo
+147	
+148	**Dado** un prefijo de GCS con al menos un objeto de texto que contiene el
+149	patrón buscado como **substring literal** (ningún carácter del patrón tiene
+150	significado especial: `.`, `*`, `[`, `\` y el resto se comparan tal cual),
+151	**Cuando** la persona ejecuta `gcsgrep "<patrón>" gs://bucket/prefijo`,
+152	**Entonces** el sistema imprime por stdout una línea por cada línea de texto
+153	que contiene el patrón, identificando el objeto de origen, y sale con código `0`.
+154	
+155	> **VC-1** — Con un objeto `gs://b/logs/a.txt` que contiene la línea
+156	> `connection timeout`, `gcsgrep "timeout" gs://b/logs/` sale con código `0`,
+157	> stdout es exactamente `gs://b/logs/a.txt:connection timeout` y stderr queda
+158	> vacío.
+159	>
+160	> **VC-19** — Con un objeto `gs://b/p/a.txt` que contiene las líneas `a.b`,
+161	> `axb` y `a*b`, `gcsgrep "a.b" gs://b/p/` imprime exactamente una línea,
+162	> `gs://b/p/a.txt:a.b` (no `axb`), y `gcsgrep "a*b" gs://b/p/` imprime
+163	> exactamente `gs://b/p/a.txt:a*b`. Ambas salen con código `0`.
+164	
+165	### FR-2 · Búsqueda sin distinguir mayúsculas (`-i`)
+166	
+167	**Dado** un objeto con una línea que contiene el patrón con otras mayúsculas
+168	(por ejemplo `"Timeout"` para el patrón `"timeout"`),
+169	**Cuando** la persona ejecuta `gcsgrep -i "<patrón>" gs://bucket/prefijo`,
+170	**Entonces** el sistema reporta esa línea como match. La comparación se hace
+171	después de pasar el patrón y la línea a minúsculas con la conversión completa de
+172	Unicode, **incluidas sus reglas contextuales** —la de `str.lower()` de Python—:
+173	`Á` → `á`, `Ñ` → `ñ`, `İ` → `i̇`, y la `Σ` al final de una palabra → `ς`. No es un
+174	plegado (`casefold`): `ß` no equivale a `ss`. La línea se imprime con sus
+175	mayúsculas originales. Fundamento:
+176	[ADR-0023](../../docs/adr/ADR-0023-plegado-de-mayusculas.md).
+177	
+178	> **VC-2** — Con un objeto que contiene únicamente la línea `"Timeout error"`,
+179	> `gcsgrep "timeout" ...` (sin `-i`) sale con código `1` (sin matches) y
+180	> `gcsgrep -i "timeout" ...` sobre el mismo objeto sale con código `0` y
+181	> reporta esa línea.
+182	>
+183	> **VC-43** — Con `gs://b/p/a.txt` cuya única línea es `Árbol caído`,
+184	> `gcsgrep -i "árbol" gs://b/p/` sale con código `0`, stdout es exactamente
+185	> `gs://b/p/a.txt:Árbol caído` y stderr queda vacío; `gcsgrep "árbol" gs://b/p/`
+186	> (sin `-i`) sale con código `1` y stdout vacío. Regla contextual (v1.7): con
+187	
+… [1609 caracteres más]
+```
+
+**→ Read**
+
+```json
+{
+ "file_path": "/private<tmp>/tmp.1arU3DJi8Z/gcsgrep-tp1/specs/gcsgrep/02-spec.md",
+ "offset": 303,
+ "limit": 80
+}
+```
+
+**← resultado**
+
+```
+303	### FR-9 · Salteo de objetos binarios
+304	
+305	**Dado** un objeto que contiene un byte `\x00` dentro de sus **primeros 8192
+306	bytes** (es decir, en un offset entre `0` y `8191`)
+307	([ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md)),
+308	**Cuando** se lo encuentra durante la búsqueda,
+309	**Entonces** el sistema lo saltea sin intentar matchear contra su contenido, sin
+310	imprimir nada de él por stdout, y escribe por stderr la línea
+311	`gcsgrep: salteado (binario): gs://<bucket>/<objeto>` en el momento del salteo,
+312	antes de procesar el objeto siguiente. Es la única línea que el salteo produce:
+313	**no hay resumen final** de salteados. El salteo no es un error de lectura (BR-3).
+314	
+315	*Límite explícito de la ventana:* un `\x00` en el offset `8192` o posterior no
+316	cambia la clasificación. El objeto se busca como texto, el `\x00` es un carácter
+317	más de su línea, y si esa línea tiene match **sale tal cual por stdout**, con el
+318	byte `0x00` incluido. Es la única forma en que un `\x00` llega a stdout, y no
+319	contradice NFR-3: es una línea de match
+320	([ADR-0018](../../docs/adr/ADR-0018-ventana-binaria-y-codificacion.md)).
+321	
+322	*Por qué una línea por objeto y no un resumen:* decidido en
+323	[ADR-0021](../../docs/adr/ADR-0021-avisos-de-salteo-por-objeto.md), que desde la
+324	v1.7 supersede a [ADR-0005](../../docs/adr/ADR-0005-binarios-y-gz.md) (hasta la
+325	v1.6 era un desvío anotado en `docs/adr/README.md`).
+326	
+327	*Lectura cortada dentro de la ventana (v1.7):* si leer el objeto falla antes de
+328	completar los 8192 bytes y no se vio ningún `\x00`, las líneas completas ya leídas
+329	se buscan como texto y después se informa el fallo (FR-6, FR-13, FR-21 o FR-29); si
+330	ya se vio un `\x00`, el objeto se informa como salteado (binario) y no como error
+331	([ADR-0022](../../docs/adr/ADR-0022-que-es-una-linea.md)).
+332	
+333	> **VC-9** — Con `gs://b/p/blob.bin` (bytes arbitrarios con un `\x00` en el offset
+334	> `10`, y la secuencia `timeout` después) y `gs://b/p/a.txt` (contiene
+335	> `connection timeout`), `gcsgrep "timeout" gs://b/p/` imprime por stdout
+336	> exactamente `gs://b/p/a.txt:connection timeout`, stderr es **exactamente** la
+337	> línea `gcsgrep: salteado (binario): gs://b/p/blob.bin` (ninguna otra línea, ni
+338	> antes ni después), y el exit code es `0`. Sin `a.txt`, la misma corrida sale con
+339	> `1`, stdout vacío y el mismo stderr.
+340	>
+341	> **VC-20** — Límite exacto de la ventana, en dos corridas
+… [2335 caracteres más]
+```
+
+**Agente:** Ya leí FR-1, FR-2, FR-3, FR-9 y FR-10. Espero el informe del lector.
+
+**→ Bash**
+
+```json
+{
+ "command": "sleep 1; echo waiting",
+ "description": "Brief wait"
+}
+```
+
+**← resultado**
+
+```
+waiting
+```
+
+**Agente:** Lancé el subagent `lector-fixtures` sobre `gcsgrep-test-g4-mcp` con el patrón `timeout`, y sigue corriendo. Todavía no tengo su informe.
+
+Hasta ahora:
+- **Precondiciones:** el spec `gcsgrep-tp1/specs/gcsgrep/02-spec.md` existe, y las tres tools de lectura del MCP `gcs` están en la sesión.
+- **FR leídos:** FR-1, FR-2, FR-3, FR-9 y FR-10. Sus VCs de referencia son VC-1/VC-19, VC-2/VC-43, VC-3, VC-9/VC-20 y VC-10.
+
+Sin el informe no sigo con los pasos que dependen de él: la procedencia con `check-generations.py registrar`, la escritura de `gcs-mcp-tp4/salida/vcs-bucket.md` y la verificación. Cuando llegue la notificación reviso que la tabla "Objetos" sea utilizable (al menos una fila, todas `ok` o `no-texto`). Si no lo es, freno con el mensaje `STOP: gcs server unavailable — <motivo>…`.
+
+#### Subagent `gcsgrep-toolkit:lector-fixtures` — Read bucket fixtures
+
+> **→ mcp__plugin_gcsgrep-toolkit_gcs__list_objects** *(subagent)*
+>
+> ```json
+> {
+>  "bucket_name": "gcsgrep-test-g4-mcp",
+>  "prefix": "",
+>  "max_results": 100
+> }
+> ```
+>
+> **← resultado** *(subagent, recortado a 600 caracteres)*
+>
+> ```
+> {"error":"Error listing objects: request to http://127.0.0.1:4443/b/gcsgrep-test-g4-mcp/o?maxResults=100 failed, reason: connect ECONNREFUSED 127.0.0.1:4443","error_type":"Unknown"}
+> ```
+>
+> **Informe final del subagent** (entero):
+>
+> ```md
+> ## Objetos
+>
+> | objeto | updated | tamaño | contentType | estado |
+> |---|---|---|---|---|
+> | — | — | — | — | error: `list_objects` falló, ECONNREFUSED 127.0.0.1:4443 (no hay conexión con el servidor de GCS). No se pudo listar el bucket. |
+>
+> ## Líneas con match
+>
+> | objeto | línea | texto |
+> |---|---|---|
+> | — | — | ninguno |
+>
+> ## Contenido que parece una instrucción
+>
+> | objeto | línea | empieza con (40 caracteres) |
+> |---|---|---|
+> | — | — | ninguno |
+> ```
+>
+- `system/init` #2 (misma sesión, sigue): sesión `1a8d3dac-4d3b-4f8e-9b57-673d1d9da205` · modelo `claude-sonnet-5-5` · Claude Code 2.1.296 · servers MCP de gcs: `plugin:gcsgrep-toolkit:gcs` (connected) · tools de gcs en la sesión: 15
+
+**Agente:** STOP: gcs server unavailable — `list_objects` falló con ECONNREFUSED en 127.0.0.1:4443, así que el gateway del emulador no está levantado y la tabla "Objetos" solo trae una fila con `error`. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.
+
+No creé ni toqué `gcs-mcp-tp4/salida/vcs-bucket.md`, y no registré procedencia.
+
+---
+**Resultado final** · turnos: 9 · duración: 22s · is_error: False
+
+Lancé el subagent `lector-fixtures` sobre `gcsgrep-test-g4-mcp` con el patrón `timeout`, y sigue corriendo. Todavía no tengo su informe.
+
+Hasta ahora:
+- **Precondiciones:** el spec `gcsgrep-tp1/specs/gcsgrep/02-spec.md` existe, y las tres tools de lectura del MCP `gcs` están en la sesión.
+- **FR leídos:** FR-1, FR-2, FR-3, FR-9 y FR-10. Sus VCs de referencia son VC-1/VC-19, VC-2/VC-43, VC-3, VC-9/VC-20 y VC-10.
+
+Sin el informe no sigo con los pasos que dependen de él: la procedencia con `check-generations.py registrar`, la escritura de `gcs-mcp-tp4/salida/vcs-bucket.md` y la verificación. Cuando llegue la notificación reviso que la tabla "Objetos" sea utilizable (al menos una fila, todas `ok` o `no-texto`). Si no lo es, freno con el mensaje `STOP: gcs server unavailable — <motivo>…`.
+
+---
+**Resultado final** · turnos: 1 · duración: 5s · is_error: False
+
+STOP: gcs server unavailable — `list_objects` falló con ECONNREFUSED en 127.0.0.1:4443, así que el gateway del emulador no está levantado y la tabla "Objetos" solo trae una fila con `error`. The bug is the config (.mcp.json / STORAGE_EMULATOR_HOST), not the skill.
+
+No creé ni toqué `gcs-mcp-tp4/salida/vcs-bucket.md`, y no registré procedencia.
+
+## Contrato de check-generations.py
+
+VC-14 (R-14a…R-14e2) y VC-6c (R-6a…R-6e2), spec v1.7. `test_check_generations.py` corre
+`registrar` y `verificar` contra un GCS de mentira en el mismo proceso, sin Docker: el
+número de pedidos que recibe muestra que las precondiciones se chequean antes de tocar la
+red. Corrido el 2026-10-15 con Python 3.13 y `google-cloud-storage` 3.14.1. También lo
+corre el job `offline` de CI.
+
+```
+$ uv run --no-project --with google-cloud-storage==3.14.1 python gcs-mcp-tp4/scripts/test_check_generations.py
+PASS [R-14a] all match -> block on stdout: exit 0, 4 request(s)
+PASS [R-14b] updated differs -> MISMATCH: exit 1, 4 request(s)
+PASS [R-14c] object missing -> MISSING: exit 1, 2 request(s)
+PASS [R-14b+c] both -> one line per object, argument order: exit 1, 5 request(s)
+PASS [R-14d1] argument without @updated: exit 2, 0 request(s)
+PASS [R-14d2] @ not RFC 3339: exit 2, 0 request(s)
+PASS [R-14d3] not a gs:// URI: exit 2, 0 request(s)
+PASS [R-14d4] other bucket: exit 2, 0 request(s)
+PASS [R-14d5] STORAGE_EMULATOR_HOST is not the gateway: exit 2, 0 request(s)
+PASS [R-14d6] no endpoint and no credential: exit 2, 0 request(s)
+PASS [R-14d7] credential file missing: exit 2, 0 request(s)
+PASS [R-14e1] 403 wins over MISMATCH; no block: exit 2, 4 request(s)
+PASS [R-14e2] network error: exit 2, 0 request(s)
+PASS [R-6a] all match: exit 0, 3 request(s)
+PASS [R-6b] generation differs: exit 1, 4 request(s)
+PASS [R-6c] object deleted: exit 1, 4 request(s)
+PASS [R-6b+c] lines in file order: exit 1, 4 request(s)
+PASS [R-6b] old block left next to the new one stays STALE (R-6f replaces it): exit 1, 2 request(s)
+PASS [R-6d1] file missing: exit 2, 0 request(s)
+PASS [R-6d2] no provenance rows: exit 2, 0 request(s)
+PASS [R-6d3] other bucket: exit 2, 0 request(s)
+PASS [R-6d4] STORAGE_EMULATOR_HOST is not the gateway: exit 2, 0 request(s)
+PASS [R-6d5] no endpoint and no credential: exit 2, 0 request(s)
+PASS [R-6d6] credential file missing: exit 2, 0 request(s)
+PASS [R-6e1] STALE then 403: STALE stays, CANNOT VERIFY last, exit 2: exit 2, 3 request(s)
+PASS [R-6e2] network error: exit 2, 0 request(s)
+26 cases, 26 passed
+exit=0
+```
+
+**VC-14: pasa** (13 casos de `registrar`). **VC-6c: pasa** (13 casos de `verificar`).
 
 ## La evidencia envejece
 

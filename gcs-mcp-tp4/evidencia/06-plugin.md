@@ -1,6 +1,7 @@
 # 06 · El plugin `gcsgrep-toolkit`: validado, con nombres nuevos y el muro repetido
 
-Spec: [R-11/VC-11a/VC-11b, VC-0, VC-3, VC-13](../spec.md#r-11--plugin-gcsgrep-toolkit).
+Spec v1.7: [R-11/VC-11a/VC-11b, R-11b/VC-11c, VC-0, VC-3, VC-13, N-3/VC-15](../spec.md#r-11--plugin-gcsgrep-toolkit).
+Los chequeos offline de la v1.7 están en ["Chequeos offline (spec v1.7)"](#chequeos-offline-spec-v17); los de abajo son de la v1.6.
 Plugin: [`plugin/gcsgrep-toolkit/`](../plugin/gcsgrep-toolkit/). Bucket emulado (D-9).
 Todas las corridas de `claude -p` usaron **Sonnet** (`--model sonnet --output-format stream-json --verbose --max-turns 60`).
 
@@ -41,7 +42,7 @@ exit=1
 ```
 
 - **VC-11a: pasa.** `claude plugin validate` sale con `0` (el único aviso es un consejo sobre la línea de instalación desde un marketplace, que no cambia el veredicto); `armar.sh --check` sale con `0`; `grep -r 'mcp__gcs__'` sobre `skills/` y `agents/` del plugin no devuelve nada.
-- **VC-0: pasa.** `check-alcance.py` compara `git diff origin/main...HEAD`, así que solo ve lo commiteado. La primera pasada (antes de 01dd473) daba 53 archivos; la salida de arriba es la de HEAD = 01dd473, con los 63 archivos de la rama. Los cambios de esta revisión (sin commitear) no entran en ese conteo: hay que correrlo otra vez después del próximo commit.
+- **VC-0 (v1.6): pasó** sobre HEAD = 01dd473, con 63 archivos. La corrida sobre el commit de entrega de la v1.6 dio 65 (la rama sumó el README raíz y la revisión del PR). Con la v1.7, `main` ya tiene el PR 11, así que VC-0 compara solo los cambios de la v1.7: ver ["Chequeos offline (spec v1.7)"](#chequeos-offline-spec-v17).
 - **VC-3: pasa** (misma salida que en [`01-descubrimiento.md`](./01-descubrimiento.md#config)).
 - **VC-13: pasa** con el README escrito (salida de `check-nota.py` y `check-doc-links.py` abajo). En la primera pasada `check-nota.py` salía con `1` solo porque `gcs-mcp-tp4/README.md` todavía no existía.
 
@@ -538,7 +539,7 @@ Para escribir podés hacer una de estas dos cosas:
 
 ### (b) VC-8b, corrida 3: prompt de la spec v1.5, en un turno
 
-Las tres corridas de (b) usan el prompt de la **v1.4** y necesitan un `--resume`. Esta es
+Las dos corridas anteriores de (b) usan el prompt de la **v1.4**, y la 2 necesitó un `--resume`. Esta es
 la de la v1.5 (el prompt fija contenido y bucket), con el mismo plugin, el mismo
 `--settings` con `pluginConfigs."gcsgrep-toolkit@inline"`, el mismo `--allowedTools` y
 `STORAGE_EMULATOR_HOST=http://127.0.0.1:4443`. **Cambia el directorio:** en vez del

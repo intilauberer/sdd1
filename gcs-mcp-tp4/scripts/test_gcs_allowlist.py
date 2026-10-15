@@ -2,16 +2,19 @@
 """VC-8a — prueba de .claude/hooks/gcs-allowlist.py (spec R-8), sin red ni Claude.
 
 Corre el hook por subprocess con el JSON de PreToolUse en stdin, en sus dos modos
-(repo y plugin), 33 casos por modo:
-  - 3 permitidos;
-  - 22 vetos del paso 2: las 12 tools seguras no permitidas y las 9 que solo existen
-    con --enable-destructive-tools (sacadas de gcs-mcp-tp4/server/), más exfiltrate_bucket;
-  - 4 vetos del paso 3: las 3 permitidas desde la sesión principal y el agent_type del otro modo;
-  - 1 veto del paso 4: otro bucket;
-  - 3 vetos del paso 1: JSON roto, prefijo ajeno y sin bucket configurado.
+(repo y plugin), 37 casos por modo (spec R-8a…R-8j):
+  - 3 permitidos (R-8j);
+  - 23 vetos del paso 2 (R-8g): las 12 tools seguras no permitidas y las 9 que solo existen
+    con --enable-destructive-tools (sacadas de gcs-mcp-tp4/server/), exfiltrate_bucket y
+    write_object_new (el nombre del enunciado, que la 0.6.0 no tiene);
+  - 4 vetos del paso 3 (R-8h): las 3 permitidas desde la sesión principal y el agent_type del otro modo;
+  - 1 veto del paso 4 (R-8i): otro bucket;
+  - 6 vetos del paso 1: JSON roto (R-8a), JSON que no es objeto (R-8b), sin tool_name (R-8c),
+    prefijo ajeno (R-8d), sin bucket configurado (R-8e) y una excepción imprevista (R-8f: un
+    JSON anidado 100.000 niveles da RecursionError, que no es ValueError).
 Cada caso compara el exit code y el stderr exacto.
 
-Uso: python3 gcs-mcp-tp4/scripts/test_gcs_allowlist.py   (exit 0 si pasan los 66)
+Uso: python3 gcs-mcp-tp4/scripts/test_gcs_allowlist.py   (exit 0 si pasan los 74)
 """
 
 import json
@@ -80,7 +83,7 @@ def casos(nombre, m):
     c = []
     for t in PERMITIDAS:
         c.append((f"allowed {t}", evento(pre + t, ag), var, 0, ""))
-    for t in SEGURAS_NO_PERMITIDAS + SOLO_DESTRUCTIVAS + ["exfiltrate_bucket"]:
+    for t in SEGURAS_NO_PERMITIDAS + SOLO_DESTRUCTIVAS + ["exfiltrate_bucket", "write_object_new"]:
         c.append((f"step 2 {t}", evento(pre + t, ag), var, 2,
                   f"gcs-allowlist: {pre + t} is not in the allowlist ({LISTA}). "
                   "Review the tool and add it on purpose.\n"))
@@ -94,12 +97,18 @@ def casos(nombre, m):
               f"gcs-allowlist: bucket 'otro-bucket' is not the configured test bucket '{BUCKET}'.\n"))
     c.append(("step 1 broken JSON", '{"tool_name": ', var, 2,
               "gcs-allowlist: cannot evaluate this call (stdin is not valid JSON); blocking.\n"))
+    c.append(("step 1 not an object", "[1]", var, 2,
+              "gcs-allowlist: cannot evaluate this call (event is not a JSON object); blocking.\n"))
+    c.append(("step 1 missing tool_name", json.dumps({"agent_type": ag}), var, 2,
+              "gcs-allowlist: cannot evaluate this call (missing tool_name); blocking.\n"))
     ajena = m["prefijo_ajeno"] + "read_object_content"
     c.append(("step 1 foreign prefix", evento(ajena, ag), var, 2,
               f"gcs-allowlist: cannot evaluate this call (tool_name '{ajena}' does not start with "
               "mcp__gcs__ or mcp__plugin_gcsgrep-toolkit_gcs__); blocking.\n"))
     c.append(("step 1 no bucket", evento(pre + "read_object_content", ag), None, 2,
               f"gcs-allowlist: cannot evaluate this call ({var} is not set); blocking.\n"))
+    c.append(("step 1 unforeseen exception", "[" * 100_000, var, 2,
+              "gcs-allowlist: cannot evaluate this call (RecursionError); blocking.\n"))
     return c
 
 
@@ -107,7 +116,7 @@ def main():
     total = fallas = 0
     for nombre, m in MODOS.items():
         lista = casos(nombre, m)
-        assert len(lista) == 33, f"{nombre}: {len(lista)} cases, expected 33"
+        assert len(lista) == 37, f"{nombre}: {len(lista)} cases, expected 37"
         for desc, stdin, var, exit_esp, err_esp in lista:
             total += 1
             code, err = correr(stdin, var)

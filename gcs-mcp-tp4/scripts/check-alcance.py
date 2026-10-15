@@ -4,7 +4,8 @@
 Compara `git diff --name-only <base>...HEAD` (lo commiteado; los archivos sin trackear o
 sin commitear no cuentan) con las listas Dentro:
   - se crean: `.mcp.json`, `.claude/hooks/gcs-allowlist.py`, `.claude/skills/write-vcs-con-bucket/`,
-    `.claude/agents/lector-fixtures.md`, `gcs-mcp-tp4/**`, `.github/workflows/tp4.yml`;
+    `.claude/agents/lector-fixtures.md`, `gcs-mcp-tp4/**`, `.github/workflows/tp4.yml`,
+    `.claude-plugin/marketplace.json`;
   - cambio aditivo: `.claude/settings.json`, `.claude/hooks/regresion-antes-de-commit.py`,
     `gcsgrep-tp1/scripts/check-doc-links.py`, `.gitignore` y `README.md` (raíz). En esos cinco solo se admiten líneas
     agregadas, salvo la tupla de carpetas de `regresion-antes-de-commit.py`, que se puede
@@ -27,6 +28,7 @@ NUEVOS_EXACTOS = {
     ".claude/hooks/gcs-allowlist.py",
     ".claude/agents/lector-fixtures.md",
     ".github/workflows/tp4.yml",
+    ".claude-plugin/marketplace.json",
 }
 NUEVOS_PREFIJOS = (
     ".claude/skills/write-vcs-con-bucket/",

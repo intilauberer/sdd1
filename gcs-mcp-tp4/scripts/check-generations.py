@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Procedencia y envejecimiento de la evidencia del bucket (spec.md: R-5 pasos 4 y 6, R-6, VC-6a).
+"""Procedencia y envejecimiento de la evidencia del bucket (spec.md: R-14a…R-14e2, R-6a…R-6e2; VC-14, VC-6c, VC-6a).
 
 `registrar` lee solo la metadata de los objetos (nunca el contenido) e imprime el bloque
 de procedencia que va en `salida/vcs-bucket.md`: el modelo no escribe esas filas. Cada
@@ -277,8 +277,8 @@ def cmd_registrar(uris: list[str]) -> int:
                 problems.append(f"MISSING gs://{bucket}/{name}")
                 continue
             # El updated que leyó el subagent por MCP tiene que coincidir, al microsegundo,
-            # con esta lectura independiente: si no, el objeto cambió entre las dos (R-5
-            # paso 4). La 0.6.0 no le da la generation al subagent (Hallazgo 2).
+            # con esta lectura independiente: si no, el objeto cambió entre las dos
+            # (R-14b). La 0.6.0 no le da la generation al subagent (Hallazgo 2).
             current = blob.updated.astimezone(timezone.utc) if blob.updated else None
             if current != expected:
                 problems.append(

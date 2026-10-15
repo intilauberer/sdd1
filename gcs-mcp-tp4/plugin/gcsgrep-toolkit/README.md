@@ -50,6 +50,16 @@ gcs-mcp-tp4/plugin/armar.sh --check            # exit 0: lo commiteado es lo que
 claude plugin validate gcs-mcp-tp4/plugin/gcsgrep-toolkit
 ```
 
+Para instalarlo desde el marketplace del repo (`.claude-plugin/marketplace.json` en la
+raíz, spec R-11b), en un comando:
+
+```
+/plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1
+```
+
+o por shell, con el bucket propio:
+`claude plugin install gcsgrep-toolkit --marketplace intilauberer/sdd1 --scope project --config bucket=<bucket>`.
+
 Para probarlo (VC-11b), cargalo **desde un directorio temporal sin `.claude/` ni
 `.mcp.json`**. Si lo cargás dentro del repo, los hooks del proyecto y los del plugin corren
 los dos (un comando idéntico en `settings.json` y en el `hooks.json` de un plugin no se
@@ -78,7 +88,7 @@ Los defaults sirven para el bucket del TP. Para cambiarlos:
   las opciones y cuáles faltan). `claude plugin install` nunca pregunta.
 
 El hook toma el bucket de `CLAUDE_PLUGIN_OPTION_BUCKET`; si no llegara, veta toda llamada
-(paso 1 de R-8: falla cerrado).
+(R-8e: falla cerrado).
 
 ### Qué mirar en la sesión
 

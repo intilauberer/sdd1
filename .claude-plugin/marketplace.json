@@ -1,0 +1,13 @@
+{
+  "name": "sdd1-grupo4",
+  "owner": { "name": "SDD 73.31 · Grupo 4" },
+  "description": "Marketplace del repo sdd1 (Grupo 4): solo el plugin del TP4.",
+  "plugins": [
+    {
+      "name": "gcsgrep-toolkit",
+      "source": "./gcs-mcp-tp4/plugin/gcsgrep-toolkit",
+      "description": "Especificar los VCs de gcsgrep contra un bucket de GCS por MCP (storage-mcp 0.6.0), con el muro en tres capas.",
+      "version": "1.0.0"
+    }
+  ]
+}
