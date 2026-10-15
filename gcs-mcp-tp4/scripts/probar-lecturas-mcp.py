@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Las lecturas del skill por MCP, sin Claude ni hook (spike tp4/eval-floci; spec R-1, R-7).
+"""Las lecturas del skill por MCP, sin Claude ni hook (spec D-9, R-1, R-7).
 
 Levanta el server fijado por stdio, como `probar-server-sin-hook.py`, y hace las mismas
 llamadas que hace `lector-fixtures` sobre el bucket que arma `armar-bucket.sh`. Sirve para

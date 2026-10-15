@@ -1,7 +1,7 @@
 # Spec TP4 · `gcsgrep` contra un bucket por MCP (emulado: D-9)
 
-Versión 1.7 · Iteración 4 · Grupo 4 · Fuente: [`enunciado.md`](./enunciado.md) ·
-Revisiones: [`v1.0`](./revisiones/revision-spec-v1.0.md) · [`v1.1`](./revisiones/revision-spec-v1.1.md) · [`v1.2`](./revisiones/revision-spec-v1.2.md) · [PR](./revisiones/revision-pr-tp4.md) · [`v1.6`](./revisiones/revision-spec-v1.6.md) · [`v1.7`](./revisiones/revision-spec-v1.7.md)
+Versión 1.8 · Iteración 4 · Grupo 4 · Fuente: [`enunciado.md`](./enunciado.md) ·
+Revisiones: [`v1.0`](./revisiones/revision-spec-v1.0.md) · [`v1.1`](./revisiones/revision-spec-v1.1.md) · [`v1.2`](./revisiones/revision-spec-v1.2.md) · [PR](./revisiones/revision-pr-tp4.md) · [`v1.6`](./revisiones/revision-spec-v1.6.md) · [`v1.7`](./revisiones/revision-spec-v1.7.md) · [spike `floci-gcp`](./revisiones/spike-floci-gcp-2026-10-15.md)
 
 ## Propósito
 
@@ -37,7 +37,7 @@ Rutas: las que empiezan con `gcs-mcp-tp4/` o con `.` son relativas a la raíz de
 | Server `storage-mcp` 0.6.0 | Lo que el gateway le deje (llega solo a `127.0.0.1:4443`) | Exponer tools destructivas (corre sin el flag) |
 | Gateway (`emulador/gateway.py`) | Dejar pasar `GET`/`HEAD` sobre el bucket de prueba y rechazar todo lo demás con `403` | — |
 | Emulador (`fake-gcs-server` 1.56.1) | Guardar los objetos y asignar `generation` | Recibir pedidos que no vengan del gateway o de `admin` (solo red interna, sin puertos publicados) |
-| CI (`tp4.yml`) | Correr los chequeos offline (job `offline`: VC-0, VC-2a, VC-2b, VC-2c, VC-3, VC-6c, VC-8a, VC-11a salvo `claude plugin validate`, VC-13, VC-14, VC-15) y, en el job `emulator`, levantar el emulador detrás del gateway y correr VC-1, VC-1b, VC-2d (dentro de VC-10a), VC-6a, VC-10a y VC-10b | Acceder al GCS real (no tiene credencial de TP4) ni correr sesiones de Claude. A mano quedan VC-4, VC-5a…VC-5d, VC-6b, VC-7a, VC-7b, VC-8b, VC-9, `claude plugin validate` de VC-11a, VC-11b, VC-11c, VC-12 y VC-13n |
+| CI (`tp4.yml`) | Correr los chequeos offline (job `offline`: VC-0, VC-2a, VC-2b, VC-2c, VC-3, VC-6c, VC-8a, VC-11a salvo `claude plugin validate`, VC-13, VC-14, VC-15) y, en el job `emulator`, levantar el emulador detrás del gateway y correr VC-1, VC-1b, VC-2d (dentro de VC-10a), VC-6a, VC-10a, VC-10b y `probar-lecturas-mcp.py`, dos veces: con `fake-gcs-server` y con `floci-gcp` (D-9) | Acceder al GCS real (no tiene credencial de TP4) ni correr sesiones de Claude. A mano quedan VC-4, VC-5a…VC-5d, VC-6b, VC-7a, VC-7b, VC-8b, VC-9, `claude plugin validate` de VC-11a, VC-11b, VC-11c, VC-12 y VC-13n |
 
 ## Alcance
 
@@ -99,7 +99,7 @@ Rutas: las que empiezan con `gcs-mcp-tp4/` o con `.` son relativas a la raíz de
 | D-6 | La salida de CLI (scripts, hooks) es en **inglés**. Los documentos son en castellano | Todo en castellano: los mensajes del hook y de los scripts los lee el agente y se comparan con los de GCS y de `storage-mcp`, que están en inglés; mezclar idiomas en una misma línea de stderr la vuelve más difícil de buscar. Es la misma regla que la CLI del TP1 |
 | D-7 | Lo de GCP lo ejecuta la persona del equipo. El agente no tiene credencial de admin | Que lo corra el agente: le daría una credencial de admin a una sesión con Bash |
 | D-8 | Sin objeto sin permisos. FR-6 queda cubierto por los tests con dobles del TP1 (VC-6, VC-13) | IAM Conditions que excluyan un prefijo: es posible con acceso uniforme, pero suma una condición a la política del bucket que hay que probar aparte y el enunciado lo da como ejemplo ("el objeto sin permisos"), no como pieza obligatoria. El equipo priorizó el alcance de las cinco piezas |
-| D-9 | **Emulador + gateway de solo lectura**, como desvío declarado (detalle abajo) | Esperar la facturación: el equipo no tiene tarjeta para habilitarla. `floci-gcp`, el emulador del TP1 y uno de los dos que nombró la cátedra: ADR-0014 deja a `fake-gcs-server` como "reemplazo directo", y para el TP4 hace falta un emulador que `storage-mcp` 0.6.0 alcance con `STORAGE_EMULATOR_HOST`; `floci-gcp` no se probó con el server. El emulador solo, sin gateway: `fake-gcs-server` no tiene IAM, así que no habría capa 3. Un proxy de terceros (nginx, Envoy): más configuración y menos legible que ~200 líneas de stdlib que se leen enteras |
+| D-9 | **Emulador + gateway de solo lectura**, como desvío declarado (detalle abajo) | Esperar la facturación: el equipo no tiene tarjeta para habilitarla. Migrar a `floci-gcp`, el emulador del TP1 y uno de los dos que nombró la cátedra: el [spike](./revisiones/spike-floci-gcp-2026-10-15.md) mostró que detrás del gateway se comporta igual que `fake-gcs-server` en todo lo que usa el TP4, así que migrar solo obligaría a rehacer la evidencia (unas 12 sesiones de `claude -p`) sin probar nada nuevo. Se queda como segunda fila del job `emulator` de CI ("Precedente y autorización"). El emulador solo, sin gateway: `fake-gcs-server` no tiene IAM, así que no habría capa 3. Un proxy de terceros (nginx, Envoy): más configuración y menos legible que ~200 líneas de stdlib que se leen enteras |
 
 ### D-9 · El bucket en un emulador, con un gateway de techo
 
@@ -113,6 +113,7 @@ habilitarla (pide una tarjeta). Sin bucket no hay pieza 🔌 ni capa 3.
   - `admin`: `curlimages/curl:8.16.0`, perfil `admin`, solo en `interna`: es la identidad de escritura de la persona.
 - `gateway.py`: la allowlist que reemplaza a `objectViewer` (R-2).
 - `levantar.sh`, `armar-bucket.sh`, `cambiar-objeto.sh`, `probar-403.sh`, `bajar.sh`.
+- `docker-compose.floci.yml`: el mismo servicio `gcs` con `floci/floci-gcp:0.9.0` (fijado por digest) en lugar de `fake-gcs-server`; lo suma `config.sh` con `GCSGREP_TP4_EMULATOR=floci` (puerto del upstream `4588`).
 
 El server MCP, `check-generations.py` y `probar-server-sin-hook.py` reciben
 `STORAGE_EMULATOR_HOST=http://127.0.0.1:4443`: el gateway, nunca el emulador.
@@ -137,13 +138,29 @@ real: sin `STORAGE_EMULATOR_HOST`, exigen el ADC de la SA como antes. Volver es 
 **Precedente y autorización.** En la primera entrega (TP1), sin facturación, el equipo le
 consultó a la cátedra y la cátedra habilitó emular GCS. Lo registra
 [ADR-0014](../gcsgrep-tp1/docs/adr/ADR-0014-emulacion-local-floci.md) ("Autorización"): la
-cátedra habilitó explícitamente LocalStack o Floci para emular, y el TP1 eligió `floci-gcp`.
-El equipo entiende que lo autorizado es reemplazar GCS por un mock, no una herramienta en
-particular, y el TP4 aplica ese criterio con `fake-gcs-server`, que no es ninguna de las dos
-nombradas (la alternativa descartada, y por qué, está en la tabla de Decisiones). Se mantiene
-la regla de ADR-0014 y
+cátedra habilitó explícitamente LocalStack o Floci, y el TP1 eligió `floci-gcp`.
+
+**Por qué `fake-gcs-server` y no `floci-gcp`.** La elección inicial **no fue deliberada**:
+el equipo creía que ya estaba usando `fake-gcs-server` y no comparó. La justificación se
+midió después, en un [spike](./revisiones/spike-floci-gcp-2026-10-15.md): con
+`floci-gcp` 0.9.0 en el mismo lugar (red interna, sin puertos, detrás del gateway), el job
+`emulator` de CI da lo mismo que con `fake-gcs-server` 1.56.1. Pasan VC-1, VC-1b, VC-10a,
+VC-10b, VC-6a y las 15 lecturas que hace `lector-fixtures` por MCP
+(`scripts/probar-lecturas-mcp.py`: listado con prefijos, contenido exacto con el nonce,
+`UnsupportedContentType` para `.bin` y `.gz`, `updated` igual al de la API JSON). La única
+diferencia es el formato de la `generation` (13 dígitos contra 16), que el toolkit trata
+como un valor opaco. Con eso:
+- se sigue con `fake-gcs-server`, porque toda la evidencia de 01 a 07 y la salida se
+  generaron con él, y migrar la rehace sin cambiar lo que prueba;
+- `floci-gcp` queda como **segunda fila del job `emulator`**: cada push comprueba el
+  toolkit también contra el emulador que nombró la cátedra. Si alguna vez difieren, la fila
+  `floci` falla y esta decisión se revisa;
+- lo que el spike no cubre: ninguna sesión de `claude -p` corrió contra `floci-gcp` (las
+  llamadas que hacen al server sí), y no se probó en Docker Desktop.
+
+Se mantiene la regla de ADR-0014 y
 [ADR-0015](../gcsgrep-tp1/docs/adr/ADR-0015-verificacion-real-declinada.md): un resultado
-contra el emulador no cuenta como resultado contra GCS real, y la evidencia lo dice en cada
+contra un emulador no cuenta como resultado contra GCS real, y la evidencia lo dice en cada
 archivo. Las dos filas de "Qué se entrega" que no se cumplen al pie de la letra —`02-iam` sin
 `get-iam-policy`, y el `403` de `04-muro`, que emite `gateway.py` y no GCS— son consecuencia
 directa del mock, y lo que se pierde está arriba.
@@ -955,3 +972,4 @@ R-14d8, R-6d7 y las ramas GCS real de R-14, R-6 y VC-10b (D-9).
 | 1.5 | Ajustes que salen de la evidencia. **VC-8b:** el prompt de la v1.4 dejaba ambiguo el contenido del archivo y Sonnet preguntó en vez de llamar a la tool (dos corridas, `evidencia/04-muro.md`); el prompt nuevo fija el contenido (`hola`) y el bucket. **VC-7b:** la redacción de la v1.4 (todo `Bash` con el prefijo de `check-generations.py`) **falló** en `evidencia/05-fixture-hostil.md` porque la sesión principal corrió `ls`/`grep`/`cat`/`sed` locales sobre el repo antes de lanzar el subagent. Ese prefijo no era el requerimiento: lo que importa de la trifecta es que la sesión que tiene Bash no use un **canal de salida** (red, `WebFetch`/`WebSearch`) ni lea las credenciales de `~/.config/gcloud*`. VC-7b pasa a exigir eso, y 05 se re-evalúa con la v1.5 sobre la misma transcripción (el FAIL de la v1.4 queda anotado). **Alcance:** el cambio aditivo de `.claude/settings.json` lista lo que tiene (`permissions.allow` con las 3 tools, el prefijo del script y `Edit` sobre la salida; `permissions.deny` con `Read` de los dos directorios de gcloud, `gcloud storage cat`, `gsutil cat`, `curl`, `wget`, `nc` y `WebFetch`) y deja dicho que el `deny` es segunda línea. **VC-4:** se apoya en lo que lista el agente; el estado de `claude mcp list` se registra como se observó. **Riesgos:** `Skill` denegada en `-p`, `userConfig` con `--plugin-dir`, worktree y `.claude/`, aprobación de servers de proyecto. |
 | 1.6 | Responde a [`revision-pr-tp4.md`](./revisiones/revision-pr-tp4.md) (revisión del PR, iteración 3). **B-1:** la trifecta se corta solo en el camino MCP (hook + `agent_type` + subagent sin Bash). El camino Bash → HTTP al gateway es una segunda línea de permisos, que persuade y no garantiza: R-7 suma "Límite", Riesgos suma un ítem, Alcance y D-9 se corrigen, y en 03 se declara el `curl` de `03-run1`. **B-2:** VC-8b del plugin se corrió con el prompt de la v1.5 en un turno, en un directorio de `mktemp -d` (VC-11b lo admite). **B-3:** VC-4 en 01 queda como dice la v1.5. **Alcance:** el `deny` de `.claude/settings.json` rige para todo el repo, y es un cambio deliberado; `./criterios.md` es externo conocido en todas las carpetas; `hidden-content/` también guarda los crudos de las corridas. R-3 cita la evidencia del "falla cerrado" (01). VC-1 declara que el exit code no se guardó. D-9 queda con la consulta a la cátedra pendiente. Actores/CI coincide con `tp4.yml`. El encabezado pasa a "Iteración 3". D-8 va antes que D-9. El docstring de `gcs-allowlist.py` y la intro del `SKILL.md` describen la capa 3 como el gateway (D-9), o la SA `objectViewer` con el GCS real. Ninguno de los dos cambios toca código, y el plugin se rearmó con `armar.sh`. |
 | 1.7 | Iteración 4. Responde a [`revision-spec-v1.6.md`](./revisiones/revision-spec-v1.6.md), que aplica a la v1.6 la rúbrica de la corrección de la cátedra del TP1 (`corrector-specs`) y le encuentra sus dos bloqueos, y a [`revision-spec-v1.7.md`](./revisiones/revision-spec-v1.7.md), la revisión del borrador de esta versión. **Atomicidad (2.3):** una situación por requerimiento, y un ID por fila en las tablas: R-1/R-1b; R-2a, R-2b1…R-2b21, R-2c, R-2d; R-5 (camino feliz) y R-5a/R-5b/R-5c (R-5c es una sola condición, "informe no utilizable"); `registrar` pasa a R-14a…R-14c, R-14d1…R-14d8, R-14e1/R-14e2, y `verificar` a R-6a…R-6c, R-6d1…R-6d7, R-6e1/R-6e2, con stream, orden y precedencia del exit fijados (`2` gana sobre `1`); la reacción del skill es R-6f (una sola relectura, que **reemplaza** las filas), R-6g y R-6h (`⚠ VENCIDO`); el hook pasa a R-8a…R-8j. **NFRs (4.1):** N-2 se parte en N-2a (≤ 250 líneas, para que entren los 100 objetos de N-2b; con un recorte, el informe no es utilizable) y N-2b (`prefix` **y** `max_results` ≤ 100), con el número en el enunciado; se agrega **N-3**, latencia del hook (p95 ≤ 100 ms sobre 200 invocaciones, medido antes de fijarlo: p95 ≈ 18 ms), con VC-15. **R-10** deja de afirmar "no hay otro camino": el aislamiento es R-2d y vale en Docker Desktop, no en Linux. **D-9:** cita la autorización de la primera entrega como la registra ADR-0014 (LocalStack o Floci), dice que el TP4 la aplica con `fake-gcs-server` y suma `floci-gcp` como alternativa descartada; sale el "Pendiente". **Comportamiento que vivía fuera de la spec:** el estado `error: …` (R-7 paso 4), el rechazo de `.`/`..`/`//`/`%2e` (R-2c), las condiciones de VC-11b. **VCs nuevos que corren sin Docker:** VC-2a…VC-2c (`test_gateway.py`, 34 casos; encontró que el gateway reenviaba `X-HTTP-Method-Override`, y ahora lo descarta), VC-14 y VC-6c (`test_check_generations.py`, 26 casos contra un GCS de mentira), y VC-8a con `write_object_new`, un JSON que no es objeto, sin `tool_name` y una excepción imprevista (74 casos). **VCs nuevos con Claude:** VC-5c y VC-5d, corridos. **Consigna:** un marketplace en la raíz para instalar con un comando (R-11b, VC-11c). D-3 nombra los permisos; D-6 tiene alternativa; D-9 declara que el gateway deja pasar la metadata del bucket. VC-9 y VC-6b quedan con observables literales; VC-5b exige que cada fila sea idéntica a la de `registrar`; VC-10b nombra sus cuatro chequeos. Fuera suma la paginación. El límite Bash → HTTP queda en un solo lugar (R-7). Los caminos que no se ejercitaron se listan en Trazabilidad. |
+| 1.8 | Iteración 4. D-9 registra que la elección de `fake-gcs-server` no fue deliberada y la justifica con el [spike de `floci-gcp`](./revisiones/spike-floci-gcp-2026-10-15.md): en CI los dos emuladores, detrás del mismo gateway, dan lo mismo en VC-1, VC-1b, VC-10a, VC-10b, VC-6a y `probar-lecturas-mcp.py`. `floci-gcp` 0.9.0 pasa a ser la segunda fila del job `emulator` (`docker-compose.floci.yml`, `GCSGREP_TP4_EMULATOR`). La alternativa "migrar a `floci-gcp`" se descarta por costo de evidencia, no por comportamiento. |

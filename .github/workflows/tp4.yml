@@ -3,7 +3,8 @@ name: tp4 (gcs-mcp-tp4)
 # TP4 (spec.md). Job `offline`: VC-0, VC-2a…VC-2c, VC-3, VC-6c, VC-8a, VC-11a, VC-13, VC-14 y
 # VC-15, sin Docker ni GCS (los tests del gateway y de check-generations usan un GCS de
 # mentira en el mismo proceso). Job `emulator` (D-9): levanta el emulador detrás del gateway
-# de solo lectura y corre VC-1, VC-10a (con VC-2d), VC-10b, VC-6a y VC-1b de punta a punta.
+# de solo lectura y corre VC-1, VC-10a (con VC-2d), VC-10b, las lecturas por MCP, VC-6a y
+# VC-1b de punta a punta, una vez con fake-gcs-server y otra con floci-gcp.
 # CI no tiene credencial de GCP: nada de esto habla con el GCS real. Lo que pide una sesión
 # de Claude (VC-4, VC-5a…VC-5d, VC-6b, VC-7, VC-8b, VC-9, VC-11b) se corre a mano y queda
 # en evidencia/.
@@ -83,8 +84,9 @@ jobs:
           python3 gcs-mcp-tp4/scripts/check-alcance.py "$base"
 
   emulator:
-    # Spike tp4/eval-floci: el mismo job contra floci-gcp. En la fila floci cada paso sigue
-    # aunque falle el anterior, para ver todo lo que no anda; el resumen lo lista.
+    # El mismo job contra los dos emuladores (spec D-9): fake-gcs-server, el de la evidencia,
+    # y floci-gcp, el que nombró la cátedra en el TP1. Que los dos pasen es la justificación
+    # medida de seguir con fake-gcs-server.
     strategy:
       fail-fast: false
       matrix:
@@ -105,32 +107,20 @@ jobs:
           node-version: "20"
       - uses: astral-sh/setup-uv@v6
       - name: Levantar emulador y gateway
-        id: levantar-emulador-y-gateway
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/levantar.sh
       - name: Armar el bucket (VC-1)
-        id: armar-el-bucket-vc-1
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/armar-bucket.sh
       - name: Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a)
-        id: escribir-y-borrar-por-el-gateway-dan-403
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         run: gcs-mcp-tp4/emulador/probar-403.sh
       - name: El server MCP sin hook contra el gateway (VC-10b)
-        id: el-server-mcp-sin-hook-contra-el-gateway
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: python3 gcs-mcp-tp4/scripts/probar-server-sin-hook.py
-      - name: Las lecturas del skill por MCP (spike floci)
-        id: lecturas-mcp
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
+      - name: Las lecturas del skill por MCP, sin Claude (D-9)
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: python3 gcs-mcp-tp4/scripts/probar-lecturas-mcp.py
       - name: Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a)
-        id: procedencia-y-evidencia-que-envejece-de-
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         env:
           STORAGE_EMULATOR_HOST: http://127.0.0.1:4443
         run: |
@@ -149,8 +139,6 @@ jobs:
           [ "$rc" -eq 1 ] && grep -q "^STALE gs://$BUCKET/logs/app-2026-10-02.log recorded=" "$RUNNER_TEMP/verificar.txt" \
             || { echo "expected exit 1 with a STALE line (got $rc)"; exit 1; }
       - name: Objetos de más (VC-1b)
-        id: objetos-de-m-s-vc-1b
-        continue-on-error: ${{ matrix.emulator == 'floci' }}
         # Al final: deja un objeto extra y re-arma el bucket (generations nuevas).
         run: |
           set -uo pipefail
@@ -175,24 +163,12 @@ jobs:
         run: |
           source gcs-mcp-tp4/emulador/config.sh
           compose logs --no-log-prefix gateway || true
-      - name: Imagen del emulador y resumen
+      - name: Imagen del emulador
         if: always()
         run: |
           source gcs-mcp-tp4/emulador/config.sh
-          echo "gcs image: $(docker inspect --format '{{index .RepoDigests 0}}' "$(compose ps -q gcs)" 2>/dev/null || docker image inspect --format '{{index .RepoDigests 0}}' floci/floci-gcp:0.9.0 2>/dev/null || echo '?')"
-          {
-            echo "### Emulador: $GCSGREP_TP4_EMULATOR"
-            echo
-            echo "| paso | resultado |"
-            echo "|---|---|"
-            echo "| Levantar emulador y gateway | ${{ steps.levantar-emulador-y-gateway.outcome }} |"
-            echo "| Armar el bucket (VC-1) | ${{ steps.armar-el-bucket-vc-1.outcome }} |"
-            echo "| Escribir y borrar por el gateway dan 403; no hay camino directo (VC-10a) | ${{ steps.escribir-y-borrar-por-el-gateway-dan-403.outcome }} |"
-            echo "| El server MCP sin hook contra el gateway (VC-10b) | ${{ steps.el-server-mcp-sin-hook-contra-el-gateway.outcome }} |"
-            echo "| Las lecturas del skill por MCP | ${{ steps.lecturas-mcp.outcome }} |"
-            echo "| Procedencia y evidencia que envejece de punta a punta (R-14a, R-6a, R-6b, VC-6a) | ${{ steps.procedencia-y-evidencia-que-envejece-de-.outcome }} |"
-            echo "| Objetos de más (VC-1b) | ${{ steps.objetos-de-m-s-vc-1b.outcome }} |"
-          } | tee -a "$GITHUB_STEP_SUMMARY"
+          docker inspect --format '{{index .RepoDigests 0}}' "$(compose ps -q gcs)" 2>/dev/null \
+            || docker image ls --digests | grep -E 'fake-gcs-server|floci-gcp' || true
       - name: Logs del emulador
         if: always()
         run: |

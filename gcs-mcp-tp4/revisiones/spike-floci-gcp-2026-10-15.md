@@ -71,6 +71,9 @@ corrigió en `7a6463f`.
 
 ## Opciones
 
+Se eligió la 1 (spec v1.8, D-9).
+
+
 1. **Quedarse con `fake-gcs-server` y dejar la fila `floci` en CI.** La justificación de
    D-9 pasa a ser medida: los dos emuladores se comportan igual en todo lo que usa el TP4, y
    cada push lo vuelve a comprobar contra el que nombró la cátedra. Migrar rehace la
