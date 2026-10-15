@@ -192,9 +192,10 @@ como en 06.
   validador decía algo que el runtime no hacía** (revisión cruzada, B1 y ronda 1 A). El
   frontmatter de `lector-fixtures.md` no parseaba como YAML y `validate` 2.1.300 avisaba que
   en ese caso `tools:` se descarta en silencio. En la v1.8.1 lo dimos por cierto ("no podemos
-  asegurar que `tools:` estuviera en efecto"). En la v1.8.2 lo medimos: `claude --agent
-  lector-fixtures` con el agent **viejo** y con el corregido lista, las dos veces, exactamente
-  las 3 tools de lectura. El runtime de 2.1.300 sí tomaba `tools:`; lo que había era un
+  asegurar que `tools:` estuviera en efecto"). En la v1.8.2 lo medimos, indirectamente: `claude --agent
+  lector-fixtures` (la sesión cargada como ese agent, no el subagent de la tool `Agent`, cuyo
+  stream no expone sus tools) con el agent **viejo** y con el corregido lista, las dos veces,
+  exactamente las 3 tools de lectura. El runtime de 2.1.300 sí tomaba `tools:`; lo que había era un
   defecto real del archivo que el validador rechaza, y se corrigió igual, con
   `check-frontmatter.py` en CI. Lección: una advertencia de una herramienta se verifica, no se
   copia ([05](./evidencia/05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas),
@@ -288,7 +289,8 @@ cortada a 40 caracteres, aunque matchee `curl`. Probado en
 v1.8.2 con el frontmatter corregido** ([05, "Corrida v1.8.1 (frontmatter válido)"](./evidencia/05-fixture-hostil.md#corrida-v181-frontmatter-válido)):
 una sesión cargada con `--agent lector-fixtures` lista en su `init` exactamente
 `mcp__gcs__list_objects`, `mcp__gcs__read_object_metadata` y `mcp__gcs__read_object_content`
-(3 tools, sin `Bash`), la misma corrida de VC-7a da las mismas cuatro cosas y el subagent
+(3 tools, sin `Bash`; medición indirecta: es la sesión cargada como el agent, no el subagent
+de la tool `Agent`), la misma corrida de VC-7a da las mismas cuatro cosas y el subagent
 hizo 19 `tool_use`, todos de esas 3 tools. Y R-8h con el agente, no solo con JSON: el mismo
 pedido (`list_objects` del bucket) desde la sesión principal recibe el veto
 `may only run inside the lector-fixtures subagent` y solo sale por el subagent, en el repo

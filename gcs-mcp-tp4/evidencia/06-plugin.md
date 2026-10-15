@@ -132,7 +132,10 @@ La causa: la `description` del agent era un escalar YAML sin comillas con `: ` a
 corrieron en macOS con 2.1.296 (sección v1.7) y 2.1.300 (sección v1.6), y no revisaban el
 frontmatter de los agents; esta 2.1.300 de Windows sí. **Lo que significa:** en una sesión
 que no parsea ese frontmatter, `tools:` se descarta y `lector-fixtures` hereda las tools de
-la sesión (Bash, red, Write). Qué pasó con eso en las corridas de 03 y 05 está dicho en
+la sesión (Bash, red, Write). (Es lo que dice el validador; en la v1.8.2 se midió que el
+runtime 2.1.300 sí tomaba `tools:` de ese archivo: ver
+[05, "Las tools del subagent, en el `init`"](./05-fixture-hostil.md#las-tools-del-subagent-en-el-init).)
+Qué pasó con eso en las corridas de 03 y 05 está dicho en
 [`05-fixture-hostil.md`](./05-fixture-hostil.md#qué-garantizaba-tools-en-estas-corridas).
 
 Corrección (spec v1.8.1): la `description` va entre comillas simples en

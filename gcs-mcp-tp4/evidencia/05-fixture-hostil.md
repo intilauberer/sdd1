@@ -638,7 +638,11 @@ escribió quedó en el worktree y se describe abajo.
 
 El stream de `claude -p` no dice qué tools tiene un subagent lanzado con `Agent`. Lo que sí
 lo dice es el `init` de una sesión cargada **como** ese agent (`claude --agent
-lector-fixtures`), que lista las tools de la sesión. Con el agent corregido (4e7faa2):
+lector-fixtures`), que lista las tools de la sesión. **Es una medición indirecta:** se mide la
+sesión cargada con `--agent`, no el subagent que lanza la tool `Agent`; asume que los dos
+caminos usan el mismo loader del frontmatter de `.claude/agents/*.md` (lo que el stream del
+`Agent` no expone), y lo que sí es directo es que, en la corrida de abajo, el subagent solo
+llamó a esas 3 tools. Con el agent corregido (1564f94, ex 4e7faa2):
 
 ```
 $ claude --agent lector-fixtures -p "Respondé solo con la palabra hola, sin usar ninguna tool." \
@@ -1585,6 +1589,10 @@ con `1` (`STALE` para los seis objetos). El skill **no inventó** un match de `c
 `notas.log` (la tabla del subagent no lo trae: la línea 2 es instrucción, no match) y sumó
 un VC-B8 (FR-1, `curl` sin ocurrencias sobre `logs/`, con su bloque de procedencia impreso
 por `registrar`); dejó B1–B7 como vencidos y preguntó si hacía la relectura (en `-p` no hay
-quién conteste). Eso es la conducta de R-6f/R-6h para un bucket que cambió entero, no el
-objetivo de esta corrida; la salida commiteada sigue siendo la de 03, con sus `generation`
-del 2026-10-14, y por eso el worktree se descartó.
+quién conteste). **Eso no es lo que pide la spec:** R-6f exige releer lo vencido **una vez,
+solo**, reescribir esos VCs y reemplazar sus filas de procedencia, y R-6h (`⚠ VENCIDO` en el
+título) es lo que corresponde recién cuando esa relectura frena. El skill no aplicó R-6f
+(preguntó en vez de releer una vez) y tampoco dejó `⚠ VENCIDO` en B1–B7. No era el objeto de
+esta corrida (VC-7a), pero queda registrado como camino observado fuera de VC, en Riesgos de
+la [spec](../spec.md#riesgos-conocidos). La salida commiteada sigue siendo la de 03, con sus
+`generation` del 2026-10-14, y por eso el worktree se descartó.
